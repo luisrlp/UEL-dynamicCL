@@ -1,0 +1,1228 @@
+# -*- coding: mbcs -*-
+from part import *
+from material import *
+from section import *
+from assembly import *
+from step import *
+from interaction import *
+from load import *
+from mesh import *
+from optimization import *
+from job import *
+from sketch import *
+from visualization import *
+from connectorBehavior import *
+mdb.models['Model-1'].ConstrainedSketch(name='__profile__', sheetSize=4.0)
+mdb.models['Model-1'].sketches['__profile__'].rectangle(point1=(0.0, 0.0), 
+    point2=(2.0, 2.0))
+mdb.models['Model-1'].Part(dimensionality=THREE_D, name='cube', type=
+    DEFORMABLE_BODY)
+mdb.models['Model-1'].parts['cube'].BaseSolidExtrude(depth=2.0, sketch=
+    mdb.models['Model-1'].sketches['__profile__'])
+del mdb.models['Model-1'].sketches['__profile__']
+mdb.models['Model-1'].ConstrainedSketch(name='__profile__', sheetSize=4.0)
+mdb.models['Model-1'].sketches['__profile__'].ConstructionLine(point1=(0.0, 
+    -2.0), point2=(0.0, 2.0))
+mdb.models['Model-1'].sketches['__profile__'].FixedConstraint(entity=
+    mdb.models['Model-1'].sketches['__profile__'].geometry[2])
+mdb.models['Model-1'].sketches['__profile__'].CircleByCenterPerimeter(center=(
+    0.0, 0.0), point1=(1.0, 0.0))
+mdb.models['Model-1'].sketches['__profile__'].Line(point1=(0.0, 0.0), point2=(
+    1.0, 0.0))
+mdb.models['Model-1'].sketches['__profile__'].HorizontalConstraint(
+    addUndoState=False, entity=
+    mdb.models['Model-1'].sketches['__profile__'].geometry[4])
+mdb.models['Model-1'].sketches['__profile__'].Line(point1=(0.0, 0.0), point2=(
+    0.0, -1.0))
+mdb.models['Model-1'].sketches['__profile__'].VerticalConstraint(addUndoState=
+    False, entity=mdb.models['Model-1'].sketches['__profile__'].geometry[5])
+mdb.models['Model-1'].sketches['__profile__'].autoTrimCurve(curve1=
+    mdb.models['Model-1'].sketches['__profile__'].geometry[3], point1=(
+    -0.961063504219055, 0.270868510007858))
+mdb.models['Model-1'].sketches['__profile__'].autoTrimCurve(curve1=
+    mdb.models['Model-1'].sketches['__profile__'].geometry[5], point1=(
+    -0.00166182965040207, -0.139202788472176))
+mdb.models['Model-1'].sketches['__profile__'].autoTrimCurve(curve1=
+    mdb.models['Model-1'].sketches['__profile__'].geometry[4], point1=(
+    0.203451573848724, -0.00361468270421028))
+mdb.models['Model-1'].sketches['__profile__'].undo()
+mdb.models['Model-1'].sketches['__profile__'].autoTrimCurve(curve1=
+    mdb.models['Model-1'].sketches['__profile__'].geometry[6], point1=(
+    0.988617122173309, 0.15842966735363))
+mdb.models['Model-1'].sketches['__profile__'].autoTrimCurve(curve1=
+    mdb.models['Model-1'].sketches['__profile__'].geometry[4], point1=(
+    0.482450067996979, -0.00251235440373421))
+mdb.models['Model-1'].Part(dimensionality=THREE_D, name='probe', type=
+    ANALYTIC_RIGID_SURFACE)
+mdb.models['Model-1'].parts['probe'].AnalyticRigidSurfRevolve(sketch=
+    mdb.models['Model-1'].sketches['__profile__'])
+del mdb.models['Model-1'].sketches['__profile__']
+mdb.models['Model-1'].Material(name='Material-1')
+mdb.models['Model-1'].materials['Material-1'].Elastic(table=((1.0, 0.45), ))
+mdb.models['Model-1'].HomogeneousSolidSection(material='Material-1', name=
+    'SECTION_elastic', thickness=None)
+mdb.models['Model-1'].parts['cube'].Set(cells=
+    mdb.models['Model-1'].parts['cube'].cells.getSequenceFromMask(('[#1 ]', ), 
+    ), name='Set-Cube')
+mdb.models['Model-1'].parts['cube'].SectionAssignment(offset=0.0, offsetField=
+    '', offsetType=MIDDLE_SURFACE, region=
+    mdb.models['Model-1'].parts['cube'].sets['Set-Cube'], sectionName=
+    'SECTION_elastic', thicknessAssignment=FROM_SECTION)
+mdb.models['Model-1'].rootAssembly.DatumCsysByDefault(CARTESIAN)
+mdb.models['Model-1'].rootAssembly.Instance(dependent=OFF, name='cube-1', part=
+    mdb.models['Model-1'].parts['cube'])
+mdb.models['Model-1'].rootAssembly.Instance(dependent=OFF, name='probe-1', 
+    part=mdb.models['Model-1'].parts['probe'])
+mdb.models['Model-1'].rootAssembly.instances['probe-1'].translate(vector=(3.2, 
+    0.0, 0.0))
+mdb.models['Model-1'].parts['probe'].ReferencePoint(point=
+    mdb.models['Model-1'].parts['probe'].vertices[0])
+mdb.models['Model-1'].rootAssembly.regenerate()
+mdb.models['Model-1'].rootAssembly.translate(instanceList=('probe-1', ), 
+    vector=(-1.2, 3.0, 2.0))
+mdb.models['Model-1'].rootAssembly.translate(instanceList=('probe-1', ), 
+    vector=(0.0, 1.0, 0.0))
+mdb.models['Model-1'].ConstrainedSketch(name='__edit__', objectToCopy=
+    mdb.models['Model-1'].parts['probe'].features['3D Analytic rigid shell-1'].sketch)
+mdb.models['Model-1'].parts['probe'].projectReferencesOntoSketch(filter=
+    COPLANAR_EDGES, sketch=mdb.models['Model-1'].sketches['__edit__'], 
+    upToFeature=
+    mdb.models['Model-1'].parts['probe'].features['3D Analytic rigid shell-1'])
+mdb.models['Model-1'].sketches['__edit__'].offset(distance=0.75, objectList=(
+    mdb.models['Model-1'].sketches['__edit__'].geometry[7], ), side=LEFT)
+mdb.models['Model-1'].sketches['__edit__'].autoTrimCurve(curve1=
+    mdb.models['Model-1'].sketches['__edit__'].geometry[7], point1=(
+    0.537047803401947, -0.845222055912018))
+mdb.models['Model-1'].parts['probe'].features['3D Analytic rigid shell-1'].setValues(
+    sketch=mdb.models['Model-1'].sketches['__edit__'])
+del mdb.models['Model-1'].sketches['__edit__']
+mdb.models['Model-1'].parts['probe'].regenerate()
+#* FeatureError: Regeneration failed
+mdb.models['Model-1'].parts['probe'].backup()
+del mdb.models['Model-1'].parts['probe'].features['RP']
+mdb.models['Model-1'].parts['probe'].ReferencePoint(point=
+    mdb.models['Model-1'].parts['probe'].vertices[0])
+mdb.models['Model-1'].rootAssembly.regenerate()
+mdb.models['Model-1'].rootAssembly.translate(instanceList=('probe-1', ), 
+    vector=(0.0, -1.75, 0.0))
+mdb.models['Model-1'].rootAssembly.translate(instanceList=('probe-1', ), 
+    vector=(0.0, 0.25, 0.0))
+mdb.models['Model-1'].StaticStep(name='indentation', nlgeom=ON, previous=
+    'Initial')
+mdb.models['Model-1'].ContactProperty('IntProp-1')
+mdb.models['Model-1'].interactionProperties['IntProp-1'].TangentialBehavior(
+    formulation=FRICTIONLESS)
+mdb.models['Model-1'].rootAssembly.Surface(name='Surface-Probe', side1Faces=
+    mdb.models['Model-1'].rootAssembly.instances['probe-1'].faces.getSequenceFromMask(
+    ('[#1 ]', ), ))
+mdb.models['Model-1'].rootAssembly.Surface(name='SURFACE-Top', side1Faces=
+    mdb.models['Model-1'].rootAssembly.instances['cube-1'].faces.getSequenceFromMask(
+    ('[#2 ]', ), ))
+mdb.models['Model-1'].SurfaceToSurfaceContactStd(adjustMethod=NONE, 
+    clearanceRegion=None, createStepName='indentation', datumAxis=None, 
+    initialClearance=OMIT, interactionProperty='IntProp-1', main=
+    mdb.models['Model-1'].rootAssembly.surfaces['Surface-Probe'], name=
+    'INTERACTION-Contact', secondary=
+    mdb.models['Model-1'].rootAssembly.surfaces['SURFACE-Top'], sliding=FINITE, 
+    thickness=ON)
+mdb.models['Model-1'].interactionProperties.changeKey(fromName='IntProp-1', 
+    toName='INTPROP-Frictionless')
+mdb.models['Model-1'].rootAssembly.Set(name='Set-RP', referencePoints=(
+    mdb.models['Model-1'].rootAssembly.instances['probe-1'].referencePoints[3], 
+    ))
+mdb.models['Model-1'].DisplacementBC(amplitude=UNSET, createStepName=
+    'indentation', distributionType=UNIFORM, fieldName='', fixed=OFF, 
+    localCsys=None, name='BC-ProbeDisplacement', region=
+    mdb.models['Model-1'].rootAssembly.sets['Set-RP'], u1=0.0, u2=-0.5, u3=0.0, 
+    ur1=0.0, ur2=0.0, ur3=0.0)
+mdb.models['Model-1'].rootAssembly.Set(faces=
+    mdb.models['Model-1'].rootAssembly.instances['cube-1'].faces.getSequenceFromMask(
+    ('[#8 ]', ), ), name='Set-Bottom')
+mdb.models['Model-1'].EncastreBC(createStepName='indentation', localCsys=None, 
+    name='BC-Fix', region=
+    mdb.models['Model-1'].rootAssembly.sets['Set-Bottom'])
+mdb.models['Model-1'].rootAssembly.Set(faces=
+    mdb.models['Model-1'].rootAssembly.instances['cube-1'].faces.getSequenceFromMask(
+    ('[#4 ]', ), ), name='Set-XSYMM')
+mdb.models['Model-1'].XsymmBC(createStepName='indentation', localCsys=None, 
+    name='BC-XSYMM', region=
+    mdb.models['Model-1'].rootAssembly.sets['Set-XSYMM'])
+mdb.models['Model-1'].rootAssembly.Set(faces=
+    mdb.models['Model-1'].rootAssembly.instances['cube-1'].faces.getSequenceFromMask(
+    ('[#10 ]', ), ), name='Set-ZSYMM')
+mdb.models['Model-1'].ZsymmBC(createStepName='indentation', localCsys=None, 
+    name='BC-ZSYMM', region=
+    mdb.models['Model-1'].rootAssembly.sets['Set-ZSYMM'])
+mdb.models['Model-1'].rootAssembly.makeDependent(instances=(
+    mdb.models['Model-1'].rootAssembly.instances['cube-1'], ))
+mdb.models['Model-1'].parts['cube'].seedPart(deviationFactor=0.1, 
+    minSizeFactor=0.1, size=1.0)
+mdb.models['Model-1'].parts['cube'].generateMesh()
+mdb.models['Model-1'].parts['cube'].deleteMesh()
+mdb.models['Model-1'].parts['cube'].seedPart(deviationFactor=0.1, 
+    minSizeFactor=0.1, size=0.5)
+mdb.models['Model-1'].parts['cube'].generateMesh()
+mdb.models['Model-1'].rootAssembly.regenerate()
+mdb.Job(atTime=None, contactPrint=OFF, description='', echoPrint=OFF, 
+    explicitPrecision=SINGLE, getMemoryFromAnalysis=True, historyPrint=OFF, 
+    memory=90, memoryUnits=PERCENTAGE, model='Model-1', modelPrint=OFF, 
+    multiprocessingMode=DEFAULT, name='cube_indent', nodalOutputPrecision=
+    SINGLE, numCpus=2, numDomains=2, numGPUs=0, numThreadsPerMpiProcess=1, 
+    queue=None, resultsFormat=ODB, scratch='', type=ANALYSIS, userSubroutine=''
+    , waitHours=0, waitMinutes=0)
+mdb.models['Model-1'].interactions['INTERACTION-Contact'].setValues(
+    adjustMethod=NONE, bondingSet=None, contactTracking=TWO_CONFIG, 
+    enforcement=SURFACE_TO_SURFACE, initialClearance=OMIT, interactionProperty=
+    'INTPROP-Frictionless', sliding=FINITE, thickness=ON)
+mdb.jobs['cube_indent'].submit(consistencyChecking=OFF)
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'PATH BASED TRACKING IS DEFINED IN CONTACT PAIR (ASSEMBLY_SURFACE-TOP,ASSEMBLY_PROBE-1_SURFACE-PROBE). PATH BASED TRACKING CANNOT BE USED WITH ANALYTICAL RIGID MAIN SURFACES, THE STATE BASED TRACKING ALGORITHM WILL BE USED INSTEAD.', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FILE, {
+    'file': '/home/lpacheco/UEL-ABAQUS/4_AFFCL_COUPLED/test_in_abaqus/cube_indent.odb', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(STEP, {'stepId': 1, 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MEMORY_ESTIMATE, {'memory': 24.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(PHYSICAL_MEMORY, {'physical_memory': 258048.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MINIMUM_MEMORY, {'minimum_memory': 17.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'THERE ARE 2 UNCONNECTED REGIONS IN THE MODEL.', 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 1, 
+    'attempts': 1, 'severe': 1, 'equilibrium': 5, 'iterations': 6, 
+    'totalTime': 1.0, 'stepTime': 1.0, 'timeIncrement': 1.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(END_STEP, {'stepId': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(JOB_COMPLETED, {
+    'time': 'Fri Mar 13 11:50:57 2026', 'jobName': 'cube_indent'})
+mdb.models['Model-1'].steps['indentation'].setValues(initialInc=0.1, maxInc=
+    0.2)
+mdb.jobs['cube_indent'].submit(consistencyChecking=OFF)
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'PATH BASED TRACKING IS DEFINED IN CONTACT PAIR (ASSEMBLY_SURFACE-TOP,ASSEMBLY_PROBE-1_SURFACE-PROBE). PATH BASED TRACKING CANNOT BE USED WITH ANALYTICAL RIGID MAIN SURFACES, THE STATE BASED TRACKING ALGORITHM WILL BE USED INSTEAD.', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FILE, {
+    'file': '/home/lpacheco/UEL-ABAQUS/4_AFFCL_COUPLED/test_in_abaqus/cube_indent.odb', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(STEP, {'stepId': 1, 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MEMORY_ESTIMATE, {'memory': 24.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(PHYSICAL_MEMORY, {'physical_memory': 258048.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MINIMUM_MEMORY, {'minimum_memory': 17.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'THERE ARE 2 UNCONNECTED REGIONS IN THE MODEL.', 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 1, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.1, 'stepTime': 0.1, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 2, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.2, 'stepTime': 0.2, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 3, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.35, 'stepTime': 0.35, 'timeIncrement': 0.15, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 3, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 4, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.55, 'stepTime': 0.55, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 4, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 5, 
+    'attempts': 1, 'severe': 1, 'equilibrium': 8, 'iterations': 9, 
+    'totalTime': 0.75, 'stepTime': 0.75, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 5, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 6, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 4, 'iterations': 4, 
+    'totalTime': 0.95, 'stepTime': 0.95, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 6, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 7, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 7, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 3, 'iterations': 3, 
+    'totalTime': 1.0, 'stepTime': 1.0, 'timeIncrement': 0.05, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(END_STEP, {'stepId': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(JOB_COMPLETED, {
+    'time': 'Fri Mar 13 11:51:59 2026', 'jobName': 'cube_indent'})
+mdb.models['Model-1'].parts['cube'].setElementType(elemTypes=(ElemType(
+    elemCode=C3D8, elemLibrary=STANDARD, secondOrderAccuracy=OFF, 
+    distortionControl=DEFAULT), ElemType(elemCode=C3D6, elemLibrary=STANDARD), 
+    ElemType(elemCode=C3D4, elemLibrary=STANDARD)), regions=(
+    mdb.models['Model-1'].parts['cube'].cells.getSequenceFromMask(('[#1 ]', ), 
+    ), ))
+mdb.models['Model-1'].rootAssembly.regenerate()
+mdb.jobs['cube_indent'].submit(consistencyChecking=OFF)
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'PATH BASED TRACKING IS DEFINED IN CONTACT PAIR (ASSEMBLY_SURFACE-TOP,ASSEMBLY_PROBE-1_SURFACE-PROBE). PATH BASED TRACKING CANNOT BE USED WITH ANALYTICAL RIGID MAIN SURFACES, THE STATE BASED TRACKING ALGORITHM WILL BE USED INSTEAD.', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FILE, {
+    'file': '/home/lpacheco/UEL-ABAQUS/4_AFFCL_COUPLED/test_in_abaqus/cube_indent.odb', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(STEP, {'stepId': 1, 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MEMORY_ESTIMATE, {'memory': 24.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(PHYSICAL_MEMORY, {'physical_memory': 258048.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MINIMUM_MEMORY, {'minimum_memory': 17.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'THERE ARE 2 UNCONNECTED REGIONS IN THE MODEL.', 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 1, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.1, 'stepTime': 0.1, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 2, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.2, 'stepTime': 0.2, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 3, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.35, 'stepTime': 0.35, 'timeIncrement': 0.15, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 3, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 4, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.55, 'stepTime': 0.55, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 4, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 5, 
+    'attempts': 1, 'severe': 1, 'equilibrium': 5, 'iterations': 6, 
+    'totalTime': 0.75, 'stepTime': 0.75, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 5, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 6, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 4, 'iterations': 4, 
+    'totalTime': 0.95, 'stepTime': 0.95, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 6, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 7, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 7, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 3, 'iterations': 3, 
+    'totalTime': 1.0, 'stepTime': 1.0, 'timeIncrement': 0.05, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(END_STEP, {'stepId': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(JOB_COMPLETED, {
+    'time': 'Fri Mar 13 11:53:56 2026', 'jobName': 'cube_indent'})
+mdb.models['Model-1'].Material(name='Material-Neo-Hooke')
+mdb.models['Model-1'].materials['Material-Neo-Hooke'].Hyperelastic(
+    materialType=ISOTROPIC, table=((1.0, 0.002), ), testData=OFF, type=
+    NEO_HOOKE, volumetricResponse=VOLUMETRIC_DATA)
+mdb.models['Model-1'].materials['Material-Neo-Hooke'].Density(table=((1.0, ), 
+    ))
+mdb.models['Model-1'].sections['SECTION_elastic'].setValues(material=
+    'Material-Neo-Hooke', thickness=None)
+mdb.models['Model-1'].sections.changeKey(fromName='SECTION_elastic', toName=
+    'SECTION_hyperelastic')
+mdb.jobs['cube_indent'].submit(consistencyChecking=OFF)
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'PATH BASED TRACKING IS DEFINED IN CONTACT PAIR (ASSEMBLY_SURFACE-TOP,ASSEMBLY_PROBE-1_SURFACE-PROBE). PATH BASED TRACKING CANNOT BE USED WITH ANALYTICAL RIGID MAIN SURFACES, THE STATE BASED TRACKING ALGORITHM WILL BE USED INSTEAD.', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ERROR, {
+    'message': '64 elements have missing property definitions. The elements have been identified in element set ErrElemMissingSection.', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FILE, {
+    'file': '/home/lpacheco/UEL-ABAQUS/4_AFFCL_COUPLED/test_in_abaqus/cube_indent.odb', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ABORTED, {
+    'message': 'Analysis phase failed due to errors', 'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ERROR, {
+    'message': 'Analysis Input File Processor exited with an error - Please see the  cube_indent.dat file for possible error messages if the file exists.', 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(JOB_ABORTED, {
+    'message': 'Analysis Input File Processor exited with an error - Please see the  cube_indent.dat file for possible error messages if the file exists.', 
+    'jobName': 'cube_indent'})
+mdb.models['Model-1'].parts['cube'].sectionAssignments[0].setValues(
+    sectionName='SECTION_hyperelastic')
+mdb.jobs['cube_indent'].submit(consistencyChecking=OFF)
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'PATH BASED TRACKING IS DEFINED IN CONTACT PAIR (ASSEMBLY_SURFACE-TOP,ASSEMBLY_PROBE-1_SURFACE-PROBE). PATH BASED TRACKING CANNOT BE USED WITH ANALYTICAL RIGID MAIN SURFACES, THE STATE BASED TRACKING ALGORITHM WILL BE USED INSTEAD.', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FILE, {
+    'file': '/home/lpacheco/UEL-ABAQUS/4_AFFCL_COUPLED/test_in_abaqus/cube_indent.odb', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ABORTED, {
+    'message': 'Analysis phase failed due to errors', 'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ERROR, {
+    'message': 'Analysis Input File Processor exited with an error - Please see the  cube_indent.dat file for possible error messages if the file exists.', 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(JOB_ABORTED, {
+    'message': 'Analysis Input File Processor exited with an error - Please see the  cube_indent.dat file for possible error messages if the file exists.', 
+    'jobName': 'cube_indent'})
+mdb.models['Model-1'].parts['cube'].setElementType(elemTypes=(ElemType(
+    elemCode=C3D8H, elemLibrary=STANDARD), ElemType(elemCode=C3D6, 
+    elemLibrary=STANDARD), ElemType(elemCode=C3D4, elemLibrary=STANDARD)), 
+    regions=(mdb.models['Model-1'].parts['cube'].cells.getSequenceFromMask((
+    '[#1 ]', ), ), ))
+mdb.models['Model-1'].rootAssembly.regenerate()
+mdb.jobs['cube_indent'].submit(consistencyChecking=OFF)
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'PATH BASED TRACKING IS DEFINED IN CONTACT PAIR (ASSEMBLY_SURFACE-TOP,ASSEMBLY_PROBE-1_SURFACE-PROBE). PATH BASED TRACKING CANNOT BE USED WITH ANALYTICAL RIGID MAIN SURFACES, THE STATE BASED TRACKING ALGORITHM WILL BE USED INSTEAD.', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FILE, {
+    'file': '/home/lpacheco/UEL-ABAQUS/4_AFFCL_COUPLED/test_in_abaqus/cube_indent.odb', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(STEP, {'stepId': 1, 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MEMORY_ESTIMATE, {'memory': 24.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(PHYSICAL_MEMORY, {'physical_memory': 258048.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MINIMUM_MEMORY, {'minimum_memory': 17.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'THERE ARE 2 UNCONNECTED REGIONS IN THE MODEL.', 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 1, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.1, 'stepTime': 0.1, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 2, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.2, 'stepTime': 0.2, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 3, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.35, 'stepTime': 0.35, 'timeIncrement': 0.15, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 3, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 4, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.55, 'stepTime': 0.55, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 4, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 5, 
+    'attempts': 1, 'severe': 1, 'equilibrium': 7, 'iterations': 8, 
+    'totalTime': 0.75, 'stepTime': 0.75, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 5, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 6, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 5, 'iterations': 5, 
+    'totalTime': 0.95, 'stepTime': 0.95, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 6, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 7, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 7, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 2, 'iterations': 2, 
+    'totalTime': 1.0, 'stepTime': 1.0, 'timeIncrement': 0.05, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(END_STEP, {'stepId': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(JOB_COMPLETED, {
+    'time': 'Fri Mar 13 12:00:31 2026', 'jobName': 'cube_indent'})
+mdb.models['Model-1'].interactions['INTERACTION-Contact'].setValues(
+    adjustMethod=NONE, bondingSet=None, enforcement=NODE_TO_SURFACE, 
+    initialClearance=OMIT, sliding=FINITE, smooth=0.2, supplementaryContact=
+    SELECTIVE, surfaceSmoothing=NONE, thickness=OFF)
+mdb.jobs['cube_indent'].submit(consistencyChecking=OFF)
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(ODB_FILE, {
+    'file': '/home/lpacheco/UEL-ABAQUS/4_AFFCL_COUPLED/test_in_abaqus/cube_indent.odb', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(STEP, {'stepId': 1, 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MEMORY_ESTIMATE, {'memory': 24.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(PHYSICAL_MEMORY, {'physical_memory': 258048.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MINIMUM_MEMORY, {'minimum_memory': 17.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'THERE ARE 2 UNCONNECTED REGIONS IN THE MODEL.', 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 1, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.1, 'stepTime': 0.1, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 2, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.2, 'stepTime': 0.2, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 3, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.35, 'stepTime': 0.35, 'timeIncrement': 0.15, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 3, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 4, 
+    'attempts': 1, 'severe': 1, 'equilibrium': 3, 'iterations': 4, 
+    'totalTime': 0.55, 'stepTime': 0.55, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 4, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 5, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 3, 'iterations': 3, 
+    'totalTime': 0.75, 'stepTime': 0.75, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 5, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 6, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 2, 'iterations': 2, 
+    'totalTime': 0.95, 'stepTime': 0.95, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 6, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 7, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 7, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 2, 'iterations': 2, 
+    'totalTime': 1.0, 'stepTime': 1.0, 'timeIncrement': 0.05, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(END_STEP, {'stepId': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(JOB_COMPLETED, {
+    'time': 'Fri Mar 13 12:02:06 2026', 'jobName': 'cube_indent'})
+mdb.models['Model-1'].interactions['INTERACTION-Contact'].setValues(
+    adjustMethod=NONE, bondingSet=None, contactTracking=TWO_CONFIG, 
+    enforcement=SURFACE_TO_SURFACE, initialClearance=OMIT, sliding=FINITE, 
+    smooth=0.2, surfaceSmoothing=NONE, thickness=ON)
+mdb.models['Model-1'].interactionProperties['INTPROP-Frictionless'].tangentialBehavior.setValues(
+    formulation=FRICTIONLESS)
+mdb.models['Model-1'].interactionProperties['INTPROP-Frictionless'].NormalBehavior(
+    allowSeparation=ON, constraintEnforcementMethod=DEFAULT, 
+    pressureOverclosure=HARD)
+mdb.jobs['cube_indent'].submit(consistencyChecking=OFF)
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'PATH BASED TRACKING IS DEFINED IN CONTACT PAIR (ASSEMBLY_SURFACE-TOP,ASSEMBLY_PROBE-1_SURFACE-PROBE). PATH BASED TRACKING CANNOT BE USED WITH ANALYTICAL RIGID MAIN SURFACES, THE STATE BASED TRACKING ALGORITHM WILL BE USED INSTEAD.', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FILE, {
+    'file': '/home/lpacheco/UEL-ABAQUS/4_AFFCL_COUPLED/test_in_abaqus/cube_indent.odb', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(STEP, {'stepId': 1, 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MEMORY_ESTIMATE, {'memory': 24.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(PHYSICAL_MEMORY, {'physical_memory': 258048.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MINIMUM_MEMORY, {'minimum_memory': 17.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'THERE ARE 2 UNCONNECTED REGIONS IN THE MODEL.', 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 1, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.1, 'stepTime': 0.1, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 2, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.2, 'stepTime': 0.2, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 3, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.35, 'stepTime': 0.35, 'timeIncrement': 0.15, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 3, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 4, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.55, 'stepTime': 0.55, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 4, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 5, 
+    'attempts': 1, 'severe': 1, 'equilibrium': 7, 'iterations': 8, 
+    'totalTime': 0.75, 'stepTime': 0.75, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 5, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 6, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 5, 'iterations': 5, 
+    'totalTime': 0.95, 'stepTime': 0.95, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 6, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 7, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 7, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 2, 'iterations': 2, 
+    'totalTime': 1.0, 'stepTime': 1.0, 'timeIncrement': 0.05, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(END_STEP, {'stepId': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(JOB_COMPLETED, {
+    'time': 'Fri Mar 13 12:07:18 2026', 'jobName': 'cube_indent'})
+mdb.models['Model-1'].interactionProperties['INTPROP-Frictionless'].tangentialBehavior.setValues(
+    formulation=FRICTIONLESS)
+mdb.models['Model-1'].interactionProperties['INTPROP-Frictionless'].normalBehavior.setValues(
+    allowSeparation=ON, clearanceAtZeroContactPressure=0.0, 
+    constraintEnforcementMethod=AUGMENTED_LAGRANGE, contactStiffness=DEFAULT, 
+    contactStiffnessScaleFactor=1.0, pressureOverclosure=HARD)
+mdb.jobs['cube_indent'].submit(consistencyChecking=OFF)
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'PATH BASED TRACKING IS DEFINED IN CONTACT PAIR (ASSEMBLY_SURFACE-TOP,ASSEMBLY_PROBE-1_SURFACE-PROBE). PATH BASED TRACKING CANNOT BE USED WITH ANALYTICAL RIGID MAIN SURFACES, THE STATE BASED TRACKING ALGORITHM WILL BE USED INSTEAD.', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FILE, {
+    'file': '/home/lpacheco/UEL-ABAQUS/4_AFFCL_COUPLED/test_in_abaqus/cube_indent.odb', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(STEP, {'stepId': 1, 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MEMORY_ESTIMATE, {'memory': 24.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(PHYSICAL_MEMORY, {'physical_memory': 258048.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MINIMUM_MEMORY, {'minimum_memory': 17.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'THERE ARE 2 UNCONNECTED REGIONS IN THE MODEL.', 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 1, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.1, 'stepTime': 0.1, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 2, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.2, 'stepTime': 0.2, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 3, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.35, 'stepTime': 0.35, 'timeIncrement': 0.15, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 3, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 4, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.55, 'stepTime': 0.55, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 4, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 5, 
+    'attempts': 1, 'severe': 1, 'equilibrium': 7, 'iterations': 8, 
+    'totalTime': 0.75, 'stepTime': 0.75, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 5, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 6, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 5, 'iterations': 5, 
+    'totalTime': 0.95, 'stepTime': 0.95, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 6, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 7, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 7, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 2, 'iterations': 2, 
+    'totalTime': 1.0, 'stepTime': 1.0, 'timeIncrement': 0.05, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(END_STEP, {'stepId': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(JOB_COMPLETED, {
+    'time': 'Fri Mar 13 12:08:16 2026', 'jobName': 'cube_indent'})
+mdb.models['Model-1'].rootAssembly.Surface(name='m_Surf-3', side2Faces=
+    mdb.models['Model-1'].rootAssembly.instances['probe-1'].faces.getSequenceFromMask(
+    ('[#1 ]', ), ))
+mdb.models['Model-1'].interactions['INTERACTION-Contact'].setValues(
+    adjustMethod=NONE, bondingSet=None, contactTracking=TWO_CONFIG, 
+    enforcement=SURFACE_TO_SURFACE, initialClearance=OMIT, main=
+    mdb.models['Model-1'].rootAssembly.surfaces['m_Surf-3'], sliding=FINITE, 
+    thickness=ON)
+del mdb.models['Model-1'].rootAssembly.surfaces['Surface-Probe']
+mdb.jobs['cube_indent'].submit(consistencyChecking=OFF)
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'PATH BASED TRACKING IS DEFINED IN CONTACT PAIR (ASSEMBLY_SURFACE-TOP,ASSEMBLY_PROBE-1_M_SURF-3). PATH BASED TRACKING CANNOT BE USED WITH ANALYTICAL RIGID MAIN SURFACES, THE STATE BASED TRACKING ALGORITHM WILL BE USED INSTEAD.', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FILE, {
+    'file': '/home/lpacheco/UEL-ABAQUS/4_AFFCL_COUPLED/test_in_abaqus/cube_indent.odb', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(STEP, {'stepId': 1, 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MEMORY_ESTIMATE, {'memory': 24.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(PHYSICAL_MEMORY, {'physical_memory': 258048.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MINIMUM_MEMORY, {'minimum_memory': 17.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'THERE ARE 2 UNCONNECTED REGIONS IN THE MODEL.', 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 1, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.1, 'stepTime': 0.1, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 2, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.2, 'stepTime': 0.2, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 3, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.35, 'stepTime': 0.35, 'timeIncrement': 0.15, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 3, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 4, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.55, 'stepTime': 0.55, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 4, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 5, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.75, 'stepTime': 0.75, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 5, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 6, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.95, 'stepTime': 0.95, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 6, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 7, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 7, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 1.0, 'stepTime': 1.0, 'timeIncrement': 0.05, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(END_STEP, {'stepId': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(JOB_COMPLETED, {
+    'time': 'Fri Mar 13 12:11:18 2026', 'jobName': 'cube_indent'})
+mdb.models['Model-1'].rootAssembly.Surface(name='m_Surf-4', side1Faces=
+    mdb.models['Model-1'].rootAssembly.instances['probe-1'].faces.getSequenceFromMask(
+    ('[#1 ]', ), ))
+mdb.models['Model-1'].interactions['INTERACTION-Contact'].setValues(
+    adjustMethod=NONE, bondingSet=None, contactTracking=TWO_CONFIG, 
+    enforcement=SURFACE_TO_SURFACE, initialClearance=OMIT, main=
+    mdb.models['Model-1'].rootAssembly.surfaces['m_Surf-4'], sliding=FINITE, 
+    thickness=ON)
+del mdb.models['Model-1'].rootAssembly.surfaces['m_Surf-3']
+mdb.jobs['cube_indent'].submit(consistencyChecking=OFF)
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'PATH BASED TRACKING IS DEFINED IN CONTACT PAIR (ASSEMBLY_SURFACE-TOP,ASSEMBLY_PROBE-1_M_SURF-4). PATH BASED TRACKING CANNOT BE USED WITH ANALYTICAL RIGID MAIN SURFACES, THE STATE BASED TRACKING ALGORITHM WILL BE USED INSTEAD.', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FILE, {
+    'file': '/home/lpacheco/UEL-ABAQUS/4_AFFCL_COUPLED/test_in_abaqus/cube_indent.odb', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(STEP, {'stepId': 1, 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MEMORY_ESTIMATE, {'memory': 24.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(PHYSICAL_MEMORY, {'physical_memory': 258048.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MINIMUM_MEMORY, {'minimum_memory': 17.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'THERE ARE 2 UNCONNECTED REGIONS IN THE MODEL.', 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 1, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.1, 'stepTime': 0.1, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 2, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.2, 'stepTime': 0.2, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 3, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.35, 'stepTime': 0.35, 'timeIncrement': 0.15, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 3, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 4, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.55, 'stepTime': 0.55, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 4, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 5, 
+    'attempts': 1, 'severe': 1, 'equilibrium': 7, 'iterations': 8, 
+    'totalTime': 0.75, 'stepTime': 0.75, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 5, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 6, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 5, 'iterations': 5, 
+    'totalTime': 0.95, 'stepTime': 0.95, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 6, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 7, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 7, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 2, 'iterations': 2, 
+    'totalTime': 1.0, 'stepTime': 1.0, 'timeIncrement': 0.05, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(END_STEP, {'stepId': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(JOB_COMPLETED, {
+    'time': 'Fri Mar 13 12:14:05 2026', 'jobName': 'cube_indent'})
+mdb.models['Model-1'].materials['Material-Neo-Hooke'].hyperelastic.setValues(
+    table=((1.0, 0.005), ))
+mdb.jobs['cube_indent'].submit(consistencyChecking=OFF)
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'PATH BASED TRACKING IS DEFINED IN CONTACT PAIR (ASSEMBLY_SURFACE-TOP,ASSEMBLY_PROBE-1_M_SURF-4). PATH BASED TRACKING CANNOT BE USED WITH ANALYTICAL RIGID MAIN SURFACES, THE STATE BASED TRACKING ALGORITHM WILL BE USED INSTEAD.', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FILE, {
+    'file': '/home/lpacheco/UEL-ABAQUS/4_AFFCL_COUPLED/test_in_abaqus/cube_indent.odb', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(STEP, {'stepId': 1, 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MEMORY_ESTIMATE, {'memory': 24.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(PHYSICAL_MEMORY, {'physical_memory': 258048.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MINIMUM_MEMORY, {'minimum_memory': 17.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'THERE ARE 2 UNCONNECTED REGIONS IN THE MODEL.', 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 1, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.1, 'stepTime': 0.1, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 2, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.2, 'stepTime': 0.2, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 3, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.35, 'stepTime': 0.35, 'timeIncrement': 0.15, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 3, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 4, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.55, 'stepTime': 0.55, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 4, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 5, 
+    'attempts': 1, 'severe': 1, 'equilibrium': 7, 'iterations': 8, 
+    'totalTime': 0.75, 'stepTime': 0.75, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 5, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 6, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 5, 'iterations': 5, 
+    'totalTime': 0.95, 'stepTime': 0.95, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 6, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 7, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 7, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 2, 'iterations': 2, 
+    'totalTime': 1.0, 'stepTime': 1.0, 'timeIncrement': 0.05, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(END_STEP, {'stepId': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(JOB_COMPLETED, {
+    'time': 'Fri Mar 13 12:15:35 2026', 'jobName': 'cube_indent'})
+mdb.models['Model-1'].parts['cube'].deleteMesh()
+mdb.models['Model-1'].parts['cube'].seedPart(deviationFactor=0.1, 
+    minSizeFactor=0.1, size=0.2)
+mdb.models['Model-1'].parts['cube'].generateMesh()
+mdb.models['Model-1'].rootAssembly.regenerate()
+mdb.jobs['cube_indent'].submit(consistencyChecking=OFF)
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'PATH BASED TRACKING IS DEFINED IN CONTACT PAIR (ASSEMBLY_SURFACE-TOP,ASSEMBLY_PROBE-1_M_SURF-4). PATH BASED TRACKING CANNOT BE USED WITH ANALYTICAL RIGID MAIN SURFACES, THE STATE BASED TRACKING ALGORITHM WILL BE USED INSTEAD.', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FILE, {
+    'file': '/home/lpacheco/UEL-ABAQUS/4_AFFCL_COUPLED/test_in_abaqus/cube_indent.odb', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(STEP, {'stepId': 1, 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MEMORY_ESTIMATE, {'memory': 39.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(PHYSICAL_MEMORY, {'physical_memory': 258048.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MINIMUM_MEMORY, {'minimum_memory': 20.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'THERE ARE 2 UNCONNECTED REGIONS IN THE MODEL.', 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 1, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.1, 'stepTime': 0.1, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 2, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.2, 'stepTime': 0.2, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 3, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.35, 'stepTime': 0.35, 'timeIncrement': 0.15, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 3, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 4, 
+    'attempts': 1, 'severe': 1, 'equilibrium': 3, 'iterations': 4, 
+    'totalTime': 0.55, 'stepTime': 0.55, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 4, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 5, 
+    'attempts': 1, 'severe': 2, 'equilibrium': 5, 'iterations': 7, 
+    'totalTime': 0.75, 'stepTime': 0.75, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 5, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 6, 
+    'attempts': ' 1U', 'severe': 2, 'equilibrium': 9, 'iterations': 11, 
+    'totalTime': 0.75, 'stepTime': 0.75, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'FORCE equilibrium accepted using the alternate tolerance.', 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 6, 
+    'attempts': 2, 'severe': 1, 'equilibrium': 10, 'iterations': 11, 
+    'totalTime': 0.85, 'stepTime': 0.85, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 6, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'FORCE equilibrium accepted using the alternate tolerance.', 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 7, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 15, 'iterations': 15, 
+    'totalTime': 0.95, 'stepTime': 0.95, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 7, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'FORCE equilibrium accepted using the alternate tolerance.', 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 8, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 8, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 10, 'iterations': 10, 
+    'totalTime': 1.0, 'stepTime': 1.0, 'timeIncrement': 0.05, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(END_STEP, {'stepId': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(JOB_COMPLETED, {
+    'time': 'Fri Mar 13 12:16:34 2026', 'jobName': 'cube_indent'})
+mdb.models['Model-1'].ConstrainedSketch(name='__edit__', objectToCopy=
+    mdb.models['Model-1'].parts['probe'].features['3D Analytic rigid shell-1'].sketch)
+mdb.models['Model-1'].parts['probe'].projectReferencesOntoSketch(filter=
+    COPLANAR_EDGES, sketch=mdb.models['Model-1'].sketches['__edit__'], 
+    upToFeature=
+    mdb.models['Model-1'].parts['probe'].features['3D Analytic rigid shell-1'])
+mdb.models['Model-1'].sketches['__edit__'].offset(distance=0.05, objectList=(
+    mdb.models['Model-1'].sketches['__edit__'].geometry[8], ), side=RIGHT)
+mdb.models['Model-1'].sketches['__edit__'].autoTrimCurve(curve1=
+    mdb.models['Model-1'].sketches['__edit__'].geometry[8], point1=(
+    0.0949200093746185, -0.231783509254456))
+mdb.models['Model-1'].sketches['__edit__'].offset(distance=0.2, objectList=(
+    mdb.models['Model-1'].sketches['__edit__'].geometry[9], ), side=RIGHT)
+mdb.models['Model-1'].sketches['__edit__'].autoTrimCurve(curve1=
+    mdb.models['Model-1'].sketches['__edit__'].geometry[9], point1=(
+    0.202805683016777, -0.221501022577286))
+mdb.models['Model-1'].parts['probe'].features['3D Analytic rigid shell-1'].setValues(
+    sketch=mdb.models['Model-1'].sketches['__edit__'])
+del mdb.models['Model-1'].sketches['__edit__']
+mdb.models['Model-1'].parts['probe'].regenerate()
+#* FeatureError: Regeneration failed
+mdb.models['Model-1'].parts['probe'].backup()
+del mdb.models['Model-1'].parts['probe'].features['RP']
+mdb.models['Model-1'].parts['probe'].ReferencePoint(point=
+    mdb.models['Model-1'].parts['probe'].vertices[0])
+mdb.models['Model-1'].rootAssembly.regenerate()
+mdb.models['Model-1'].rootAssembly.translate(instanceList=('probe-1', ), 
+    vector=(0.0, 0.25, 0.0))
+mdb.models['Model-1'].rootAssembly.Surface(name='SURFACE-Probe', side1Faces=
+    mdb.models['Model-1'].rootAssembly.instances['probe-1'].faces.getSequenceFromMask(
+    ('[#1 ]', ), ))
+mdb.models['Model-1'].interactions['INTERACTION-Contact'].setValues(
+    adjustMethod=NONE, bondingSet=None, contactTracking=TWO_CONFIG, 
+    enforcement=SURFACE_TO_SURFACE, initialClearance=OMIT, main=
+    mdb.models['Model-1'].rootAssembly.surfaces['SURFACE-Probe'], sliding=
+    FINITE, thickness=ON)
+del mdb.models['Model-1'].rootAssembly.surfaces['m_Surf-4']
+mdb.models['Model-1'].boundaryConditions['BC-ProbeDisplacement'].setValues(
+    region=mdb.models['Model-1'].rootAssembly.sets['Set-RP'])
+mdb.models['Model-1'].parts['cube'].deleteMesh()
+mdb.models['Model-1'].parts['cube'].seedPart(deviationFactor=0.1, 
+    minSizeFactor=0.1, size=0.5)
+mdb.models['Model-1'].parts['cube'].generateMesh()
+mdb.models['Model-1'].rootAssembly.regenerate()
+del mdb.models['Model-1'].rootAssembly.sets['Set-RP']
+mdb.models['Model-1'].rootAssembly.Set(name='Set-RP', referencePoints=(
+    mdb.models['Model-1'].rootAssembly.instances['probe-1'].referencePoints[4], 
+    ))
+mdb.models['Model-1'].boundaryConditions['BC-ProbeDisplacement'].setValues(
+    region=mdb.models['Model-1'].rootAssembly.sets['Set-RP'])
+mdb.jobs['cube_indent'].submit(consistencyChecking=OFF)
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'PATH BASED TRACKING IS DEFINED IN CONTACT PAIR (ASSEMBLY_SURFACE-TOP,ASSEMBLY_PROBE-1_SURFACE-PROBE). PATH BASED TRACKING CANNOT BE USED WITH ANALYTICAL RIGID MAIN SURFACES, THE STATE BASED TRACKING ALGORITHM WILL BE USED INSTEAD.', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FILE, {
+    'file': '/home/lpacheco/UEL-ABAQUS/4_AFFCL_COUPLED/test_in_abaqus/cube_indent.odb', 
+    'phase': BATCHPRE_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': BATCHPRE_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STARTED, {'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent', 'clientHost': 'nexus', 'handle': 0})
+mdb.jobs['cube_indent']._Message(STEP, {'stepId': 1, 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MEMORY_ESTIMATE, {'memory': 24.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(PHYSICAL_MEMORY, {'physical_memory': 258048.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(MINIMUM_MEMORY, {'minimum_memory': 17.0, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(WARNING, {
+    'message': 'THERE ARE 2 UNCONNECTED REGIONS IN THE MODEL.', 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 1, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.1, 'stepTime': 0.1, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 2, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.2, 'stepTime': 0.2, 'timeIncrement': 0.1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 3, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.35, 'stepTime': 0.35, 'timeIncrement': 0.15, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 3, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 4, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 1, 'iterations': 1, 
+    'totalTime': 0.55, 'stepTime': 0.55, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 4, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 5, 
+    'attempts': 1, 'severe': 1, 'equilibrium': 3, 'iterations': 4, 
+    'totalTime': 0.75, 'stepTime': 0.75, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 5, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 6, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 4, 'iterations': 4, 
+    'totalTime': 0.95, 'stepTime': 0.95, 'timeIncrement': 0.2, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 6, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(ODB_FRAME, {'step': 0, 'frame': 7, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(STATUS, {'step': 1, 'increment': 7, 
+    'attempts': 1, 'severe': 0, 'equilibrium': 3, 'iterations': 3, 
+    'totalTime': 1.0, 'stepTime': 1.0, 'timeIncrement': 0.05, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(END_STEP, {'stepId': 1, 
+    'phase': STANDARD_PHASE, 'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(COMPLETED, {
+    'message': 'Analysis phase complete', 'phase': STANDARD_PHASE, 
+    'jobName': 'cube_indent'})
+mdb.jobs['cube_indent']._Message(JOB_COMPLETED, {
+    'time': 'Fri Mar 13 12:28:29 2026', 'jobName': 'cube_indent'})

@@ -1,0 +1,5 @@
+**
+*uel property, elset=main_mesh
+<K>,<C10>,<CHI>,<D>,<MU0>,<VMOL>,<RGAS>,<THETA>,
+**                                        nlSdv   ngSdv
+<PHI0>,   8,    8

@@ -1,0 +1,24 @@
+*Amplitude,name=amp
+0., 0., 1., 0.8, 2., 0., 3., 0.9
+4., 0., 5., 1., 6., 0.
+*** BOUNDARY CONDITIONS
+** Type: Displacement/Rotation
+*Boundary, op=MOD
+Set-1, YSYMM
+** Name: BC-1 Type: Symmetry/Antisymmetry/Encastre
+*Boundary, op=MOD
+Set-3, ZSYMM
+** Name: BC-2 Type: Symmetry/Antisymmetry/Encastre
+*Boundary, op=MOD
+Set-4, XSYMM
+*Boundary, op=MOD
+Set-2, 2,2, 0.3
+*Boundary, op=MOD
+Set-7, 1,1, 0.3
+**
+** LOADS
+**
+** Name: Load1   Type: Surface traction
+**Cload
+**Set-2, 2, 0.6
+**Set-7, 1, 0.6

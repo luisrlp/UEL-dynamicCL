@@ -1,0 +1,1 @@
+gfortran -o nh_coupled.o material.f90 main.f90

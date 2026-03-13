@@ -1,0 +1,128 @@
+PROGRAM TEST_GENERAL_UMAT
+    use,intrinsic :: ISO_Fortran_env
+    INCLUDE 'aba_param.inc'
+    INCLUDE 'param_umat.inc'
+    
+    !C     ADD COMMON BLOCKS HERE IF NEEDED ()
+    !C      COMMON /KBLOCK/KBLOCK
+    
+    PARAMETER(NTENS = 6, NSTATEV = NSDV, NPROPS = 9, NDI=3, NSHR=3)
+    PARAMETER(NOEL = 1, NPT = 8)
+    !
+    CHARACTER*8 CMNAME
+    DIMENSION STRESS(NDI, NDI),STATEV(NSTATEV),DDSDDE(NTENS,NTENS),DDSDDT(NTENS),      &
+    DRPLDE(NTENS),STRAN(NTENS),DSTRAN(NTENS),TIME(2),PREDEF(1),DPRED(1),            &
+    PROPS(NPROPS),COORDS(3),DROT(3,3),DFGRD0(3,3),DFGRD1(3,3)
+    !
+    i=1.0d0
+    j=1.0d0
+    DO i=1,NTENS
+        DO j=1,NTENS
+            DDSDDE(i,j)=0.0D0
+        ENDDO
+    ENDDO
+    DO i=1,NDI
+        DO j=1,NDI
+            STRESS(i,j)=0.0D0
+        ENDDO
+    ENDDO
+    
+    !
+    ! DEFORMATION GRADIENT
+    DFGRD1(1,1)= 1.1D0
+    DFGRD1(1,2)= 0.0D0
+    DFGRD1(1,3)= 0.0D0
+    DFGRD1(2,1)= 0.0D0
+    DFGRD1(2,2)= 1.0D0/DFGRD1(1,1)
+    DFGRD1(2,3)= 0.0D0
+    DFGRD1(3,1)= 0.0D0
+    DFGRD1(3,2)= 0.0D0
+    DFGRD1(3,3)= 1.0D0/DFGRD1(1,1)
+    !
+    time(1)=0.d0
+    time(2)=0.d0
+    dtime = 0.1d0
+    kstep = 1
+    !
+    ! MATERIAL PROPERTIES
+    !
+    ! k PENALTY PARAMETER
+    PROPS(1)=1000.d0
+    ! ISOTROPIC MATRIX
+    ! C10=
+    PROPS(2)=1.00d0
+    !
+    ! !viscous parameters - maxwell
+    ! ! v - number of dashpots
+    PROPS(3)=0
+    ! !tau1 %
+    PROPS(4)=2.0d0
+    ! !teta1
+    PROPS(5)=0.835d0
+    ! !tau2 %
+    PROPS(6)=1.2d0
+    ! !teta2
+    PROPS(7)=7.0d0
+    ! !tau3 %
+    PROPS(8)=12.d0
+    ! !teta3
+    PROPS(9)=2.0d0
+    ! !
+    STATEV=0.D0
+    !
+    erf=0.d0
+    RHO=0.D0
+    !
+    !
+     DFGRD1(1,1)=  1.0D0
+     DFGRD1(1,2)=  0.0D0
+     DFGRD1(1,3)=  0.0d0
+     DFGRD1(2,1)=  0.0d0
+     DFGRD1(2,2)=  1.0D0
+     DFGRD1(2,3)=  0.0d0
+     DFGRD1(3,1)=  0.0d0
+     DFGRD1(3,2)=  0.0d0
+     DFGRD1(3,3)=  1.0D0
+    !
+    !################################################################################################!
+    !!     TENSILE MONOTONIC LOAD TEST
+     DFGRD1(1,1)=  1.3D0
+     DFGRD1(1,2)=  0.0D0
+     DFGRD1(1,3)=  0.0d0
+     DFGRD1(2,1)=  0.0d0
+     DFGRD1(2,2)=  1/sqrt(DFGRD1(1,1))
+     DFGRD1(2,3)=  0.0d0
+     DFGRD1(3,1)=  0.0d0
+     DFGRD1(3,2)=  0.0d0
+     DFGRD1(3,3)=  1/sqrt(DFGRD1(1,1))
+    !
+     DFGRD1(1,1)=  0.999409865502331
+     DFGRD1(1,2)=  6.840823995929941E-004
+     DFGRD1(1,3)=  1.415375547882356E-009
+     DFGRD1(2,1)=  -2.710760077512183E-020
+     DFGRD1(2,2)=  1.00134406533680
+     DFGRD1(2,3)=  -2.710760077512183E-020
+     DFGRD1(3,1)=  -3.978368599508040E-010
+     DFGRD1(3,2)=  -8.550969990486904E-005
+     DFGRD1(3,3)=  0.999249478911563
+
+    
+     CALL MATERIAL(STRESS,STATEV,DDSDDE,DFGRD0,DFGRD1,DET,TIME,DTIME,PREDEF,NDI, &
+     NSHR,NTENS,NSTATEV,PROPS,NPROPS,COORDS,PNEWDT,NOEL,NPT,KSTEP,KINC)
+    !  CALL MATERIAL(STRESS,STATEV,DDSDDE,SSE,SPD,SCD,RPL,DDSDDT, DRPLDE,DRPLDT,STRAN,     &
+    ! DSTRAN,TIME,DTIME,TEMP,DTEMP,PREDEF,DPRED,CMNAME,NDI,NSHR,NTENS,NSTATEV,PROPS,  &
+    ! NPROPS,COORDS,DROT,PNEWDT,CELENT,DFGRD0,DFGRD1,NOEL,NPT,LAYER,KSPT,KSTEP,KINC)
+    !
+    
+     write(*,*) 'STRESS'
+     write(*,*) STRESS(1,1), STRESS(1,2), STRESS(1,3)
+     write(*,*) STRESS(2,1), STRESS(2,2), STRESS(2,3)
+     write(*,*) STRESS(3,1), STRESS(3,2), STRESS(3,3)
+     write(*,*)
+     write(*,*) 'DDSDDE'
+     write(*,*) DDSDDE
+
+    !################################################################################################!
+    !
+    END PROGRAM
+    

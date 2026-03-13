@@ -1,0 +1,60 @@
+<Description>
+      ABAQUS/ABQvwrG rank 00 pid 210936 received signal 2 (Interrupt) from process 0
+
+</Description>
+
+<Details>
+      
+</Details>
+
+
+<Context>
+   ABQvwrG
+</Context>
+
+
+<Memory>
+   <Current>            0 GB </Current>
+   <Resident>           0 GB </Resident>
+   <Physical>         252 GB </Physical>
+   <Limit>              0 GB </Limit>
+   <Accessible>       252 GB </Accessible>
+   <Available>         85 GB </Available>
+   <Allocator>            DL </Allocator>
+   <HugePages>        always </HugePages>
+</Memory>
+
+<Swap>
+       <Size>          19 GB </Size>
+       <Used>           0 GB </Used>
+       <Free>          19 GB </Free>
+</Swap>
+
+<Directories>
+  <current> /home/lpacheco/UEL-ABAQUS/1_AFFCL/test_in_abaqus </current> <free>     35 GB </free>   <used>   5229 GB </used> 
+</Directories>
+
+<Installation>
+</Installation>
+
+<Callstack>
+   1) libc.so.6                  0x000fdfaf ! __recv           :?
+   2) libABQSMAInbVwrIPC.so      0x0001a219 ! ipc_Socket::Recv ??:?
+   3) libABQSMAInbVwrIPC.so      0x000157d1 ! ipc_IsokStreamDevice::read ??:?
+   4) libABQSMAInbVwrIPC.so      0x0001559b ! ipc_IsokStreamDevice::pullFull ??:?
+   5) libABQSMAAbuBasicUtils.so  0x0009f3bc ! bio_Idevice::iRemnant ??:?
+   6) libABQSMAAbuBasicUtils.so  0x000a01db ! bio_Ifilter::shortMove ??:?
+   7) libABQSMAAbuBasicUtils.so  0x000a0573 ! bio_Ifilter::operator>> ??:?
+   8) libABQSMAInbVwrIPC.so      0x00017854 ! ipc_Que::deq     ??:?
+   9) libABQSMAInbVwrIPC.so      0x00014aea ! ipc_Client::ReceiveReply ??:?
+  10) libABQSMAInbVwrIPC.so      0x00014dc9 ! ipc_Client::SendRequest ??:?
+  11) libABQSMAIngVwrGui.so      0x002a7793 ! mdmG_KerClientBase::HandleDirectManipulationRequest ??:?
+  12) libABQSMAIngVwrGui.so      0x0031c0f8 ! oslG_DirectManipulationProxy::SendSyncDirectManipInfo ??:?
+  13) libABQSMAIngVwrGui.so      0x0031b31b ! oslG_DirectManipulationClient::SendSyncDirectManipInfo ??:?
+  14) libABQSMAIngVwrGui.so      0x0031b8c3 ! oslG_DirectManipulationProxy::HandleMotionEvent ??:?
+  15) libABQSMAIngVwrGui.so      0x002a8c49 ! mdmG_Manipulator::InputCB ??:?
+  16) libABQSMAIngVwrGui.so      0x001f8192 ! cnvG_Viewport::onMotion ??:?
+  17) libABQSMAFoxFoxAPI.so      0x000b4cf8 ! FXApp::dispatchEvent ??:?
+  18) libABQSMAFoxFoxAPI.so      0x000b8808 ! FXApp::runOneEvent ??:?
+</Callstack>
+
