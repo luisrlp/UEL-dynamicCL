@@ -1455,18 +1455,18 @@ end subroutine AssembleElement
                        TIME, DTIME, PREDEF, &
                        nDim, nshr, ntens, nsdv, PROPS, NPROPS, coords, PNEWDT, &
                        JELEM, intpt, KSTEP, KINC,MU_TAU,PHI_T,THETA0,PHI_TAU,DPDT, &
-                       DPHIDMU,DPHIDOTDMU,MFLUID,DMDMU,DMDJ,VMOL,SPUCMOD,SPCUMODFAC)
+                       DPHIDMU,DPHIDOTDMU,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,SPUCMOD,SPCUMODFAC)
                !
                !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
                ! Previous determinant of the deformation gradient
-               write(*, *) 'detF_t=', prev_statev(2)
+               ! write(*, *) 'detF_t=', prev_statev(2)
                ! Current determinant of the deformation gradient
-               write(*, *) 'detF_tau=', statev(2)
+               ! write(*, *) 'detF_tau=', statev(2)
                ! Save the state variables at this integ point
                !  at the end of the increment
                !
                SVARS(1 + jj : nsdv + jj) = statev
-               jj = jj + nlSdv 
+               jj = jj + nlSdv
          ! setup for the next intPt      
          ! Save the state variables at this integ point in the
          !  global array used for plotting field output
@@ -1474,6 +1474,8 @@ end subroutine AssembleElement
          globalSdv(jelem, intPt, 1:nsdv) = statev
 
          ! Time stepping algorithm based on the constitutive response
+         write(*,*) 'statev(1) = ', statev(1)
+         write(*,*) 'phi_tau = ', phi_tau
          phiLmt = 0.005d0
          phi_tau = statev(1)
          phi_t = prev_statev(1)
@@ -2098,6 +2100,7 @@ end subroutine UEL
         ! uvar(1) = globalSdv(noel-ElemOffset,npt,1)
         ! for example
         ! uvar(2) = globalSdv(noel-ElemOffset,npt,2)
+
         do i1 = 1, nsdv
             UVAR(i1) = globalSdv(noel-ElemOffset, npt, i1)
         end do
@@ -3386,13 +3389,13 @@ END DO
 RETURN
 
 END SUBROUTINE indexx
-SUBROUTINE initialize(statev, phi_t)
+SUBROUTINE initialize(statev, phi_t, Vmol)
 use global
 IMPLICIT NONE
 
 !      DOUBLE PRECISION TIME(2),KSTEP
 INTEGER :: pos1, i
-DOUBLE PRECISION, INTENT(IN)             :: phi_t
+DOUBLE PRECISION, INTENT(IN)             :: phi_t, Vmol
 DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
 
 
@@ -3401,8 +3404,10 @@ pos1=1
 statev(pos1)=phi_t
 !       DETERMINANT
 statev(pos1+1)=one
+!      FLUID CONTENT
+statev(pos1+2) = (1.0d0 - phi_t) / (Vmol * phi_t)
 !       CL RELATIVE STIFFNESS
-DO i = pos1+2, nsdv
+DO i = pos1+3, nsdv
     statev(i)=zero
 END DO
 !        CONTRACTION VARIANCE
@@ -9573,7 +9578,7 @@ DOUBLE PRECISION, INTENT(IN)             :: statev(nsdv)
 RETURN
 
 END SUBROUTINE sdvread
-SUBROUTINE sdvwrite(det,statev,sigma,phi_tau)
+SUBROUTINE sdvwrite(det,statev,sigma,phi_tau,dmudx,Vmol,jfluid)
 !>    VISCOUS DISSIPATION: WRITE STATE VARS
 use global
 implicit none
@@ -9584,18 +9589,32 @@ DOUBLE PRECISION, INTENT(IN)             :: det
 ! DOUBLE PRECISION, INTENT(IN)             :: etac_sdv(nsdv-1)
 DOUBLE PRECISION, INTENT(IN)             :: sigma(6)
 DOUBLE PRECISION, INTENT(IN)             :: phi_tau
+DOUBLE PRECISION, INTENT(IN)             :: dmudx(3,1), JFLUID(3,1)
+DOUBLE PRECISION, INTENT(IN)             :: Vmol
 DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
 !
 pos1=1
 statev(pos1)=phi_tau
 statev(pos1+1)=det
+! Add fluid content cR to statev
+! cR
+! statev(pos1+2) = (1.0d0 - phi_tau) / (Vmol * phi_tau)
+! c
+statev(pos1+2) = (1.0d0 - phi_tau) / (Vmol * phi_tau * det)
 
 ! Find out how many stress components we actually have room for
-min_idx = MIN(6, nsdv - 2)
+min_idx = MIN(6, nsdv - 3)
 
 IF (min_idx > 0) THEN
-    statev(3 : 2 + min_idx) = sigma(1 : min_idx)
+    statev(4 : 3 + min_idx) = sigma(1 : min_idx)
 END IF
+
+statev(pos1+3+min_idx : pos1+5+min_idx) = - dmudx(1:3,1)
+
+statev(pos1+6+min_idx : nsdv) = JFLUID(1:3,1)
+
+! write(*,*) 'nsdv = ', nsdv
+! write(*,*) 'statev = ', statev
 
 RETURN
 
@@ -11604,7 +11623,7 @@ END SUBROUTINE uexternaldb
     SUBROUTINE MATERIAL(SIGMA,STATEV,DDSIGDDE,DFGRD0,DFGRD1,DET, &
     TIME,DTIME,PREDEF,NDI,NSHR,NTENS,NSTATEV,PROPS,NPROPS,COORDS, &
     PNEWDT,NOEL,NPT,KSTEP,KINC,MU_TAU,PHI_T,THETA,PHI_TAU,DPDT, &
-      DPHIDMU,DPHIDOTDMU,MFLUID,DMDMU,DMDJ,VMOL,SPUCMOD,SPCUMODFAC)
+      DPHIDMU,DPHIDOTDMU,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,SPUCMOD,SPCUMODFAC)
 !
 use global  
 IMPLICIT NONE
@@ -11622,14 +11641,14 @@ REAL(KIND=8) :: STRESS(NTENS), STATEV(NSTATEV), &
                 PROPS(NPROPS), COORDS(3), DROT(3,3), DFGRD0(3,3), DFGRD1(3,3), &
                 FIBORI(NELEM,4), ARGS(NARGS)
 
-REAL(8), INTENT(IN)      :: MU_TAU, PHI_T, THETA
+REAL(8), INTENT(IN)      :: MU_TAU, PHI_T, THETA, DMUDX(3,1)
 REAL(8), INTENT(OUT)     :: SPUCMOD(NDI,NDI), SPCUMODFAC(NDI,NDI)
 REAL(8), INTENT(OUT)     :: PHI_TAU, DPDT, DPHIDMU, DPHIDOTDMU
 REAL(8), INTENT(OUT)     :: MFLUID, DMDMU, DMDJ, VMOL
 
 ! DIFFUSION VARIABLES
 REAL(8) :: CHI, D, MU0, RGAS
-REAL(8) :: PHI_PER, PHI_M, dPdt_per, dPdt_m, DELTAMU
+REAL(8) :: PHI_PER, PHI_M, dPdt_per, dPdt_m, DELTAMU, JFLUID(3,1)
 REAL(8) :: DphiDJ, DmDphi
 
 REAL(KIND=8) :: SSE, SPD, SCD, RPL, DRPLDT, DTIME, TEMP, &
@@ -11762,6 +11781,8 @@ cjr=zero
 !     TOTAL CAUCHY STRESS AND ELASTICITY TENSORS
 sigma=zero
 ddsigdde=zero
+!     FLUID FLUX
+jfluid=zero
 !----------------------------------------------------------------------
 !------------------------ IDENTITY TENSORS ----------------------------
 !----------------------------------------------------------------------
@@ -11826,7 +11847,7 @@ affprops = (/nn, bb/)
 !        STATE VARIABLES AND CHEMICAL PARAMETERS
 IF ((time(1) == zero).AND.(kstep == 1)) THEN
   ! write(*,*) 'Initializing state variables'
-  CALL initialize(statev,phi_t)
+  CALL initialize(statev,phi_t,Vmol)
 END IF
 !        READ STATEV
 CALL sdvread(statev)
@@ -11868,7 +11889,7 @@ CALL projlag(c,unit4,projl,ndi)
       
       DETFE = DET * PHI_TAU
       
-      write(*,*) 'INSIDE MATERIAL: DETFE =', DETFE
+      ! write(*,*) 'INSIDE MATERIAL: DETFE =', DETFE
       
       !     2. Time rate of swelling
       DPDT = (PHI_TAU - PHI_T) / DTIME
@@ -11907,6 +11928,9 @@ CALL projlag(c,unit4,projl,ndi)
       DMDPHI = -(D / (DET * VMOL * PHI_TAU * PHI_TAU * RGAS * THETA))
       DMDMU  = DMDPHI * DPHIDMU
       DMDJ   = DMDPHI * DPHIDJ
+
+      !    6. Fluid flux vector (just for plotting)
+      JFLUID = -MFLUID * DMUDX
       
 !----------------------------------------------------------------------
 !--------------------- CONSTITUTIVE RELATIONS  ------------------------
@@ -12047,7 +12071,7 @@ CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(det,statev,stress,phi_tau)
+CALL sdvwrite(det,statev,stress,phi_tau,dmudx,Vmol,jfluid)
 ! CALL sdvwrite(det,etac_sdv,statev)
 !     END DO
 !----------------------------------------------------------------------

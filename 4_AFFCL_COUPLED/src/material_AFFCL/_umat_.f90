@@ -19,7 +19,7 @@
     SUBROUTINE MATERIAL(SIGMA,STATEV,DDSIGDDE,DFGRD0,DFGRD1,DET, &
     TIME,DTIME,PREDEF,NDI,NSHR,NTENS,NSTATEV,PROPS,NPROPS,COORDS, &
     PNEWDT,NOEL,NPT,KSTEP,KINC,MU_TAU,PHI_T,THETA,PHI_TAU,DPDT, &
-      DPHIDMU,DPHIDOTDMU,MFLUID,DMDMU,DMDJ,VMOL,SPUCMOD,SPCUMODFAC)
+      DPHIDMU,DPHIDOTDMU,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,SPUCMOD,SPCUMODFAC)
 !
 use global  
 IMPLICIT NONE
@@ -37,14 +37,14 @@ REAL(KIND=8) :: STRESS(NTENS), STATEV(NSTATEV), &
                 PROPS(NPROPS), COORDS(3), DROT(3,3), DFGRD0(3,3), DFGRD1(3,3), &
                 FIBORI(NELEM,4), ARGS(NARGS)
 
-REAL(8), INTENT(IN)      :: MU_TAU, PHI_T, THETA
+REAL(8), INTENT(IN)      :: MU_TAU, PHI_T, THETA, DMUDX(3,1)
 REAL(8), INTENT(OUT)     :: SPUCMOD(NDI,NDI), SPCUMODFAC(NDI,NDI)
 REAL(8), INTENT(OUT)     :: PHI_TAU, DPDT, DPHIDMU, DPHIDOTDMU
 REAL(8), INTENT(OUT)     :: MFLUID, DMDMU, DMDJ, VMOL
 
 ! DIFFUSION VARIABLES
 REAL(8) :: CHI, D, MU0, RGAS
-REAL(8) :: PHI_PER, PHI_M, dPdt_per, dPdt_m, DELTAMU
+REAL(8) :: PHI_PER, PHI_M, dPdt_per, dPdt_m, DELTAMU, JFLUID(3,1)
 REAL(8) :: DphiDJ, DmDphi
 
 REAL(KIND=8) :: SSE, SPD, SCD, RPL, DRPLDT, DTIME, TEMP, &
@@ -177,6 +177,8 @@ cjr=zero
 !     TOTAL CAUCHY STRESS AND ELASTICITY TENSORS
 sigma=zero
 ddsigdde=zero
+!     FLUID FLUX
+jfluid=zero
 !----------------------------------------------------------------------
 !------------------------ IDENTITY TENSORS ----------------------------
 !----------------------------------------------------------------------
@@ -241,7 +243,7 @@ affprops = (/nn, bb/)
 !        STATE VARIABLES AND CHEMICAL PARAMETERS
 IF ((time(1) == zero).AND.(kstep == 1)) THEN
   ! write(*,*) 'Initializing state variables'
-  CALL initialize(statev,phi_t)
+  CALL initialize(statev,phi_t,Vmol)
 END IF
 !        READ STATEV
 CALL sdvread(statev)
@@ -283,7 +285,7 @@ CALL projlag(c,unit4,projl,ndi)
       
       DETFE = DET * PHI_TAU
       
-      write(*,*) 'INSIDE MATERIAL: DETFE =', DETFE
+      ! write(*,*) 'INSIDE MATERIAL: DETFE =', DETFE
       
       !     2. Time rate of swelling
       DPDT = (PHI_TAU - PHI_T) / DTIME
@@ -322,6 +324,9 @@ CALL projlag(c,unit4,projl,ndi)
       DMDPHI = -(D / (DET * VMOL * PHI_TAU * PHI_TAU * RGAS * THETA))
       DMDMU  = DMDPHI * DPHIDMU
       DMDJ   = DMDPHI * DPHIDJ
+
+      !    6. Fluid flux vector (just for plotting)
+      JFLUID = -MFLUID * DMUDX
       
 !----------------------------------------------------------------------
 !--------------------- CONSTITUTIVE RELATIONS  ------------------------
@@ -462,7 +467,7 @@ CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(det,statev,stress,phi_tau)
+CALL sdvwrite(det,statev,stress,phi_tau,dmudx,Vmol,jfluid)
 ! CALL sdvwrite(det,etac_sdv,statev)
 !     END DO
 !----------------------------------------------------------------------

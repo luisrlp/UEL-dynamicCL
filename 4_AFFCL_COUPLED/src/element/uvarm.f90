@@ -24,6 +24,7 @@
         ! uvar(1) = globalSdv(noel-ElemOffset,npt,1)
         ! for example
         ! uvar(2) = globalSdv(noel-ElemOffset,npt,2)
+
         do i1 = 1, nsdv
             UVAR(i1) = globalSdv(noel-ElemOffset, npt, i1)
         end do

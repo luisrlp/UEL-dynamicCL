@@ -1,0 +1,95 @@
+# =========================
+# Abaqus Ignore List
+# =========================
+
+# Output databases and results (often huge binary files)
+*.odb
+*.res
+*.fil
+*.prt
+*.sim
+*.stt
+*.sel
+
+# Text outputs, statuses, and messages
+*.dat
+*.msg
+*.sta
+*.log
+
+# Temporary, lock, and process files
+*.lck
+*.com
+*.ipm
+*.pac
+*.mdl
+*.abq
+
+# Replay and recovery files
+abaqus.rpy*
+*.rec
+
+# Scratch files generated during analysis (usually numbered like .023, .024)
+*.0*
+
+# =========================
+# Fortran Ignore List
+# =========================
+
+# Compiled Object files (generated during subroutine compilation)
+*.o
+*.obj
+
+# Compiled Module files
+*.mod
+*.smod
+
+# Executables and shared libraries
+*.exe
+*.out
+a.out
+*.a
+*.so
+*.dll
+*.dylib
+
+# =========================
+# Python Ignore List
+# =========================
+
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments (where dependencies are installed)
+venv/
+.venv/
+env/
+.env/
+
+# Jupyter Notebook checkpoints (if you use Jupyter for data analysis)
+.ipynb_checkpoints/
+
+# Distribution and packaging directories
+build/
+dist/
+*.egg-info/
+
+# Environment variable files (keeps your secrets/paths safe)
+.env
+
+# =========================
+# Images Ignore List
+# =========================
+
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.tif
+*.webp
+*.ico
+*.svg

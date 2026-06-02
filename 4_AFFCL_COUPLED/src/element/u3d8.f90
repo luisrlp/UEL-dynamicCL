@@ -363,18 +363,18 @@
                        TIME, DTIME, PREDEF, &
                        nDim, nshr, ntens, nsdv, PROPS, NPROPS, coords, PNEWDT, &
                        JELEM, intpt, KSTEP, KINC,MU_TAU,PHI_T,THETA0,PHI_TAU,DPDT, &
-                       DPHIDMU,DPHIDOTDMU,MFLUID,DMDMU,DMDJ,VMOL,SPUCMOD,SPCUMODFAC)
+                       DPHIDMU,DPHIDOTDMU,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,SPUCMOD,SPCUMODFAC)
                !
                !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
                ! Previous determinant of the deformation gradient
-               write(*, *) 'detF_t=', prev_statev(2)
+               ! write(*, *) 'detF_t=', prev_statev(2)
                ! Current determinant of the deformation gradient
-               write(*, *) 'detF_tau=', statev(2)
+               ! write(*, *) 'detF_tau=', statev(2)
                ! Save the state variables at this integ point
                !  at the end of the increment
                !
                SVARS(1 + jj : nsdv + jj) = statev
-               jj = jj + nlSdv 
+               jj = jj + nlSdv
          ! setup for the next intPt      
          ! Save the state variables at this integ point in the
          !  global array used for plotting field output
@@ -382,6 +382,8 @@
          globalSdv(jelem, intPt, 1:nsdv) = statev
 
          ! Time stepping algorithm based on the constitutive response
+         write(*,*) 'statev(1) = ', statev(1)
+         write(*,*) 'phi_tau = ', phi_tau
          phiLmt = 0.005d0
          phi_tau = statev(1)
          phi_t = prev_statev(1)

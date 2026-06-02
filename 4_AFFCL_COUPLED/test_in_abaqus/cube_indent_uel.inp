@@ -131,13 +131,11 @@
     123,           0.,           1.,           0.
     124,           0.,          0.5,           0.
     125,           0.,           0.,           0.
-
 **
 ** NODE (Probe Reference Point)
 **
 *Node, nset=Set-RP
-1000, -9.18485073e-17,         -0.5,           0.
-
+1000, 2.0,         2.25,           2.0
 **
 ** EXTRA NODES
 **
@@ -150,13 +148,11 @@
 99997, 0.0001,0.0,0.0001
 99998, 0.0001,0.0001,0.0001
 99999, 0.0,0.0001,0.0001
-
 ** ----------------------------------------------------------------
 ** USER ELEMENT DEFINITION
 ** ----------------------------------------------------------------
-*User Element, type=U3,Nodes=8,Coordinates=3,Properties=21,Iproperties=2,Variables=64,Unsymm
+*User Element, type=U3,Nodes=8,Coordinates=3,Properties=21,Iproperties=2,Variables=120,Unsymm
 1,2,3,11
-
 ** ----------------------------------------------------------------
 ** MESH
 ** ----------------------------------------------------------------
@@ -226,10 +222,9 @@
 62, 117, 118, 123, 122,  92,  93,  98,  97
 63, 118, 119, 124, 123,  93,  94,  99,  98
 64, 119, 120, 125, 124,  94,  95, 100,  99
-
 ** DUMMY MESH (Visualization & Contact)
 ** Numbering offset: +1000
-*Element, type=C3D8, elset=dummy_mesh
+*Element, type=C3D8T, elset=dummy_mesh
 1001,  26,  27,  32,  31,   1,   2,   7,   6
 1002,  27,  28,  33,  32,   2,   3,   8,   7
 1003,  28,  29,  34,  33,   3,   4,   9,   8
@@ -294,11 +289,10 @@
 1062, 117, 118, 123, 122,  92,  93,  98,  97
 1063, 118, 119, 124, 123,  93,  94,  99,  98
 1064, 119, 120, 125, 124,  94,  95, 100,  99
-
+**
 ** EXTRA ELEMENT
 *Element,type=C3D8T,elset=extra_element
 99999, 99992,99993,99994,99995,99996,99997,99998,99999
-
 ** ----------------------------------------------------------------
 ** NODE AND ELEMENT SETS
 ** ----------------------------------------------------------------
@@ -315,22 +309,21 @@
   77,  78,  79,  80, 101, 102, 103, 104, 105
 *Elset, elset=Set-ZSYMM
   1,  2,  3,  4, 17, 18, 19, 20, 33, 34, 35, 36, 49, 50, 51, 52
-
 ** ----------------------------------------------------------------
 ** SURFACES & CONTACT
 ** ----------------------------------------------------------------
 ** Define analytical rigid surface for the probe
 *Surface, type=REVOLUTION, name=SURFACE-Probe
+********
+2.0, 2.75, 2.0,   2.0, 3.75, 2.0
 START,          0.5,           0.
  CIRCL,           0.,         -0.5,           0.,           0.
 *Rigid Body, ref node=1000, analytical surface=SURFACE-Probe
-
 ** Define contact surface on the DUMMY MESH, not the UEL!
 *Elset, elset=_SURFACE-Top_S6, generate
   1001,  1061,   4
 *Surface, type=ELEMENT, name=SURFACE-Top
 _SURFACE-Top_S6, S6
-
 *Surface Interaction, name=INTPROP-Frictionless
 1.,
 *Friction
@@ -338,12 +331,14 @@ _SURFACE-Top_S6, S6
 *Surface Behavior, augmented Lagrange
 *Contact Pair, interaction=INTPROP-Frictionless, type=SURFACE TO SURFACE
 SURFACE-Top, SURFACE-Probe
-
+*Imperfection
+** Applies a small initial imperfection to the first node in the mesh, in the z-direction
+** Prevents constantly homogeneous deformation
+1,0,0,5.7062e-06
 ** ----------------------------------------------------------------
 ** PARAMETERS: MATERIAL and SIMULATION
 ** ----------------------------------------------------------------
 *include, input=properties.inp
-
 ** ----------------------------------------------------------------
 ** MATERIAL DEFINITIONS
 ** ----------------------------------------------------------------
@@ -351,7 +346,7 @@ SURFACE-Top, SURFACE-Probe
 *Solid section, elset=dummy_mesh, material=dummy_material
 *Hourglass stiffness
 250.0
-
+**
 *Material, name=extra_material
 *Elastic
 1.e-20
@@ -361,62 +356,104 @@ SURFACE-Top, SURFACE-Probe
 1.0
 *Specific heat
 1.0
-
+**
 *Material, name=dummy_material
 *User output variables
-8
+15
 *elastic
 1.e-20
-
+*Conductivity
+1.0
+*Density
+1.0
+*Specific heat
+1.0
+**
 ** Include User Element Material Logic
 *INCLUDE, file=sec_uel_cube.inp
-
+**
 ************************************************************************
 **			AMPLITUDE DEFINITION
 ************************************************************************
 ** *Amplitude, name=chemProfile
 ** 0.0,<INITMU>,<TF>,<MU0>
-
+************************************************************************
+** INITIAL CONDITIONS
+************************************************************************
+*Initial conditions, type=temperature
+all_nodes, <INITMU>
+*Initial conditions, type=temperature
+extra_element, 0.0
 ** ----------------------------------------------------------------
 ** STEP DEFINITION: indentation
 ** ----------------------------------------------------------------
 *Step, name=indentation, nlgeom=YES
 ** Updated to Coupled temp-disp to support DOF 11 (chemical potential)
 *Coupled temperature-displacement, deltmx=100.0
-0.1, 1., 1e-05, 0.2
-
+0.001, 1., 1e-05, 0.1
+**
 ** BOUNDARY CONDITIONS
 ** Fix Bottom
 *Boundary
-Set-Bottom, ENCASTRE
-
+** Set-Bottom, ENCASTRE
+Set-Bottom, YSYMM
+**
 ** CHEMICAL BOUNDARY CONDITIONS
 ** *Boundary, amplitude=chemProfile
 ** Set-1, 11, 11, 1.0
 ** Set-7, 11, 11, 1.0
-
+**
 ** Probe Displacement (Rigid Node 1000)
 *Boundary
 Set-RP, 1, 1
-Set-RP, 2, 2, -0.5
+Set-RP, 2, 2, -0.75
 Set-RP, 3, 3
 Set-RP, 4, 4
 Set-RP, 5, 5
 Set-RP, 6, 6
-
+**
 ** Symmetry
 *Boundary
 Set-XSYMM, XSYMM
 Set-ZSYMM, ZSYMM
-
+**
 ** Extra Element Fix
 *Boundary
 extra_element, encastre
 extra_element, 11, 11, 0.0
-
+**
 ** OUTPUT REQUESTS
 *Restart, write, frequency=0
-
+**
 *Output, field, time marks=no
 *node output, nset=all_nodes
 u, nt, rf
+*node output, nset=extra_element
+u
+*node output, nset=Set-RP
+u, rf
+*element output, elset=dummy_mesh
+uvarm, le
+
+*End Step
+** ** ----------------------------------------------------------------
+** ** STEP DEFINITION: relaxation
+** ** ----------------------------------------------------------------
+** *Step, name=relaxation, nlgeom=YES
+** ** Long time period for fluid to diffuse (e.g., 10,000 seconds)
+** *Coupled temperature-displacement, deltmx=100.0
+** 0.1, 10000.0, 1e-05, 500.0
+** **
+** ** BOUNDARY CONDITIONS
+** ** (No new boundary conditions are defined here)
+** ** By default, Abaqus propagates all BCs from the previous step.
+** **
+** ** OUTPUT REQUESTS
+** *Output, field, time marks=no
+** *Node Output, nset=all_nodes
+** u, nt, rf
+** *Node Output, nset=Set-RP
+** u, rf
+** *Element Output, elset=dummy_mesh
+** uvarm, le
+** *End Step

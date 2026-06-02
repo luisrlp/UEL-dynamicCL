@@ -27,7 +27,7 @@
       DOUBLE PRECISION HALF,THIRD
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       ! Set the number of UEL elements used here
-      parameter(numElem=1)
+      parameter(numElem=64)
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       ! Set the offset here for UVARM plotting, must match input file!
       parameter(ElemOffset=1000)
@@ -36,7 +36,8 @@
       PARAMETER (FACTOR=6) ! 6
       PARAMETER (NDIR=20 * FACTOR**2)
       PARAMETER (NGP=8)
-      PARAMETER(NELEM=1, NSDV=7)
+      !!! State variables: phi (1), det (1),  cR (1), cauchy (6), dmudx (3)
+      PARAMETER(NELEM=1, NSDV=15)
       PARAMETER(ZERO=0.D0, ONE=1.0D0,TWO=2.0D0)
       PARAMETER(THREE=3.0D0,FOUR=4.0D0,SIX=6.0D0)
       PARAMETER(HALF=0.5d0,THIRD=1.d0/3.d0)
