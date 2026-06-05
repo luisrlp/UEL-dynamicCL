@@ -1,0 +1,2 @@
+Abaqus Warning: The .inp extension has been removed from the job identifier
+Input file               : Abaqus/Analysis interrupted by the user.

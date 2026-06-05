@@ -1,0 +1,48 @@
+Old job files exist. Overwrite? (y/n): Analysis initiated from SIMULIA established products
+Abaqus JOB cube_indent_uel
+Abaqus 2025
+Begin Compiling Abaqus/Standard User Subroutines
+Fri 15 May 2026 01:35:53 PM WEST
+ Intel(R) Fortran 26.0-1156
+End Compiling Abaqus/Standard User Subroutines
+Begin Linking Abaqus/Standard User Subroutines
+GNU ld version 2.35.2-67.el9_7.1
+End Linking Abaqus/Standard User Subroutines
+Fri 15 May 2026 01:36:08 PM WEST
+Begin Analysis Input File Processor
+Fri 15 May 2026 01:36:08 PM WEST
+Run pre
+Fri 15 May 2026 01:36:10 PM WEST
+End Analysis Input File Processor
+Begin Abaqus/Standard Analysis
+Fri 15 May 2026 01:36:10 PM WEST
+Run standard
+ nelem =            1
+ jobdir = 
+ /home/lpacheco/Desktop/UEL-dynamicCL/4_AFFCL_COUPLED/test_in_abaqus            
+                                                                                
+                                                                                
+                    
+ lenjobdir =           67
+ -------------------------------------------------
+ ----------- globalSDV ALLOCATED -----------------
+ -------------------------------------------------
+ ---------- YOU PUT NUMBER OF ELEMENTS -----------
+ ---------- numElem=          64
+ ---------- U3D8 ELEMENTS ------------------------
+ -------------------------------------------------
+ ---------- YOU PUT NUMBER OF POINTS -------------
+ ---------- nIntt =           8
+ ---------- nInttS=           1
+ -------------------------------------------------
+ ---------- YOU PUT NUMBER OF SDVs ---------------
+ ---------- ngSdv=          15
+ -------------------------------------------------
+Fri 15 May 2026 01:36:51 PM WEST
+End Abaqus/Standard Analysis
+Begin SIM Wrap-up
+Fri 15 May 2026 01:36:51 PM WEST
+Run SMASimUtility
+Fri 15 May 2026 01:36:52 PM WEST
+End SIM Wrap-up
+Abaqus JOB cube_indent_uel COMPLETED
