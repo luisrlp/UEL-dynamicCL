@@ -163,7 +163,8 @@ END DO
 
 !  Pick a face of the icosahedron, and identify its vertices as A, B, C.
 !
-  do face = 1, face_num
+! Integrate only one hemisphere of the icosahedron (faces 1 to 10) 
+do face = 1, face_num/2
 !
     a = face_point(1,face)
     b = face_point(2,face)
@@ -201,7 +202,7 @@ END DO
         CALL deffil(lambdai,mfi,mf0i,f,ndi)
 
         CALL bangle(ang,f,mfi,noel,pd,ndi)
-  
+        
         CALL density(rho,ang,bdisp,efi)
 
         !!!! Assigning random value to etac
@@ -222,16 +223,17 @@ END DO
           lambdaimax=lambdai
         END IF
         IF(lambdai .GE. 1.0d0)THEN 
-          
           CALL fil(fi,ffi,dwi,ddwi,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0,beta,b0,etac)
           ! CALL filpce(lambdai, fi, dwi, ddwi)
           ! call cpu_time(t_end)
 
           ! write (*,*) 'Time for fil: ', t_end - t_start, ' seconds'
+          
+          ! Factor of 2 accounts for the hemisphere not explicitly integrated.
+          CALL sigfilfic(sfilfic,2*rho,lambdai,dwi,mfi,ai,ndi)
 
-          CALL sigfilfic(sfilfic,rho,lambdai,dwi,mfi,ai,ndi)
+          CALL csfilfic(cfilfic,2*rho,lambdai,dwi,ddwi,mfi,ai,ndi)
 
-          CALL csfilfic(cfilfic,rho,lambdai,dwi,ddwi,mfi,ai,ndi)
 
           DO j1=1,ndi
             DO k1=1,ndi
