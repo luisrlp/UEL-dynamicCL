@@ -2,7 +2,7 @@
 !> Record of revisions:                                              |
 !>        Date        Programmer        Description of change        |
 !>        ====        ==========        =====================        |
-!>     05/11/2016    Joao Ferreira      full network model           |
+!>                                                                   |
 !>--------------------------------------------------------------------
 !>     Description:
 !C>     UMAT: USER MATERIAL FOR THE FULL NETWORK MODEL.
@@ -18,7 +18,7 @@
 
     SUBROUTINE MATERIAL(SIGMA,STATEV,DDSIGDDE,DFGRD0,DFGRD1,DET, &
     TIME,DTIME,PREDEF,NDI,NSHR,NTENS,NSTATEV,PROPS,NPROPS,COORDS, &
-    PNEWDT,NOEL,NPT,KSTEP,KINC,MU_TAU,PHI_T,THETA,PHI_TAU,DPDT, &
+    PNEWDT,NOEL,NPT,KSTEP,KINC,MU_TAU,PHI_T,PHI_TAU,DPDT, &
       DPHIDMU,DPHIDOTDMU,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,SPUCMOD,SPCUMODFAC)
 !
 use global  
@@ -37,7 +37,7 @@ REAL(KIND=8) :: STRESS(NTENS), STATEV(NSTATEV), &
                 PROPS(NPROPS), COORDS(3), DROT(3,3), DFGRD0(3,3), DFGRD1(3,3), &
                 FIBORI(NELEM,4), ARGS(NARGS)
 
-REAL(8), INTENT(IN)      :: MU_TAU, PHI_T, THETA, DMUDX(3,1)
+REAL(8), INTENT(IN)      :: MU_TAU, PHI_T, DMUDX(3,1)
 REAL(8), INTENT(OUT)     :: SPUCMOD(NDI,NDI), SPCUMODFAC(NDI,NDI)
 REAL(8), INTENT(OUT)     :: PHI_TAU, DPDT, DPHIDMU, DPHIDOTDMU
 REAL(8), INTENT(OUT)     :: MFLUID, DMDMU, DMDJ, VMOL
@@ -80,8 +80,8 @@ DOUBLE PRECISION :: c10,c01,sseiso,diso(5),pkmatfic(ndi,ndi),  &
     smatfic(ndi,ndi),sisomatfic(ndi,ndi), cmisomatfic(ndi,ndi,ndi,ndi),  &
     cisomatfic(ndi,ndi,ndi,ndi)
 !     FILAMENTS NETWORK CONTRIBUTION
-DOUBLE PRECISION :: filprops(8), affprops(2)
-DOUBLE PRECISION :: cactin,cabp,R,ll,lambda0,mu0stretch,beta,nn,b0,bb
+DOUBLE PRECISION :: filprops(8), affprops(12) ! affprops(6)
+DOUBLE PRECISION :: cactin,cabp,ll,lambda0,mu0str,beta,nn,b0,bb
 DOUBLE PRECISION :: phinet,r0,r0c,r0f,a,p,etac,na,mactin,rhoactin
 DOUBLE PRECISION :: pknetfic(ndi,ndi),cmnetfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: snetfic(ndi,ndi),cnetfic(ndi,ndi,ndi,ndi)
@@ -89,7 +89,11 @@ DOUBLE PRECISION :: pknetficaf(ndi,ndi),pknetficnaf(ndi,ndi)
 DOUBLE PRECISION :: snetficaf(ndi,ndi),snetficnaf(ndi,ndi)
 DOUBLE PRECISION :: cmnetficaf(ndi,ndi,ndi,ndi), cmnetficnaf(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: cnetficaf(ndi,ndi,ndi,ndi), cnetficnaf(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: efi
+DOUBLE PRECISION :: efi, kb, dx, Lp, theta
+DOUBLE PRECISION :: R, Rfmax, Rbmax, Keq, Koff0, Kon0
+DOUBLE PRECISION :: cb(ndir), cf0, cb0, cfmax, cbmax, thetab0, thetaf0
+DOUBLE PRECISION :: cb_upper, machep, tol
+
 ! INTEGER :: nterm,factor 
 !
 !     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)
@@ -197,56 +201,80 @@ c10      = props(2)
 c01      = props(3)
 phinet   = props(4)
 !     ACTIN/CROSSLINKERS
-ll       = props(5)
-! cactin   = props(5)    ! Concentration of actin 
-r0f      = props(6)
-! R        = props(6)    ! Relative crosslinker concentration
-r0c      = props(7)
-etac     = props(8)
-mu0stretch  = props(9)
-beta     = props(10)
-b0       = props(11) * THETA * 1.38065d-5
-lambda0  = props(12)
-! a        = props(13)   ! Ratio between contour length and end-to-end distance
-! filprops = props(5:12)
-!     NONAFFINE NETWORK
-nn       = props(13)
-bb        = props(14)
+a        = props(5)  ! Ratio between contour length and end-to-end distance
+r0c      = props(6)
+etac     = props(7)
+mu0str   = props(8)
+beta     = props(9)
+Lp       = props(10) ! Persistence length
+theta    = props(11) ! Absolute temperature
+dx       = props(12) ! CL reactive distance / bond length
+filprops = props(5:12)
+!     AFFINE NETWORK
+bb       = props(13)
+lambda0  = props(14)
+cactin   = props(15)
+R        = props(16) ! CL to actin ratio
+Rfmax    = props(17) ! Maximum free CL to actin ratio
+Rbmax   = props(18) ! Maximum bound CL to actin ratio
+! affprops= props(13:18)
 !     SOLVENT
-CHI    = PROPS(15)
-D      = PROPS(16)
-MU0    = PROPS(17)
-VMOL   = PROPS(18)
-RGAS   = PROPS(19)
-! affprops= props(13:14)
+CHI    = PROPS(19)
+D      = PROPS(20)
+MU0    = PROPS(21)
+VMOL   = PROPS(22)
+Koff0  = PROPS(23)
+Keq    = PROPS(24)
 
-! Pass this to subroutine
+!Other parameters (Check which of these will be actually needed in the UMAT and not only in the AFFCL subroutine)
+kb = 1.380649e-5      
+b0 = Lp * theta * kb
+rgas = 8.314462618
+Mactin = 42.0          ! [kDa]
+rhoactin = 16.0        ! [MDa/microm]
+NA = 6.022e5           ! [1/amol]
+Kon0 = Koff0 * Keq
+
+affprops = (/bb, lambda0, cactin, R, Rfmax, Rbmax, kb, b0, rgas, Mactin, rhoactin, NA/)
+
+! All of these will be needed (but not here)
+! Check whether they should be at UEL/UMAT/AFFCL DIRECTION
 !     CL CONCENTRATION
 ! cabp = cactin*R
 ! write(*,*) 'cabp = ', cabp
 !     FILAMENT END-TO-END DISTANCE
-! r0f = 1.6 * cabp**(-2.0/5.0)
+! r0f = 1.6 * cabp**(-2.0/5.0) ! AFFCL DIRECTION
 ! write(*,*) 'r0f = ', r0f
 !     FILAMENT CONTOUR LENGTH
-! ll = a * r0f
+! ll = a * r0f ! AFFCL DIRECTION
 ! write(*,*) 'll = ', ll
 !     FILAMENT DENSITY
 ! na = 6.022e23
 ! mactin = 42.0          ! [kDa]
 ! rhoactin = 16.0        ! [MDa/microm]
-! nn = cactin/ll * na * mactin / rhoactin * 1.0e-24
+! nn = cactin/ll * na * mactin / rhoactin * 1.0e-24 ! AFFCL DIRECTION
 ! write(*,*) 'nn = ', nn
-
-filprops = (/ll, r0f, r0c, etac, mu0stretch, beta, b0, lambda0/)
-affprops = (/nn, bb/)
 
 !        STATE VARIABLES AND CHEMICAL PARAMETERS
 IF ((time(1) == zero).AND.(kstep == 1)) THEN
-  ! write(*,*) 'Initializing state variables'
-  CALL initialize(statev,phi_t,Vmol)
+  !     CL CONCENTRATION
+  cabp = cactin*R
+  ! Maximum allowable CL concentration
+  cfmax = Rfmax * cactin
+  cbmax = Rbmax * cactin
+  ! Initial bound and free CL concentrations
+  cb_upper = MIN(cabp, cbmax)
+  machep = 2.22d-16
+  tol = 1.0d-8
+  CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq)
+  ! --------------------------------------------
+  cf0 = cabp - cb0
+  thetab0 = cb0 / cbmax
+  thetaf0 = cf0 / cfmax
+  CALL initialize(statev,phi_t,vmol,cb0)
 END IF
 !        READ STATEV
-CALL sdvread(statev)
+CALL sdvread(statev, cb)
 !----------------------------------------------------------------------
 !---------------------------- KINEMATICS ------------------------------
 !----------------------------------------------------------------------
@@ -359,7 +387,7 @@ IF ((phinet > zero) .AND. (nn > zero)) THEN
   ! GET CL STIFFNESS DISTRIBUTION FOR CURRENT GP
   !CALL getprops_gp(noel, npt, etadir, etadir_array)
   CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,filprops,  &
-      affprops,efi,noel,det,prefdir,ndi,etadir_array, etac_sdv, noel)
+      affprops,efi,noel,det,prefdir,ndi,cb)
 END IF
 !      PKNETFIC=PKNETFICNAF+PKNETFICAF
 snetfic=snetficnaf+snetficaf
@@ -467,7 +495,7 @@ CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(det,statev,stress,phi_tau,dmudx,Vmol,jfluid)
+CALL sdvwrite(det,statev,stress,phi_tau,dmudx,Vmol,jfluid,cb)
 ! CALL sdvwrite(det,etac_sdv,statev)
 !     END DO
 !----------------------------------------------------------------------

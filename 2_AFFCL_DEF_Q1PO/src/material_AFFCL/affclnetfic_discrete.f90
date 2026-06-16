@@ -163,7 +163,8 @@ END DO
 
 !  Pick a face of the icosahedron, and identify its vertices as A, B, C.
 !
-  do face = 1, face_num
+! Integrate only one hemisphere of the icosahedron (faces 1 to 10) 
+  do face = 1, face_num/2
 !
     a = face_point(1,face)
     b = face_point(2,face)
@@ -229,9 +230,10 @@ END DO
 
           ! write (*,*) 'Time for fil: ', t_end - t_start, ' seconds'
 
-          CALL sigfilfic(sfilfic,rho,lambdai,dwi,mfi,ai,ndi)
+          ! Factor of 2 accounts for the hemisphere not explicitly integrated.
+          CALL sigfilfic(sfilfic,2*rho,lambdai,dwi,mfi,ai,ndi)
 
-          CALL csfilfic(cfilfic,rho,lambdai,dwi,ddwi,mfi,ai,ndi)
+          CALL csfilfic(cfilfic,2*rho,lambdai,dwi,ddwi,mfi,ai,ndi)
 
           DO j1=1,ndi
             DO k1=1,ndi

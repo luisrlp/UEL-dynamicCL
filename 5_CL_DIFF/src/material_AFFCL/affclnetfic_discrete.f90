@@ -2,7 +2,7 @@
 !           efi,noel,det,prefdir,ndi) ! (original)
 
 SUBROUTINE affclnetfic_discrete(sfic,cfic,f,filprops,affprops,  &
-  efi,noel,det,prefdir,ndi,etac_array,etac_sdv,elem_num)  
+  efi,noel,det,prefdir,ndi,cb)  
 
 
 
@@ -16,11 +16,10 @@ DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
 DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN)             :: filprops(8)
-DOUBLE PRECISION, INTENT(IN)             :: affprops(2)
+DOUBLE PRECISION, INTENT(IN)             :: affprops(12)
 DOUBLE PRECISION, INTENT(IN OUT)         :: efi
 INTEGER, INTENT(IN OUT)                  :: noel
 DOUBLE PRECISION, INTENT(IN OUT)         :: det
-INTEGER, INTENT(IN)                      :: elem_num
 
 INTEGER :: i1,j1,k1,l1,m1, im1
 DOUBLE PRECISION :: sfilfic(ndi,ndi), cfilfic(ndi,ndi,ndi,ndi)
@@ -28,58 +27,28 @@ DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
 DOUBLE PRECISION :: aux,lambdai,dwi,ddwi,rwi,lambdaic
 DOUBLE PRECISION :: l,r0f,r0,mu0,b0,beta,lambda0,lambda0f,rho,n,fi,ffi,dtime
 DOUBLE PRECISION :: r0c,etac,lambdaif,lambdaimax
-DOUBLE PRECISION :: bdisp,fric,ffmax,ang, frac(4),ru
-DOUBLE PRECISION :: vara,avga,maxa,aux0,ffic,suma,rho0,dirmax(ndi)
-DOUBLE PRECISION :: prefdir(nelem,4)
-DOUBLE PRECISION :: pd(3),lambda_pref,prefdir0(3),ang_pref 
-
-! RANDOM GENERATORS
-INTEGER :: i_f, sum_f, test_num, i_iter
-INTEGER (kind=4) :: seed1, seed2
-INTEGER (kind=4) :: test
-CHARACTER(len=100) :: phrase
-REAL(kind=4) , allocatable :: rnd_array(:)
-REAL(kind=4) :: l_bound, h_bound, target_sum, real_sum
-REAL(kind=4) :: mean, sd
-DOUBLE PRECISION ::  etac_array(NDIR)
-DOUBLE PRECISION, intent(out) :: etac_sdv(nsdv-1)
+DOUBLE PRECISION :: bdisp,ang, frac(4)
+DOUBLE PRECISION :: prefdir(nelem,4), pd(3),lambda_pref,prefdir0(3)
+DOUBLE PRECISION :: cb(ndir)
 
 ! INTEGRATION SCHEME
   integer, parameter :: nfacedir = 2
   integer ( kind = 4 ) ifacedir
   integer :: f3_start(nfacedir), f3_end(nfacedir), f2_start(nfacedir)
   integer, dimension(3, nfacedir) :: off_a, off_b, off_c
-  integer ( kind = 4 ) node_num
-  integer ( kind = 4 ) a
-  real ( kind = 8 ) a_xyz(3)
-  real ( kind = 8 ) a2_xyz(3)
-  real ( kind = 8 ) ai !area of triangle i
-  real ( kind = 8 ) area_total
-  integer ( kind = 4 ) b
-  real ( kind = 8 ) b_xyz(3)
-  real ( kind = 8 ) b2_xyz(3)
-  integer ( kind = 4 ) c
-  real ( kind = 8 ) c_xyz(3)
-  real ( kind = 8 ) c2_xyz(3)
-  integer ( kind = 4 ) edge_num
+  integer ( kind = 4 ) a, b, c
+  real ( kind = 8 ) a_xyz(3), b_xyz(3), c_xyz(3)
+  real ( kind = 8 ) a2_xyz(3), b2_xyz(3), c2_xyz(3)
+  real ( kind = 8 ) area_total, ai !area of triangle i
   integer ( kind = 4 ), allocatable, dimension ( :, : ) :: edge_point
-  integer ( kind = 4 ) f1
-  integer ( kind = 4 ) f2
-  integer ( kind = 4 ) f3
-  integer ( kind = 4 ) face
-  integer ( kind = 4 ) face_num
+  integer ( kind = 4 ) f1, f2, f3
+  integer ( kind = 4 ) face, face_num, face_order_max, node_num, edge_num, point_num
   integer ( kind = 4 ), allocatable, dimension ( : ) :: face_order
   integer ( kind = 4 ), allocatable, dimension ( :, : ) :: face_point
-  integer ( kind = 4 ) face_order_max
-  ! integer ( kind = 4 ) factor ! (original)
-  !external             fun
   real ( kind = 8 ) node_xyz(3)
   real ( kind = 8 ), parameter :: pi = 3.141592653589793D+00
   real ( kind = 8 ), allocatable, dimension ( :, : ) :: point_coord
-  integer ( kind = 4 ) point_num
-  real ( kind = 8 ) rr, aa
-  real ( kind = 8 ) v
-  real ( kind = 16 ) :: t_start, t_end
+  real ( kind = 8 ) rr, aa, v
 
 
 
@@ -134,25 +103,10 @@ off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
     r0=r0f+r0c
   
     aa = zero
-    avga=zero
-    maxa=zero
-    suma=zero
-    dirmax=zero
     lambdaimax=zero
 !----------------------------------------------------------------------
-!------------------------ RANDOM GENERATION ---------------------------
-!----------------------------------------------------------------------
-! A random value of a given property is assigned for each direction/node (test_num = n_nodes )
-
-DO test=1, ndir 
-  IF (test .LE. nsdv-1) THEN
-    !etac_sdv(test) = etac_array(test)
-    etac_sdv(test) = etac
-  END IF
-END DO
-!----------------------------------------------------------------------
   
-  !preferred direction measures (macroscale measures)
+  ! preferred direction measures (macroscale measures)
   ! prefdir0=prefdir(noel,2:4)
   ! Currently assuming all elements have the same preferential direction
   prefdir0=prefdir(1,2:4)
@@ -163,7 +117,9 @@ END DO
 
 !  Pick a face of the icosahedron, and identify its vertices as A, B, C.
 !
-  do face = 1, face_num
+! Integrate only one hemisphere of the icosahedron (faces 1 to 10) 
+! Remember to multiply each direction's contribution by 2 to account for the other hemisphere
+do face = 1, face_num/2
 !
     a = face_point(1,face)
     b = face_point(2,face)
@@ -207,7 +163,6 @@ END DO
         !!!! Assigning random value to etac
         !etac = etac_array(node_num + 1)
         ! write(*,*) "lambdai: ", lambdai
-        ! call cpu_time(t_start)
 
         ! Comment following if statement when using filpce
         IF((etac > zero).AND.(etac .LE. one))THEN
@@ -225,13 +180,13 @@ END DO
           
           CALL fil(fi,ffi,dwi,ddwi,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0,beta,b0,etac)
           ! CALL filpce(lambdai, fi, dwi, ddwi)
-          ! call cpu_time(t_end)
 
           ! write (*,*) 'Time for fil: ', t_end - t_start, ' seconds'
 
-          CALL sigfilfic(sfilfic,rho,lambdai,dwi,mfi,ai,ndi)
+          ! Factor of 2 accounts for the hemisphere not explicitly integrated.
+          CALL sigfilfic(sfilfic,2*rho,lambdai,dwi,mfi,ai,ndi)
 
-          CALL csfilfic(cfilfic,rho,lambdai,dwi,ddwi,mfi,ai,ndi)
+          CALL csfilfic(cfilfic,2*rho,lambdai,dwi,ddwi,mfi,ai,ndi)
 
           DO j1=1,ndi
             DO k1=1,ndi

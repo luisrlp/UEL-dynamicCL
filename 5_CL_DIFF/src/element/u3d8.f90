@@ -362,7 +362,7 @@
                        F_t, F_tau, detF_tau, &
                        TIME, DTIME, PREDEF, &
                        nDim, nshr, ntens, nsdv, PROPS, NPROPS, coords, PNEWDT, &
-                       JELEM, intpt, KSTEP, KINC,MU_TAU,PHI_T,THETA0,PHI_TAU,DPDT, &
+                       JELEM, intpt, KSTEP, KINC,MU_TAU,PHI_T,PHI_TAU,DPDT, &
                        DPHIDMU,DPHIDOTDMU,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,SPUCMOD,SPCUMODFAC)
                !
                !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@

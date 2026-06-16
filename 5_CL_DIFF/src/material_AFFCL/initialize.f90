@@ -1,10 +1,10 @@
-SUBROUTINE initialize(statev, phi_t, Vmol)
+SUBROUTINE initialize(statev, phi_t, Vmol, cb0)
 use global
 IMPLICIT NONE
 
 !      DOUBLE PRECISION TIME(2),KSTEP
 INTEGER :: pos1, i
-DOUBLE PRECISION, INTENT(IN)             :: phi_t, Vmol
+DOUBLE PRECISION, INTENT(IN)             :: phi_t, Vmol, cb0
 DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
 
 
@@ -16,8 +16,12 @@ statev(pos1+1)=one
 !      FLUID CONTENT
 statev(pos1+2) = (1.0d0 - phi_t) / (Vmol * phi_t)
 !       CL RELATIVE STIFFNESS
-DO i = pos1+3, nsdv
+DO i = pos1+3, nsdv - ndir
     statev(i)=zero
+END DO
+
+DO i = 1, ndir
+    statev(nsdv - ndir + i) = cb0 ! INITIAL CL CONCENTRATION
 END DO
 !        CONTRACTION VARIANCE
 !statev(pos1+2)=zero

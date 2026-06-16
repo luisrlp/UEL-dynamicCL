@@ -1,4 +1,14 @@
 # =========================
+# Directories to Ignore
+# =========================
+literature/
+
+# =========================
+# Specific Files to Ignore
+# =========================
+GEMINI.md
+
+# =========================
 # Abaqus Ignore List
 # =========================
 
@@ -78,6 +88,11 @@ dist/
 
 # Environment variable files (keeps your secrets/paths safe)
 .env
+
+# =========================
+# Mathematica Notebooks
+# =========================
+*.nb
 
 # =========================
 # Images Ignore List

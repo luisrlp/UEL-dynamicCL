@@ -6,8 +6,8 @@ PROGRAM TEST_GENERAL_UMAT
     !C     ADD COMMON BLOCKS HERE IF NEEDED ()
     !C      COMMON /KBLOCK/KBLOCK
     
-    PARAMETER(NTENS = 6, NSTATEV = NSDV, NPROPS = 9, NDI=3, NSHR=3)
-    PARAMETER(NOEL = 1, NPT = 8)
+    PARAMETER(NTENS = 6, NSTATEV = NSDV, NPROPS = 14, NDI=3, NSHR=3)
+    PARAMETER(NOEL = 1, NPT = 1)
     !
     CHARACTER*8 CMNAME
     DIMENSION STRESS(NDI, NDI),STATEV(NSTATEV),DDSDDE(NTENS,NTENS),DDSDDT(NTENS),      &
@@ -47,26 +47,48 @@ PROGRAM TEST_GENERAL_UMAT
     ! MATERIAL PROPERTIES
     !
     ! k PENALTY PARAMETER
-    PROPS(1)=1000.d0
-    ! ISOTROPIC MATRIX
-    ! C10=
-    PROPS(2)=1.00d0
-    !
-    ! !viscous parameters - maxwell
-    ! ! v - number of dashpots
-    PROPS(3)=0
-    ! !tau1 %
-    PROPS(4)=2.0d0
-    ! !teta1
-    PROPS(5)=0.835d0
-    ! !tau2 %
-    PROPS(6)=1.2d0
-    ! !teta2
-    PROPS(7)=7.0d0
-    ! !tau3 %
-    PROPS(8)=12.d0
-    ! !teta3
-    PROPS(9)=2.0d0
+PROPS(1)=1000.000d0
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! ISOTROPIC MATRIX PARAMS
+! C10=
+PROPS(2)=1.00d0
+! C01
+PROPS(3)=1.00d0
+!PHI....
+PROPS(4)=1.0000d0 ! 1.0d0
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! SINGLE FILAMENT PARAMS
+!L (default: 1.96)
+PROPS(5)= 2.057376598 !1.96d0
+!CACTIN
+! PROPS(5)=9.5d0
+!R0F
+PROPS(6)= 1.57208 ! 1.63d0
+!R
+! PROPS(6)=0.1d0
+!R0C
+PROPS(7) = 0.01487759d0 !0.014d0
+!ETAC
+PROPS(8)=0.5d0!0.5d0
+!mu0
+!PROPS(7)=38600.0d0
+PROPS(9)= 37712.39d0 !38600.0d0
+!beta
+PROPS(10)=0.5d0
+!PROPS(8)=0.5d0
+!B0 = tk*lp*k0
+! PROPS(11)=294.d0*16.d0*1.38d-5
+PROPS(11) = 19.225788d0 !16.0
+!lambda0.
+PROPS(12)=1.00d0
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!AFFINE NETWORK PARAMS
+!n - isotropic filaments per unit volume
+PROPS(13)=7.66D0 ! 7.6627
+!A
+! PROPS(13)=1.2d0
+!B....
+PROPS(14)=0.001d0
     ! !
     STATEV=0.D0
     !

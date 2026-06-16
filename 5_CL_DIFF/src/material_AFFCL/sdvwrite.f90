@@ -1,37 +1,41 @@
-SUBROUTINE sdvwrite(det,statev,sigma,phi_tau,dmudx,Vmol,jfluid)
-!>    VISCOUS DISSIPATION: WRITE STATE VARS
-use global
-implicit none
+    SUBROUTINE sdvwrite(det, statev, sigma, phi_tau, dmudx, Vmol, jfluid, cb)                                           
+    !>    WRITE ALL STATE VARIABLES TO STATEV AT END OF INCREMENT                                                       
+    !>
+    !>    STATEV layout (defined in global.f90):
+    !>      Slot  1       : phi_tau  (polymer volume fraction)
+    !>      Slot  2       : det      (Jacobian J)
+    !>      Slot  3       : c        (fluid content)
+    !>      Slots 4-9     : sigma    (Cauchy stress, 6 components Voigt)
+    !>      Slots 10-12   : -dmudx   (chemical potential gradient)
+    !>      Slots 13-15   : jfluid   (fluid flux vector)
+    !>      Slots 16-NSDV : cb(i)    (bound CL concentration per unique direction)
+    use global
+    implicit none
+  
+    DOUBLE PRECISION, INTENT(IN)  :: det
+    DOUBLE PRECISION, INTENT(IN)  :: sigma(6)
+    DOUBLE PRECISION, INTENT(IN)  :: phi_tau
+    DOUBLE PRECISION, INTENT(IN)  :: dmudx(3,1), jfluid(3,1)
+    DOUBLE PRECISION, INTENT(IN)  :: Vmol
+    DOUBLE PRECISION, INTENT(IN)  :: cb(ndir)
+    DOUBLE PRECISION, INTENT(OUT) :: statev(nsdv)
+  
+    INTEGER :: idir
+  
+    ! --- Macroscopic quantities (slots 1-15, fixed layout) ---
+    statev(1)     = phi_tau
+    statev(2)     = det
+    statev(3)     = (1.0d0 - phi_tau) / (Vmol * phi_tau * det)  ! fluid content c
+    statev(4:9)   = sigma(1:6)        ! Cauchy stress (Voigt)
+    statev(10:12) = -dmudx(1:3,1)    ! chemical potential gradient
+    statev(13:15) = jfluid(1:3,1)    ! fluid flux vector
 
-INTEGER :: pos1, min_idx
-!
-DOUBLE PRECISION, INTENT(IN)             :: det
-! DOUBLE PRECISION, INTENT(IN)             :: etac_sdv(nsdv-1)
-DOUBLE PRECISION, INTENT(IN)             :: sigma(6)
-DOUBLE PRECISION, INTENT(IN)             :: phi_tau
-DOUBLE PRECISION, INTENT(IN)             :: dmudx(3,1), JFLUID(3,1)
-DOUBLE PRECISION, INTENT(IN)             :: Vmol
-DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
-!
-pos1=1
-statev(pos1)=phi_tau
-statev(pos1+1)=det
-! Add fluid content cR to statev
-! cR
-! statev(pos1+2) = (1.0d0 - phi_tau) / (Vmol * phi_tau)
-! c
-statev(pos1+2) = (1.0d0 - phi_tau) / (Vmol * phi_tau * det)
 
-! Find out how many stress components we actually have room for
-min_idx = MIN(6, nsdv - 3)
+! Slots 16 to NSDV: bound crosslinker concentrations
+DO idir = 1, ndir
+    statev(nsdv - ndir + idir) = cb(idir)
+END DO
 
-IF (min_idx > 0) THEN
-    statev(4 : 3 + min_idx) = sigma(1 : min_idx)
-END IF
-
-statev(pos1+3+min_idx : pos1+5+min_idx) = - dmudx(1:3,1)
-
-statev(pos1+6+min_idx : nsdv) = JFLUID(1:3,1)
 
 ! write(*,*) 'nsdv = ', nsdv
 ! write(*,*) 'statev = ', statev
