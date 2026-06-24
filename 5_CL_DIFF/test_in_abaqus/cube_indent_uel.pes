@@ -151,7 +151,7 @@
 ** ----------------------------------------------------------------
 ** USER ELEMENT DEFINITION
 ** ----------------------------------------------------------------
-*User Element, type=U3,Nodes=8,Coordinates=3,Properties=21,Iproperties=2,Variables=120,Unsymm
+*User Element, type=U3,Nodes=8,Coordinates=3,Properties=24,Iproperties=2,Variables=848,Unsymm
 1,2,3,11
 ** ----------------------------------------------------------------
 ** MESH
@@ -358,7 +358,7 @@ SURFACE-Top, SURFACE-Probe
 **
 *Material, name=dummy_material
 *User output variables
-15
+106
 *elastic
 1.e-20
 *Conductivity
@@ -370,23 +370,27 @@ SURFACE-Top, SURFACE-Probe
 **
 ** Include User Element Material Logic
 **
-*uel property, elset=main_mesh
-1000.0,0.0,0.0,1.0,1.96,1.63,0.014,0.5,
 **
-38600.0,0.5,16.0,1.0,7.66,0.001,0.1,5e-09, 
-**                                 nlSdv  ngSdv
-0.0,0.0001,8.3145,298.0,0.999,  15,    15
+*uel property, elset=main_mesh
+1000.0,0.0,0.0,1.0,1.2,0.014,0.5,38600.0,
+**
+0.5,16.0,298.0,0.001,0.001,1.0,0.0095,0.1,
+**
+1.0,0.25,0.1,0.1,0.0,0.15,0.05,0.25,
+** nlSdv ngSdv
+106, 106
+
 **
 ************************************************************************
 **			AMPLITUDE DEFINITION
 ************************************************************************
 ** *Amplitude, name=chemProfile
-** 0.0,-14382.975,3600,0.0
+** 0.0,INITMU,TF,MU0
 ************************************************************************
 ** INITIAL CONDITIONS
 ************************************************************************
 *Initial conditions, type=temperature
-all_nodes, -14382.975
+all_nodes, -5885.596868
 *Initial conditions, type=temperature
 extra_element, 0.0
 ** ----------------------------------------------------------------
@@ -411,7 +415,8 @@ Set-Bottom, YSYMM
 ** Probe Displacement (Rigid Node 1000)
 *Boundary
 Set-RP, 1, 1
-Set-RP, 2, 2, -0.75
+** Set-RP, 2, 2, -0.75
+Set-RP, 2, 2, -0.05
 Set-RP, 3, 3
 Set-RP, 4, 4
 Set-RP, 5, 5

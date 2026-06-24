@@ -376,7 +376,7 @@ SURFACE-Top, SURFACE-Probe
 **			AMPLITUDE DEFINITION
 ************************************************************************
 ** *Amplitude, name=chemProfile
-** 0.0,<INITMU>,<TF>,<MU0>
+** 0.0,INITMU,TF,MU0
 ************************************************************************
 ** INITIAL CONDITIONS
 ************************************************************************
@@ -406,7 +406,8 @@ Set-Bottom, YSYMM
 ** Probe Displacement (Rigid Node 1000)
 *Boundary
 Set-RP, 1, 1
-Set-RP, 2, 2, -0.75
+** Set-RP, 2, 2, -0.75
+Set-RP, 2, 2, -0.05
 Set-RP, 3, 3
 Set-RP, 4, 4
 Set-RP, 5, 5
