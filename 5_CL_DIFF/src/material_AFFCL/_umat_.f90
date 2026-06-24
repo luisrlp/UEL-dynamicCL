@@ -18,8 +18,8 @@
 
     SUBROUTINE MATERIAL(SIGMA,STATEV,DDSIGDDE,DFGRD0,DFGRD1,DET, &
     TIME,DTIME,PREDEF,NDI,NSHR,NTENS,NSTATEV,PROPS,NPROPS,COORDS, &
-    PNEWDT,NOEL,NPT,KSTEP,KINC,MU_TAU,PHI_T,PHI_TAU,DPDT, &
-      DPHIDMU,DPHIDOTDMU,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,SPUCMOD,SPCUMODFAC)
+    PNEWDT,NOEL,NPT,KSTEP,KINC,MU_TAU,THETAF_T,THETAF_TAU,DTHETAFDT, &
+      DTHETAFDMU,RMACRO,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,CFMAX,DSIGDMU,SPCUMODFAC)
 !
 use global  
 IMPLICIT NONE
@@ -29,7 +29,7 @@ IMPLICIT NONE
 INTEGER :: NDI, NSHR, NTENS, NSTATEV, NPROPS, NOEL, NPT, &
             LAYER, KSPT, KSTEP, KINC
 
-INTEGER, PARAMETER :: nargs = 8
+INTEGER, PARAMETER :: nargs = 10
 
 REAL(KIND=8) :: STRESS(NTENS), STATEV(NSTATEV), &
                 DDSDDE(NTENS,NTENS), DDSDDT(NTENS), DRPLDE(NTENS), &
@@ -37,10 +37,13 @@ REAL(KIND=8) :: STRESS(NTENS), STATEV(NSTATEV), &
                 PROPS(NPROPS), COORDS(3), DROT(3,3), DFGRD0(3,3), DFGRD1(3,3), &
                 FIBORI(NELEM,4), ARGS(NARGS)
 
-REAL(8), INTENT(IN)      :: MU_TAU, PHI_T, DMUDX(3,1)
-REAL(8), INTENT(OUT)     :: SPUCMOD(NDI,NDI), SPCUMODFAC(NDI,NDI)
-REAL(8), INTENT(OUT)     :: PHI_TAU, DPDT, DPHIDMU, DPHIDOTDMU
-REAL(8), INTENT(OUT)     :: MFLUID, DMDMU, DMDJ, VMOL
+REAL(8), INTENT(IN)      :: MU_TAU, THETAF_T, DMUDX(3,1)
+! REAL(8), INTENT(OUT)     :: SPUCMOD(NDI,NDI), SPCUMODFAC(NDI,NDI)
+REAL(8), INTENT(OUT)     :: DSIGDMU(NDI,NDI), SPCUMODFAC(NDI,NDI)
+REAL(8), INTENT(OUT)     :: THETAF_TAU, DTHETAFDT, DTHETAFDMU, RMACRO! DPHIDMU, DPHIDOTDMU
+REAL(8), INTENT(OUT)     :: MFLUID, DMDMU, DMDJ, VMOL, CFMAX
+
+! cfmax can probably be defined at the element level
 
 ! DIFFUSION VARIABLES
 REAL(8) :: CHI, D, MU0, RGAS
@@ -80,7 +83,7 @@ DOUBLE PRECISION :: c10,c01,sseiso,diso(5),pkmatfic(ndi,ndi),  &
     smatfic(ndi,ndi),sisomatfic(ndi,ndi), cmisomatfic(ndi,ndi,ndi,ndi),  &
     cisomatfic(ndi,ndi,ndi,ndi)
 !     FILAMENTS NETWORK CONTRIBUTION
-DOUBLE PRECISION :: filprops(8), affprops(12) ! affprops(6)
+DOUBLE PRECISION :: filprops(10), affprops(5) ! affprops(6)
 DOUBLE PRECISION :: cactin,cabp,ll,lambda0,mu0str,beta,nn,b0,bb
 DOUBLE PRECISION :: phinet,r0,r0c,r0f,a,p,etac,na,mactin,rhoactin
 DOUBLE PRECISION :: pknetfic(ndi,ndi),cmnetfic(ndi,ndi,ndi,ndi)
@@ -91,8 +94,10 @@ DOUBLE PRECISION :: cmnetficaf(ndi,ndi,ndi,ndi), cmnetficnaf(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: cnetficaf(ndi,ndi,ndi,ndi), cnetficnaf(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: efi, kb, dx, Lp, theta
 DOUBLE PRECISION :: R, Rfmax, Rbmax, Keq, Koff0, Kon0
-DOUBLE PRECISION :: cb(ndir), cf0, cb0, cfmax, cbmax, thetab0, thetaf0
+DOUBLE PRECISION :: cb(ndir), cb0, cbmax, thetab, thetaf !, cfmax
+DOUBLE PRECISION :: cb_tot, cb_tot_new, cf
 DOUBLE PRECISION :: cb_upper, machep, tol
+DOUBLE PRECISION :: Jc, f, df
 
 ! INTEGER :: nterm,factor 
 !
@@ -209,7 +214,6 @@ beta     = props(9)
 Lp       = props(10) ! Persistence length
 theta    = props(11) ! Absolute temperature
 dx       = props(12) ! CL reactive distance / bond length
-filprops = props(5:12)
 !     AFFINE NETWORK
 bb       = props(13)
 lambda0  = props(14)
@@ -217,7 +221,6 @@ cactin   = props(15)
 R        = props(16) ! CL to actin ratio
 Rfmax    = props(17) ! Maximum free CL to actin ratio
 Rbmax   = props(18) ! Maximum bound CL to actin ratio
-! affprops= props(13:18)
 !     SOLVENT
 CHI    = PROPS(19)
 D      = PROPS(20)
@@ -230,12 +233,14 @@ Keq    = PROPS(24)
 kb = 1.380649e-5      
 b0 = Lp * theta * kb
 rgas = 8.314462618
-Mactin = 42.0          ! [kDa]
+Mactin = 42.0e-3       ! [MDa]
 rhoactin = 16.0        ! [MDa/microm]
 NA = 6.022e5           ! [1/amol]
 Kon0 = Koff0 * Keq
 
-affprops = (/bb, lambda0, cactin, R, Rfmax, Rbmax, kb, b0, rgas, Mactin, rhoactin, NA/)
+filprops = (/a, r0c, etac, mu0str, beta, Lp, theta, dx, kb, NA/)
+affprops = (/bb, lambda0, cactin, Mactin, rhoactin/)
+! affprops = (/bb, lambda0, cactin, R, Rfmax, Rbmax, kb, b0, rgas, Mactin, rhoactin, NA/)
 
 ! All of these will be needed (but not here)
 ! Check whether they should be at UEL/UMAT/AFFCL DIRECTION
@@ -255,26 +260,29 @@ affprops = (/bb, lambda0, cactin, R, Rfmax, Rbmax, kb, b0, rgas, Mactin, rhoacti
 ! nn = cactin/ll * na * mactin / rhoactin * 1.0e-24 ! AFFCL DIRECTION
 ! write(*,*) 'nn = ', nn
 
+!     CL CONCENTRATION
+!!! THIS NEEDS TO BE CHANGED AFTER DIFFUSION IS IMPLEMENTED IN UEL
+cabp = cactin*R  ! <-- Placeholder: Replace with true UEL cR later!
+! Maximum allowable CL concentration
+cfmax = Rfmax * cactin
+cbmax = Rbmax * cactin
+
 !        STATE VARIABLES AND CHEMICAL PARAMETERS
 IF ((time(1) == zero).AND.(kstep == 1)) THEN
-  !     CL CONCENTRATION
-  cabp = cactin*R
-  ! Maximum allowable CL concentration
-  cfmax = Rfmax * cactin
-  cbmax = Rbmax * cactin
   ! Initial bound and free CL concentrations
   cb_upper = MIN(cabp, cbmax)
   machep = 2.22d-16
   tol = 1.0d-8
   CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq)
-  ! --------------------------------------------
-  cf0 = cabp - cb0
-  thetab0 = cb0 / cbmax
-  thetaf0 = cf0 / cfmax
-  CALL initialize(statev,phi_t,vmol,cb0)
+  CALL initialize(statev,thetaf_t,vmol,cb0)
 END IF
 !        READ STATEV
-CALL sdvread(statev, cb)
+CALL sdvread(statev, cb, cb_tot)
+! --------------------------------------------
+cf = cabp - cb_tot
+thetaf = cf / cfmax
+! Avoid numerical issues
+thetaf = MIN(MAX(thetaf, 1.0d-6), 1.0d0 - 1.0d-6)
 !----------------------------------------------------------------------
 !---------------------------- KINEMATICS ------------------------------
 !----------------------------------------------------------------------
@@ -300,7 +308,9 @@ CALL projlag(c,unit4,projl,ndi)
 !----------------------------------------------------------------------
 !---------------------- COUPLED DIFFUSION -----------------------------
 !----------------------------------------------------------------------
-!     1. Solve for current polymer volume fraction (PHI)
+
+
+!     1. Solve for current free crosslinker fraction (THETAF)
       ARGS(1) = MU_TAU
       ARGS(2) = MU0
       ARGS(3) = RGAS
@@ -309,59 +319,81 @@ CALL projlag(c,unit4,projl,ndi)
       ARGS(6) = VMOL
       ARGS(7) = K
       ARGS(8) = DET
-      CALL SOLVEPHI(PHI_TAU, ARGS, NARGS, PHI_T)
-      
-      DETFE = DET * PHI_TAU
-      
-      ! write(*,*) 'INSIDE MATERIAL: DETFE =', DETFE
-      
-      !     2. Time rate of swelling
-      DPDT = (PHI_TAU - PHI_T) / DTIME
-      
-      !     3. Analytical derivatives of PHI
-      DPHIDMU = (ONE / (RGAS * THETA)) / &
-      ( (ONE / (PHI_TAU - ONE)) + ONE + TWO * CHI * PHI_TAU &
-      - ((VMOL * K) / (RGAS * THETA * PHI_TAU)) &
-      + ((VMOL * K) / (RGAS * THETA * PHI_TAU)) * DLOG(DETFE) )
-      
-      DPHIDJ  = ( ((VMOL * K) / (RGAS * THETA * DET)) &
-      - ((VMOL * K) / (RGAS * THETA * DET)) * DLOG(DETFE) ) / &
-      ( (ONE / (PHI_TAU - ONE)) + ONE + TWO * CHI * PHI_TAU &
-      - ((VMOL * K) / (RGAS * THETA * PHI_TAU)) &
-      + ((VMOL * K) / (RGAS * THETA * PHI_TAU)) * DLOG(DETFE) )
-      
-      !     4. Numerical Perturbation for D(PHIDOT)/DMU
-      IF (DABS(MU_TAU) > ONE) THEN
-        DELTAMU = DABS(MU_TAU) * 1.D-8
-      ELSE
-        DELTAMU = 1.D-8
-      END IF
-      
-      ARGS(1) = MU_TAU + DELTAMU
-      CALL SOLVEPHI(PHI_PER, ARGS, NARGS, PHI_T)
-      DPDT_PER = (PHI_PER - PHI_T) / DTIME
-      
-      ARGS(1) = MU_TAU - DELTAMU
-      CALL SOLVEPHI(PHI_M, ARGS, NARGS, PHI_T)
-      DPDT_M = (PHI_M - PHI_T) / DTIME
-      
-      DPHIDOTDMU = (DPDT_PER - DPDT_M) / (TWO * DELTAMU)
-      
-      !     5. Fluid mobility and permeability
-      MFLUID = (D * (ONE / PHI_TAU - ONE)) / (DET * VMOL * RGAS * THETA)
-      DMDPHI = -(D / (DET * VMOL * PHI_TAU * PHI_TAU * RGAS * THETA))
-      DMDMU  = DMDPHI * DPHIDMU
-      DMDJ   = DMDPHI * DPHIDJ
+      ARGS(9) = CB_TOT
+      ARGS(10) = CFMAX
+      CALL SOLVETHETAF(THETAF_TAU, ARGS, NARGS, THETAF_T)
 
-      !    6. Fluid flux vector (just for plotting)
-      JFLUID = -MFLUID * DMUDX
+      thetaf = THETAF_TAU
+      cf = thetaf * cfmax
+
+      ! Evaluate tangent at converged root
+      CALL thetafFunc(thetaf, f, df, ARGS, NARGS)
+      DTHETAFDMU = one / df
+
+      ! Rate of free crosslinker fraction
+      DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME
+
+      ! Fluid mobility and permeability
+      MFLUID = D * cf * (1.0d0 - thetaf)
+
+      ! Mobility tangents
+      DMDMU = D * cfmax * (1.0d0 - 2.0d0 * thetaf) * DTHETAFDMU
+      DMDJ  = 0.0d0   ! Mobility no longer depends on volume!
+
+      ! Fluid flux vector (just visualization/SVARS)
+
+      
+!       DETFE = DET * PHI_TAU
+      
+!       !     2. Time rate of swelling
+!       DPDT = (PHI_TAU - PHI_T) / DTIME
+      
+!       !     3. Analytical derivatives of PHI
+!       DPHIDMU = (ONE / (RGAS * THETA)) / &
+!       ( (ONE / (PHI_TAU - ONE)) + ONE + TWO * CHI * PHI_TAU &
+!       - ((VMOL * K) / (RGAS * THETA * PHI_TAU)) &
+!       + ((VMOL * K) / (RGAS * THETA * PHI_TAU)) * DLOG(DETFE) )
+      
+!       DPHIDJ  = ( ((VMOL * K) / (RGAS * THETA * DET)) &
+!       - ((VMOL * K) / (RGAS * THETA * DET)) * DLOG(DETFE) ) / &
+!       ( (ONE / (PHI_TAU - ONE)) + ONE + TWO * CHI * PHI_TAU &
+!       - ((VMOL * K) / (RGAS * THETA * PHI_TAU)) &
+!       + ((VMOL * K) / (RGAS * THETA * PHI_TAU)) * DLOG(DETFE) )
+      
+!       !     4. Numerical Perturbation for D(PHIDOT)/DMU
+!       IF (DABS(MU_TAU) > ONE) THEN
+!         DELTAMU = DABS(MU_TAU) * 1.D-8
+!       ELSE
+!         DELTAMU = 1.D-8
+!       END IF
+      
+!       ARGS(1) = MU_TAU + DELTAMU
+!       CALL SOLVEPHI(PHI_PER, ARGS, NARGS, PHI_T)
+!       DPDT_PER = (PHI_PER - PHI_T) / DTIME
+      
+!       ARGS(1) = MU_TAU - DELTAMU
+!       CALL SOLVEPHI(PHI_M, ARGS, NARGS, PHI_T)
+!       DPDT_M = (PHI_M - PHI_T) / DTIME
+      
+!       DPHIDOTDMU = (DPDT_PER - DPDT_M) / (TWO * DELTAMU)
+      
+!       !     5. Fluid mobility and permeability
+!       MFLUID = (D * (ONE / PHI_TAU - ONE)) / (DET * VMOL * RGAS * THETA)
+!       DMDPHI = -(D / (DET * VMOL * PHI_TAU * PHI_TAU * RGAS * THETA))
+!       DMDMU  = DMDPHI * DPHIDMU
+!       DMDJ   = DMDPHI * DPHIDJ
+
+!       !    6. Fluid flux vector (just for plotting)
+!       JFLUID = -MFLUID * DMUDX
       
 !----------------------------------------------------------------------
 !--------------------- CONSTITUTIVE RELATIONS  ------------------------
 !----------------------------------------------------------------------
 !---- VOLUMETRIC ------------------------------------------------------
 !     STRAIN-ENERGY
-CALL vol(ssev,pv,ppv,k,det,phi_tau)
+! THIS NEEDS TO BE CHANGED!!!!!!!!!!!!!!
+Jc = 1.0d0 + VMOL * cb_tot + VMOL * cfmax * thetaf
+CALL vol(ssev,pv,ppv,k,det,Jc)
 
 !---- ISOCHORIC ISOTROPIC ---------------------------------------------
 IF (phinet < one) THEN
@@ -387,8 +419,13 @@ IF ((phinet > zero) .AND. (nn > zero)) THEN
   ! GET CL STIFFNESS DISTRIBUTION FOR CURRENT GP
   !CALL getprops_gp(noel, npt, etadir, etadir_array)
   CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,filprops,  &
-      affprops,efi,noel,det,prefdir,ndi,cb)
+      affprops,efi,noel,det,prefdir,ndi,cb,dtime,cabp,cfmax,cbmax,chi,Keq,Koff0, &
+      thetaf, cb_tot_new)
 END IF
+
+! Macroscopic reaction source (homogenized binding rate)
+RMACRO = (cb_tot_new - cb_tot) / DTIME
+
 !      PKNETFIC=PKNETFICNAF+PKNETFICAF
 snetfic=snetficnaf+snetficaf
 !      CMNETFIC=CMNETFICNAF+CMNETFICAF
@@ -469,12 +506,12 @@ ddsigdde=cvol+ciso+cjr
 !------------------------- CROSS-COUPLINGS ----------------------------
 !----------------------------------------------------------------------
 !     DISPLACEMENT - CHEMICAL POTENTIAL MODULUS
-DO I1 = 1, NDI
-    DO J1 = 1, NDI
-      ! Derivative of Cauchy stress with respect to phi
-      SPUCMOD(I1,J1) = (K / (DETFE * PHI_TAU)) * UNIT2(I1,J1) * DPHIDMU
-    END DO
-END DO
+! DO I1 = 1, NDI
+!     DO J1 = 1, NDI
+!       ! Derivative of Cauchy stress with respect to phi
+!       SPUCMOD(I1,J1) = (K / (DETFE * PHI_TAU)) * UNIT2(I1,J1) * DPHIDMU
+!     END DO
+! END DO
 
 !     CHEMICAL POTENTIAL - DISPLACEMENT MODULUS
 DO I1 = 1, NDI
@@ -482,7 +519,15 @@ DO I1 = 1, NDI
       SPCUMODFAC(I1,J1) = MFLUID * UNIT2(I1,J1)
     END DO
 END DO
-!
+
+
+!     CAUCHY STRESS - CHEMICAL POTENTIAL MODULUS (dS / dMu)
+  DO I1 = 1, NDI
+      DO J1 = 1, NDI
+        DSIGDMU(I1,J1) = -((K * VMOL * CFMAX) / (DET * Jc)) * UNIT2(I1,J1) * DTHETAFDMU
+      END DO
+  END DO
+
 
 !----------------------------------------------------------------------
 !------------------------- INDEX ALLOCATION ---------------------------
@@ -495,7 +540,7 @@ CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(det,statev,stress,phi_tau,dmudx,Vmol,jfluid,cb)
+CALL sdvwrite(det,statev,stress,thetaf_tau,dmudx,Vmol,jfluid,cb,cb_tot_new)
 ! CALL sdvwrite(det,etac_sdv,statev)
 !     END DO
 !----------------------------------------------------------------------

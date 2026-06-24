@@ -1,8 +1,8 @@
-subroutine solvePhi(root, args, nargs, rootOld)
+subroutine solveThetaf(root, args, nargs, rootOld)
 
-    ! This subroutine will numerically solve for the polymer
-    ! volume fraction based on the current osmotic pressure
-    ! and the previous state. See Numerical Recipes RTSAFE.
+    ! This subroutine will numerically solve for the free
+    ! crosslinker fraction (thetaf) based on the current
+    ! chemical potential. See Numerical Recipes RTSAFE.
 
     implicit none
 
@@ -22,19 +22,19 @@ subroutine solvePhi(root, args, nargs, rootOld)
     real(8), parameter :: xacc  = 1.0d-6
     real(8), parameter :: zero  = 0.0d0
 
-    ! Set the safe bounds
-    rootMax = 0.9999d0 ! corresponds to nearly 100% dry polymer
-    rootMin = 0.05d0   ! corresponds to nearly 100% fluid
+    ! Set the safe bounds for thetaf (must be strictly between 0 and 1)
+    rootMax = 1.0d0 - 1.0d-8
+    rootMin = 1.0d-8
 
     x1 = rootMin
     x2 = rootMax
-    call phiFunc(x1, fl, df, args, nargs)
-    call phiFunc(x2, fh, df, args, nargs)
+    call thetafFunc(x1, fl, df, args, nargs)
+    call thetafFunc(x2, fh, df, args, nargs)
 
     ! Check if the root is safely bracketed
     if (fl * fh >= zero) then
         root = rootOld
-        write(*,*) 'FYI, root not bracketed on phi'
+        write(*,*) 'FYI, root not bracketed on thetaf'
         write(*,*) 'fl=', fl
         write(*,*) 'fh=', fh
         write(*,*) 'rootOld=', rootOld
@@ -46,6 +46,8 @@ subroutine solvePhi(root, args, nargs, rootOld)
         write(*,*) 'Vmol=', args(6)
         write(*,*) 'Kbulk=', args(7)
         write(*,*) 'detF=', args(8)
+        write(*,*) 'cb=', args(9)
+        write(*,*) 'cfmax=', args(10)
         call exit
         return
     end if
@@ -70,7 +72,7 @@ subroutine solvePhi(root, args, nargs, rootOld)
     dxold = abs(x2 - x1)
     dx    = dxold
     
-    call phiFunc(root, f, df, args, nargs)
+    call thetafFunc(root, f, df, args, nargs)
 
     ! Loop over allowed iterations (Replaced old DO 10 loop)
     do j = 1, maxit
@@ -102,7 +104,7 @@ subroutine solvePhi(root, args, nargs, rootOld)
         if (abs(dx) < xacc) return
 
         ! The one new function evaluation per iteration
-        call phiFunc(root, f, df, args, nargs)
+        call thetafFunc(root, f, df, args, nargs)
 
         ! Maintain the bracket on the root
         if (f < 0.0d0) then
@@ -116,8 +118,7 @@ subroutine solvePhi(root, args, nargs, rootOld)
     end do
 
     ! If loop finishes without returning, maximum iterations were exceeded
-    write(*, '(/1X,A)') 'solvePhi EXCEEDING MAXIMUM ITERATIONS'
+    write(*, '(/1X,A)') 'solveThetaf EXCEEDING MAXIMUM ITERATIONS'
     
     return
-end subroutine solvePhi
-
+end subroutine solveThetaf

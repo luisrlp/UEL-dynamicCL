@@ -33,7 +33,7 @@
       parameter(ElemOffset=1000)
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       PARAMETER (NTERM=60) ! 60
-      PARAMETER (FACTOR=2) ! 6
+      PARAMETER (FACTOR=3) ! 6
       ! NDIR = number of UNIQUE filament directions (one hemisphere only).
       ! The integration loop runs over face_num/2 icosahedron faces;
       ! the antipodal hemisphere is recovered by the factor of 2 on rho.
@@ -42,14 +42,15 @@
       PARAMETER (NGP=8)
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       ! State variables (total = NSDV):
-      !   Slots  1     : phi (polymer volume fraction)
-      !   Slot   2     : det (Jacobian J)
-      !   Slot   3     : cR (fluid content)
-      !   Slots  4 to 9   : Cauchy stress (6 components)
-      !   Slots 10 to 12  : grad(mu) flux (3 components)
-      !   Slots 13 to 15  : fluid flux J_fluid (3 components)
-      !   Slots [NSDV - NDIR + 1] to NSDV : cbi (bound CL concentration per unique direction)
-      PARAMETER(NELEM=1, NSDV=15 + NDIR)
+      !   Slots  1          : thetaf (polymer volume fraction)
+      !   Slot   2          : det (Jacobian J)
+      !   Slot   3          : cR (fluid content)
+      !   Slot   4          : cb0 (total CL concentration)
+      !   Slots  5 to 10    : Cauchy stress (6 components)
+      !   Slots  11 to 13   : grad(mu) flux (3 components)
+      !   Slots  14 to 16   : fluid flux J_fluid (3 components)
+      !   Slots  17 to NSDV : cbi (bound CL concentration per unique direction)
+      PARAMETER(NELEM=1, NSDV=16 + NDIR)
       PARAMETER(ZERO=0.D0, ONE=1.0D0,TWO=2.0D0)
       PARAMETER(THREE=3.0D0,FOUR=4.0D0,SIX=6.0D0)
       PARAMETER(HALF=0.5d0,THIRD=1.d0/3.d0)

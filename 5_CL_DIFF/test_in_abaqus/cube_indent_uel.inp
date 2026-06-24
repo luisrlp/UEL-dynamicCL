@@ -151,7 +151,7 @@
 ** ----------------------------------------------------------------
 ** USER ELEMENT DEFINITION
 ** ----------------------------------------------------------------
-*User Element, type=U3,Nodes=8,Coordinates=3,Properties=21,Iproperties=2,Variables=120,Unsymm
+*User Element, type=U3,Nodes=8,Coordinates=3,Properties=24,Iproperties=2,Variables=848,Unsymm
 1,2,3,11
 ** ----------------------------------------------------------------
 ** MESH
@@ -359,7 +359,7 @@ SURFACE-Top, SURFACE-Probe
 **
 *Material, name=dummy_material
 *User output variables
-15
+106
 *elastic
 1.e-20
 *Conductivity

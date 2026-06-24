@@ -13,10 +13,12 @@ pos1=1
 statev(pos1)=phi_t
 !       DETERMINANT
 statev(pos1+1)=one
-!      FLUID CONTENT
+!      CL CONTENT
 statev(pos1+2) = (1.0d0 - phi_t) / (Vmol * phi_t)
-!       CL RELATIVE STIFFNESS
-DO i = pos1+3, nsdv - ndir
+!      TOTAL CB
+statev(pos1+3) = cb0
+!       STRESSES and CL FLUX
+DO i = pos1+4, nsdv - ndir
     statev(i)=zero
 END DO
 

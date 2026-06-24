@@ -28,15 +28,16 @@
          real(8) :: statev(nsdv), prev_statev(nsdv), Iden(3, 3), Le, theta0, phi0, Ru(3 * NNODE, 1), Rc(NNODE, 1), &
                   body(3), Kuu(3 * NNODE, 3 * NNODE), Kcc(NNODE, NNODE), sh0(NNODE), detMapJ0, &
                   dshxi(NNODE, 3), dsh0(NNODE, 3), dshC0(NNODE, 3), detMapJ0C, Vmol, Fc_tau(3, 3), &
-                  Fc_t(3, 3), detFc_tau, detFc_t, w(nIntt), DmDmu, DmDJ, sh(NNODE), detMapJ, phi_t, &
+                  Fc_t(3, 3), detFc_tau, detFc_t, w(nIntt), DmDmu, DmDJ, sh(NNODE), detMapJ, thetaf_t, &
                   dsh(NNODE, 3), detMapJC, phiLmt, umeror, dshC(NNODE, 3), mu_tau, mu_t, dMUdX(3, 1), &
                   dMUdt, F_tau(3, 3), F_t(3, 3), detF_tau, xi(nIntt, 3), detF, TR_tau(3, 3), T_tau(3, 3), &
-                  xi0(nIntt, 3), Ff_t(3, 3), Ff_tau(3, 3), SpTanMod(3, 3, 3, 3), phi_tau, dPdt, DphiDmu, &
+                  xi0(nIntt, 3), Ff_t(3, 3), Ff_tau(3, 3), SpTanMod(3, 3, 3, 3), thetaf_tau, DTHETAFDT, DTHETAFDMU, &
                   DphidotDmu, Mfluid, Smat(6, 1), Bmat(6, 3 * NNODE), BodyForceRes(3 * NNODE, 1), flux, &
                   Gmat(9, 3 * NNODE), G0mat(9, 3 * NNODE), Amat(9, 9), Qmat(9, 9), dA, xLocal(nInttS), &
                   yLocal(nInttS), zLocal(nInttS), wS(nInttS), Kuc(3 * NNODE, NNODE), Kcu(NNODE, 3 * NNODE), &
-                  Nvec(1, NNODE), ResFac, AmatUC(6, 1), TanFac, AmatCU(3, 9), SpUCMod(3, 3), &
+                  Nvec(1, NNODE), ResFac, AmatUC(6, 1), TanFac, AmatCU(3, 9), DSIGDMU(3, 3), &
                   SpCUMod(3, 3, 3), SpCUModFac(3, 3), pi, detF_t, PNEWDT
+         real(8) :: CFMAX,RMACRO
          character(len=256) :: jobName, outDir, fileName
 
          ! Get element parameters
@@ -273,12 +274,12 @@
                prev_statev(2) = one
                statev(1) = phi0
                statev(2) = one
-               phi_t  = phi0
+               thetaf_t  = phi0
                else
                ! this is not the first increment, read old values
                statev = SVARS(1 + jj : nsdv + jj)
                prev_statev = SVARS(1 + jj : nsdv + jj)
-               phi_t  = svars(1+jj)
+               thetaf_t  = svars(1+jj)
                endif
 
                ! Obtain shape functions and their local gradients
@@ -362,8 +363,8 @@
                        F_t, F_tau, detF_tau, &
                        TIME, DTIME, PREDEF, &
                        nDim, nshr, ntens, nsdv, PROPS, NPROPS, coords, PNEWDT, &
-                       JELEM, intpt, KSTEP, KINC,MU_TAU,PHI_T,PHI_TAU,DPDT, &
-                       DPHIDMU,DPHIDOTDMU,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,SPUCMOD,SPCUMODFAC)
+                       JELEM, intpt, KSTEP, KINC,MU_TAU,THETAF_T,THETAF_TAU,DTHETAFDT, &
+                       DTHETAFDMU,RMACRO,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,CFMAX,DSIGDMU,SPCUMODFAC)
                !
                !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
                ! Previous determinant of the deformation gradient
@@ -383,11 +384,11 @@
 
          ! Time stepping algorithm based on the constitutive response
          write(*,*) 'statev(1) = ', statev(1)
-         write(*,*) 'phi_tau = ', phi_tau
+         write(*,*) 'thetaf_tau = ', thetaf_tau
          phiLmt = 0.005d0
-         phi_tau = statev(1)
-         phi_t = prev_statev(1)
-         umeror = abs((phi_tau - phi_t)/phiLmt)
+         thetaf_tau = statev(1)
+         thetaf_t = prev_statev(1)
+         umeror = abs((thetaf_tau - thetaf_t)/phiLmt)
          ! write(*, *) 'umeror=', umeror
          if (umeror <= 0.5d0) then
             pnewdt = 1.5d0
@@ -436,7 +437,7 @@
             Nvec(1,kk) = sh(kk)
          enddo
          !
-         ResFac = (dPdt)/(detF*Vmol*phi_tau*phi_tau)
+         ResFac = - (CFMAX * DTHETAFDT + RMACRO) / DETF
          !
          Rc = Rc + detmapJC*w(intpt)*(transpose(Nvec)*ResFac - Mfluid*matmul(dshC,dMUdX))
          
@@ -597,9 +598,11 @@
          !
          ! Compute/update the chemical potential tangent matrix
          !
-         TanFac = (one/(detF*Vmol*phi_tau**two))* &
-                  (two*(dPdt/phi_tau)*DphiDmu - DphidotDmu)
+         ! TanFac = (one/(detF*Vmol*thetaf_tau**two))* &
+         !          (two*(DTHETAFDT/thetaf_tau)*DTHETAFDMU - DphidotDmu)
          !
+         TanFac = (CFMAX * DTHETAFDMU) / (DTIME * detF)
+
          Kcc = Kcc + detmapJC*w(intPt)* &
                   (TanFac*matmul(transpose(Nvec),Nvec) &
                   + Mfluid*matmul(dshC,transpose(dshC)) &
@@ -655,12 +658,12 @@
          !  The F-bar method will have some effect, however we neglect that here.
          !
          AmatUC = zero
-         AmatUC(1,1) = SpUCMod(1,1)
-         AmatUC(2,1) = SpUCMod(2,2)
-         AmatUC(3,1) = SpUCMod(3,3)
-         AmatUC(4,1) = SpUCMod(1,2)
-         AmatUC(5,1) = SpUCMod(2,3)
-         AmatUC(6,1) = SpUCMod(1,3)
+         AmatUC(1,1) = DSIGDMU(1,1)
+         AmatUC(2,1) = DSIGDMU(2,2)
+         AmatUC(3,1) = DSIGDMU(3,3)
+         AmatUC(4,1) = DSIGDMU(1,2)
+         AmatUC(5,1) = DSIGDMU(2,3)
+         AmatUC(6,1) = DSIGDMU(1,3)
          !
          Kuc = Kuc + detMapJC*w(intpt)* &
                (matmul(matmul(transpose(Bmat),AmatUC),Nvec))
