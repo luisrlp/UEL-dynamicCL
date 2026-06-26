@@ -1593,8 +1593,18 @@ end subroutine AssembleElement
             Nvec(1,kk) = sh(kk)
          enddo
          !
+         write(*,*) 'CFMAX = ', CFMAX
+         write(*,*) 'DTHETAFDT = ', DTHETAFDT
+         write(*,*) 'RMACRO = ', RMACRO
+         write(*,*) 'DETF = ', DETF
          ResFac = - (CFMAX * DTHETAFDT + RMACRO) / DETF
          !
+         write(*,*) 'detmapJC = ', detmapJC
+         write(*,*) 'w(intpt) = ', w(intpt)
+         write(*,*) 'transpose(Nvec) = ', transpose(Nvec)
+         write(*,*) 'ResFac = ', ResFac
+         write(*,*) 'Mfluid = ', Mfluid
+         write(*,*) 'matmul(dshC,dMUdX) = ', matmul(dshC,dMUdX)
          Rc = Rc + detmapJC*w(intpt)*(transpose(Nvec)*ResFac - Mfluid*matmul(dshC,dMUdX))
          
          
@@ -1911,6 +1921,32 @@ end subroutine AssembleElement
       !----------------------------------------------------------------
       ! Return Abaqus the RHS vector and the Stiffness matrix.
       !
+      ! CHeck if there are any NaN values in the residuals or tangents
+      !
+      if (any(isnan(Ru))) then
+         write(*,*) 'NaN values found in Ru!'
+         call exit
+      endif
+      if (any(isnan(Rc))) then
+         write(*,*) 'NaN values found in Rc!'
+         call exit
+      endif
+      if (any(isnan(Kuu))) then
+         write(*,*) 'NaN values found in Kuu!'
+         call exit
+      endif
+      if (any(isnan(Kuc))) then
+         write(*,*) 'NaN values found in Kuc!'
+         call exit
+      endif
+      if (any(isnan(Kcu))) then
+         write(*,*) 'NaN values found in Kcu!'
+         call exit
+      endif
+      if (any(isnan(Kcc))) then
+         write(*,*) 'NaN values found in Kcc!'
+         call exit
+      endif
       
       call AssembleElement(nDim, nNode, nDofEl, &
          Ru,Rc,Kuu,Kuc,Kcu,Kcc, &
@@ -2422,7 +2458,7 @@ do face = 1, face_num/2
             - koff_i * cbmax * (thetab_i / (1.0d0 - thetab_i))                                                       
                                                                                                                     
         ! Explicit Euler Integration
-        !!!!!! MAY BE REPLACED WITH A MORE STABLE INTEGRATION SCHEME !!!!!!                                                                                
+        !!!!!! MAY BE REPLACED WITH A MORE STABLE INTEGRATION SCHEME !!!!!!                                                                            
         cb(node_num) = cb(node_num) + dtime * R_i                                                                    
                                                                                                                     
         ! Accumulate macroscopic pool for the NEXT time step                                                        
@@ -12275,7 +12311,8 @@ CALL projlag(c,unit4,projl,ndi)
       DMDMU = D * cfmax * (1.0d0 - 2.0d0 * thetaf) * DTHETAFDMU
       DMDJ  = 0.0d0   ! Mobility no longer depends on volume!
 
-      ! Fluid flux vector (just visualization/SVARS)
+      ! Fluid flux vector (for visualization/SVARS)
+      jfluid = -MFLUID * DMUDX
 
       
 !       DETFE = DET * PHI_TAU
@@ -12350,9 +12387,10 @@ END IF
 CALL erfi(efi,bb)
 !     'FICTICIOUS' PK2 STRESS AND MATERIAL ELASTICITY TENSORS
 !------------ AFFINE NETWORK --------------
-IF ((phinet > zero) .AND. (nn > zero)) THEN
+IF (phinet > zero) THEN
   ! GET CL STIFFNESS DISTRIBUTION FOR CURRENT GP
   !CALL getprops_gp(noel, npt, etadir, etadir_array)
+  write(*,*) 'Calling affclnetfic_discrete at t = ', time(1)
   CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,filprops,  &
       affprops,efi,noel,det,prefdir,ndi,cb,dtime,cabp,cfmax,cbmax,chi,Keq,Koff0, &
       thetaf, cb_tot_new)
@@ -12360,6 +12398,10 @@ END IF
 
 ! Macroscopic reaction source (homogenized binding rate)
 RMACRO = (cb_tot_new - cb_tot) / DTIME
+write(*,*) 'cb_tot_new = ', cb_tot_new
+write(*,*) 'cb_tot = ', cb_tot
+write(*,*) 'DTIME = ', DTIME
+write(*,*) 'RMACRO in umat= ', RMACRO
 
 !      PKNETFIC=PKNETFICNAF+PKNETFICAF
 snetfic=snetficnaf+snetficaf

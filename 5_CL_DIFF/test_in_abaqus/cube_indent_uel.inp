@@ -407,7 +407,7 @@ Set-Bottom, YSYMM
 *Boundary
 Set-RP, 1, 1
 ** Set-RP, 2, 2, -0.75
-Set-RP, 2, 2, -0.05
+Set-RP, 2, 2, -0.75
 Set-RP, 3, 3
 Set-RP, 4, 4
 Set-RP, 5, 5

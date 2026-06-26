@@ -243,7 +243,7 @@ do face = 1, face_num/2
             - koff_i * cbmax * (thetab_i / (1.0d0 - thetab_i))                                                       
                                                                                                                     
         ! Explicit Euler Integration
-        !!!!!! MAY BE REPLACED WITH A MORE STABLE INTEGRATION SCHEME !!!!!!                                                                                
+        !!!!!! MAY BE REPLACED WITH A MORE STABLE INTEGRATION SCHEME !!!!!!                                                                            
         cb(node_num) = cb(node_num) + dtime * R_i                                                                    
                                                                                                                     
         ! Accumulate macroscopic pool for the NEXT time step                                                        

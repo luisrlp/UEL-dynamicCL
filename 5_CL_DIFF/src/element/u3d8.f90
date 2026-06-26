@@ -29,7 +29,7 @@
                   body(3), Kuu(3 * NNODE, 3 * NNODE), Kcc(NNODE, NNODE), sh0(NNODE), detMapJ0, &
                   dshxi(NNODE, 3), dsh0(NNODE, 3), dshC0(NNODE, 3), detMapJ0C, Vmol, Fc_tau(3, 3), &
                   Fc_t(3, 3), detFc_tau, detFc_t, w(nIntt), DmDmu, DmDJ, sh(NNODE), detMapJ, thetaf_t, &
-                  dsh(NNODE, 3), detMapJC, phiLmt, umeror, dshC(NNODE, 3), mu_tau, mu_t, dMUdX(3, 1), &
+                  dsh(NNODE, 3), detMapJC, thetafLmt, umeror, dshC(NNODE, 3), mu_tau, mu_t, dMUdX(3, 1), &
                   dMUdt, F_tau(3, 3), F_t(3, 3), detF_tau, xi(nIntt, 3), detF, TR_tau(3, 3), T_tau(3, 3), &
                   xi0(nIntt, 3), Ff_t(3, 3), Ff_tau(3, 3), SpTanMod(3, 3, 3, 3), thetaf_tau, DTHETAFDT, DTHETAFDMU, &
                   DphidotDmu, Mfluid, Smat(6, 1), Bmat(6, 3 * NNODE), BodyForceRes(3 * NNODE, 1), flux, &
@@ -51,6 +51,8 @@
 
          ! Initialize energy
          ENERGY = 0.0d0
+
+         write(*,*) 'Simulation has started!!!'
 
          if (.not. allocated(globalSdv)) then
             ! Allocate memory for the globalSdv's
@@ -115,8 +117,8 @@
 
          ! Obtain initial conditions
          !
-         theta0 = props(20)
-         phi0   = props(21)
+         ! theta0 = props(20)
+         ! phi0   = props(21)
 
          ! Initialize the residual and tangent matrices to zero.
          Ru = zero
@@ -270,11 +272,11 @@
                ! this is the first increment, of the first step
                !  give initial conditions (or just anything)
                ! statev = 0.9999d0 !initial determinant of the deformation gradient
-               prev_statev(1) = phi0
+               prev_statev(1) = 0.5
                prev_statev(2) = one
-               statev(1) = phi0
+               ! statev(1) = phi0
                statev(2) = one
-               thetaf_t  = phi0
+               thetaf_t  = 0.5d0
                else
                ! this is not the first increment, read old values
                statev = SVARS(1 + jj : nsdv + jj)
@@ -359,6 +361,7 @@
                ! Perform the time integration at this integ. point to compute
                !  all the specific forms and parameters needed for the solution
                !
+               write(*,*) 'Calling the material routine!'
                call material(T_tau, statev, SpTanMod, &
                        F_t, F_tau, detF_tau, &
                        TIME, DTIME, PREDEF, &
@@ -385,20 +388,34 @@
          ! Time stepping algorithm based on the constitutive response
          write(*,*) 'statev(1) = ', statev(1)
          write(*,*) 'thetaf_tau = ', thetaf_tau
-         phiLmt = 0.005d0
+         ! thetafLmt = 0.005d0
+         thetafLmt = 0.01d0
          thetaf_tau = statev(1)
          thetaf_t = prev_statev(1)
-         umeror = abs((thetaf_tau - thetaf_t)/phiLmt)
-         ! write(*, *) 'umeror=', umeror
-         if (umeror <= 0.5d0) then
-            pnewdt = 1.5d0
-         elseif (umeror > 0.5d0 .and. umeror <= 0.8d0) then
-            pnewdt = 1.25d0
-         elseif (umeror > 0.8d0 .and. umeror <= 1.25d0) then
-            pnewdt = 0.75d0
+         if ((KINC<=1) .and. (KSTEP == 1)) then
+            ! First increment: perfectly converged, keep time step constant         
+            umeror = 0.0d0
+            pnewdt = 1.0d0
+         write(*,*) 'thetaf_tau = ', thetaf_tau
+         write(*,*) 'thetaf_t = ', thetaf_t
+         write(*,*) 'thetafLmt = ', thetafLmt
+         write(*, *) 'umeror=', umeror
          else
-            pnewdt = 0.5d0
-         endif
+            umeror = abs((thetaf_tau - thetaf_t)/thetafLmt)
+         write(*,*) 'thetaf_tau = ', thetaf_tau
+         write(*,*) 'thetaf_t = ', thetaf_t
+         write(*,*) 'thetafLmt = ', thetafLmt
+         write(*, *) 'umeror=', umeror
+            if (umeror <= 0.5d0) then
+               pnewdt = 1.5d0
+            elseif (umeror > 0.5d0 .and. umeror <= 0.8d0) then
+               pnewdt = 1.25d0
+            elseif (umeror > 0.8d0 .and. umeror <= 1.25d0) then
+               pnewdt = 0.75d0
+            else
+               pnewdt = 0.5d0
+            endif
+         end if
 
          ! Compute/update the displacement residual vector
          Smat(1, 1) = T_tau(1, 1)
@@ -437,8 +454,18 @@
             Nvec(1,kk) = sh(kk)
          enddo
          !
+         write(*,*) 'CFMAX = ', CFMAX
+         write(*,*) 'DTHETAFDT = ', DTHETAFDT
+         write(*,*) 'RMACRO = ', RMACRO
+         write(*,*) 'DETF = ', DETF
          ResFac = - (CFMAX * DTHETAFDT + RMACRO) / DETF
          !
+         write(*,*) 'detmapJC = ', detmapJC
+         write(*,*) 'w(intpt) = ', w(intpt)
+         write(*,*) 'transpose(Nvec) = ', transpose(Nvec)
+         write(*,*) 'ResFac = ', ResFac
+         write(*,*) 'Mfluid = ', Mfluid
+         write(*,*) 'matmul(dshC,dMUdX) = ', matmul(dshC,dMUdX)
          Rc = Rc + detmapJC*w(intpt)*(transpose(Nvec)*ResFac - Mfluid*matmul(dshC,dMUdX))
          
          
@@ -755,6 +782,32 @@
       !----------------------------------------------------------------
       ! Return Abaqus the RHS vector and the Stiffness matrix.
       !
+      ! CHeck if there are any NaN values in the residuals or tangents
+      !
+      if (any(isnan(Ru))) then
+         write(*,*) 'NaN values found in Ru!'
+         call exit
+      endif
+      if (any(isnan(Rc))) then
+         write(*,*) 'NaN values found in Rc!'
+         call exit
+      endif
+      if (any(isnan(Kuu))) then
+         write(*,*) 'NaN values found in Kuu!'
+         call exit
+      endif
+      if (any(isnan(Kuc))) then
+         write(*,*) 'NaN values found in Kuc!'
+         call exit
+      endif
+      if (any(isnan(Kcu))) then
+         write(*,*) 'NaN values found in Kcu!'
+         call exit
+      endif
+      if (any(isnan(Kcc))) then
+         write(*,*) 'NaN values found in Kcc!'
+         call exit
+      endif
       
       call AssembleElement(nDim, nNode, nDofEl, &
          Ru,Rc,Kuu,Kuc,Kcu,Kcc, &

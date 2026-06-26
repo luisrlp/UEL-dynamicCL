@@ -260,6 +260,9 @@ affprops = (/bb, lambda0, cactin, Mactin, rhoactin/)
 ! nn = cactin/ll * na * mactin / rhoactin * 1.0e-24 ! AFFCL DIRECTION
 ! write(*,*) 'nn = ', nn
 
+write(*,*) 'Inside the material routine!'
+write(*,*) 'ELEM/GP: ', noel, npt
+
 !     CL CONCENTRATION
 !!! THIS NEEDS TO BE CHANGED AFTER DIFFUSION IS IMPLEMENTED IN UEL
 cabp = cactin*R  ! <-- Placeholder: Replace with true UEL cR later!
@@ -268,11 +271,14 @@ cfmax = Rfmax * cactin
 cbmax = Rbmax * cactin
 
 !        STATE VARIABLES AND CHEMICAL PARAMETERS
-IF ((time(1) == zero).AND.(kstep == 1)) THEN
+! IF ((time(1) == zero).AND.(kstep == 1)) THEN
+! IF ((kinc <= 1).AND.(kstep == 1)) THEN
+IF ((kinc <= 1).AND.(kstep == 1)) THEN
   ! Initial bound and free CL concentrations
   cb_upper = MIN(cabp, cbmax)
   machep = 2.22d-16
   tol = 1.0d-8
+  write(*,*) 'Calling pullchem at t=0'
   CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq)
   CALL initialize(statev,thetaf_t,vmol,cb0)
 END IF
@@ -309,7 +315,6 @@ CALL projlag(c,unit4,projl,ndi)
 !---------------------- COUPLED DIFFUSION -----------------------------
 !----------------------------------------------------------------------
 
-
 !     1. Solve for current free crosslinker fraction (THETAF)
       ARGS(1) = MU_TAU
       ARGS(2) = MU0
@@ -321,6 +326,7 @@ CALL projlag(c,unit4,projl,ndi)
       ARGS(8) = DET
       ARGS(9) = CB_TOT
       ARGS(10) = CFMAX
+      write(*,*) 'ARGS = ', ARGS
       CALL SOLVETHETAF(THETAF_TAU, ARGS, NARGS, THETAF_T)
 
       thetaf = THETAF_TAU
@@ -330,8 +336,18 @@ CALL projlag(c,unit4,projl,ndi)
       CALL thetafFunc(thetaf, f, df, ARGS, NARGS)
       DTHETAFDMU = one / df
 
+      write(*,*) 'kinc = ', kinc
+      write(*,*) 'kstep = ', kstep
+      write(*,*) 'DTIME = ', DTIME
+
       ! Rate of free crosslinker fraction
-      DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME
+      ! IF ((KINC <= 1) .AND. (KSTEP == 1)) THEN
+      IF ((KINC<=1) .AND. (KSTEP == 1)) THEN
+         DTHETAFDT = 0.0d0
+      ELSE
+         DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME
+      END IF
+
 
       ! Fluid mobility and permeability
       MFLUID = D * cf * (1.0d0 - thetaf)
@@ -340,8 +356,9 @@ CALL projlag(c,unit4,projl,ndi)
       DMDMU = D * cfmax * (1.0d0 - 2.0d0 * thetaf) * DTHETAFDMU
       DMDJ  = 0.0d0   ! Mobility no longer depends on volume!
 
-      ! Fluid flux vector (just visualization/SVARS)
+      ! Fluid flux vector (for visualization/SVARS)
       jfluid = -MFLUID * DMUDX
+
       
 !       DETFE = DET * PHI_TAU
 !       !     2. Time rate of swelling
@@ -414,9 +431,10 @@ END IF
 CALL erfi(efi,bb)
 !     'FICTICIOUS' PK2 STRESS AND MATERIAL ELASTICITY TENSORS
 !------------ AFFINE NETWORK --------------
-IF ((phinet > zero) .AND. (nn > zero)) THEN
+IF (phinet > zero) THEN
   ! GET CL STIFFNESS DISTRIBUTION FOR CURRENT GP
   !CALL getprops_gp(noel, npt, etadir, etadir_array)
+  write(*,*) 'Calling affclnetfic_discrete at t = ', time(1)
   CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,filprops,  &
       affprops,efi,noel,det,prefdir,ndi,cb,dtime,cabp,cfmax,cbmax,chi,Keq,Koff0, &
       thetaf, cb_tot_new)
@@ -424,6 +442,10 @@ END IF
 
 ! Macroscopic reaction source (homogenized binding rate)
 RMACRO = (cb_tot_new - cb_tot) / DTIME
+write(*,*) 'cb_tot_new = ', cb_tot_new
+write(*,*) 'cb_tot = ', cb_tot
+write(*,*) 'DTIME = ', DTIME
+write(*,*) 'RMACRO in umat= ', RMACRO
 
 !      PKNETFIC=PKNETFICNAF+PKNETFICAF
 snetfic=snetficnaf+snetficaf

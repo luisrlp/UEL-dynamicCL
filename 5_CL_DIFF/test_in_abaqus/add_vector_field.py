@@ -37,12 +37,12 @@ def add_vector_fields(job_id):
         {
             'name': 'MUGRAD',
             'desc': 'Gradient of the Chemical Potential',
-            'uvarms': ('UVARM10', 'UVARM11', 'UVARM12')
+            'uvarms': ('UVARM11', 'UVARM12', 'UVARM13')
         },
         {
             'name': 'JFLUX',
             'desc': 'Fluid Flux',
-            'uvarms': ('UVARM13', 'UVARM14', 'UVARM15')
+            'uvarms': ('UVARM14', 'UVARM15', 'UVARM16')
         }
     ]
     for step_name, step in odb.steps.items():

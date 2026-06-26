@@ -26,6 +26,7 @@ GEMINI.md
 *.msg
 *.sta
 *.log
+*.txt
 
 # Temporary, lock, and process files
 *.lck

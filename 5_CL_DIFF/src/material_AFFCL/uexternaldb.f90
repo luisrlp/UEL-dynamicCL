@@ -20,7 +20,8 @@ INTEGER, INTENT(IN OUT)                  :: kinc
 COMMON /kfilp/prefdir
 COMMON /kfile/etadir
 
-DOUBLE PRECISION :: prefdir(nelem,4)
+! DOUBLE PRECISION :: prefdir(nelem,4)
+DOUBLE PRECISION :: prefdir(1,4)
 DOUBLE PRECISION :: etadir(nelem*8, 2+ndir)
 CHARACTER (LEN=256) ::  filename, jobdir, etafile
 INTEGER :: lenjobdir,i,j,k

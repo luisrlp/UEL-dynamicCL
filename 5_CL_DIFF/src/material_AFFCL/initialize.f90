@@ -1,20 +1,20 @@
-SUBROUTINE initialize(statev, phi_t, Vmol, cb0)
+SUBROUTINE initialize(statev, thetaf_t, Vmol, cb0)
 use global
 IMPLICIT NONE
 
 !      DOUBLE PRECISION TIME(2),KSTEP
 INTEGER :: pos1, i
-DOUBLE PRECISION, INTENT(IN)             :: phi_t, Vmol, cb0
+DOUBLE PRECISION, INTENT(IN)             :: thetaf_t, Vmol, cb0
 DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
 
 
 pos1=1
 !     VOLUME FRACTION
-statev(pos1)=phi_t
+statev(pos1)=thetaf_t
 !       DETERMINANT
 statev(pos1+1)=one
 !      CL CONTENT
-statev(pos1+2) = (1.0d0 - phi_t) / (Vmol * phi_t)
+statev(pos1+2) = (1.0d0 - thetaf_t) / (Vmol * thetaf_t)
 !      TOTAL CB
 statev(pos1+3) = cb0
 !       STRESSES and CL FLUX

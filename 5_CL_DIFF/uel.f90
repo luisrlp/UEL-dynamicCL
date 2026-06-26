@@ -1121,7 +1121,7 @@ end subroutine AssembleElement
                   body(3), Kuu(3 * NNODE, 3 * NNODE), Kcc(NNODE, NNODE), sh0(NNODE), detMapJ0, &
                   dshxi(NNODE, 3), dsh0(NNODE, 3), dshC0(NNODE, 3), detMapJ0C, Vmol, Fc_tau(3, 3), &
                   Fc_t(3, 3), detFc_tau, detFc_t, w(nIntt), DmDmu, DmDJ, sh(NNODE), detMapJ, thetaf_t, &
-                  dsh(NNODE, 3), detMapJC, phiLmt, umeror, dshC(NNODE, 3), mu_tau, mu_t, dMUdX(3, 1), &
+                  dsh(NNODE, 3), detMapJC, thetafLmt, umeror, dshC(NNODE, 3), mu_tau, mu_t, dMUdX(3, 1), &
                   dMUdt, F_tau(3, 3), F_t(3, 3), detF_tau, xi(nIntt, 3), detF, TR_tau(3, 3), T_tau(3, 3), &
                   xi0(nIntt, 3), Ff_t(3, 3), Ff_tau(3, 3), SpTanMod(3, 3, 3, 3), thetaf_tau, DTHETAFDT, DTHETAFDMU, &
                   DphidotDmu, Mfluid, Smat(6, 1), Bmat(6, 3 * NNODE), BodyForceRes(3 * NNODE, 1), flux, &
@@ -1143,6 +1143,8 @@ end subroutine AssembleElement
 
          ! Initialize energy
          ENERGY = 0.0d0
+
+         write(*,*) 'Simulation has started!!!'
 
          if (.not. allocated(globalSdv)) then
             ! Allocate memory for the globalSdv's
@@ -1207,8 +1209,8 @@ end subroutine AssembleElement
 
          ! Obtain initial conditions
          !
-         theta0 = props(20)
-         phi0   = props(21)
+         ! theta0 = props(20)
+         ! phi0   = props(21)
 
          ! Initialize the residual and tangent matrices to zero.
          Ru = zero
@@ -1362,11 +1364,11 @@ end subroutine AssembleElement
                ! this is the first increment, of the first step
                !  give initial conditions (or just anything)
                ! statev = 0.9999d0 !initial determinant of the deformation gradient
-               prev_statev(1) = phi0
+               prev_statev(1) = 0.5
                prev_statev(2) = one
-               statev(1) = phi0
+               ! statev(1) = phi0
                statev(2) = one
-               thetaf_t  = phi0
+               thetaf_t  = 0.5d0
                else
                ! this is not the first increment, read old values
                statev = SVARS(1 + jj : nsdv + jj)
@@ -1451,6 +1453,7 @@ end subroutine AssembleElement
                ! Perform the time integration at this integ. point to compute
                !  all the specific forms and parameters needed for the solution
                !
+               write(*,*) 'Calling the material routine!'
                call material(T_tau, statev, SpTanMod, &
                        F_t, F_tau, detF_tau, &
                        TIME, DTIME, PREDEF, &
@@ -1477,20 +1480,34 @@ end subroutine AssembleElement
          ! Time stepping algorithm based on the constitutive response
          write(*,*) 'statev(1) = ', statev(1)
          write(*,*) 'thetaf_tau = ', thetaf_tau
-         phiLmt = 0.005d0
+         ! thetafLmt = 0.005d0
+         thetafLmt = 0.01d0
          thetaf_tau = statev(1)
          thetaf_t = prev_statev(1)
-         umeror = abs((thetaf_tau - thetaf_t)/phiLmt)
-         ! write(*, *) 'umeror=', umeror
-         if (umeror <= 0.5d0) then
-            pnewdt = 1.5d0
-         elseif (umeror > 0.5d0 .and. umeror <= 0.8d0) then
-            pnewdt = 1.25d0
-         elseif (umeror > 0.8d0 .and. umeror <= 1.25d0) then
-            pnewdt = 0.75d0
+         if ((KINC<=1) .and. (KSTEP == 1)) then
+            ! First increment: perfectly converged, keep time step constant         
+            umeror = 0.0d0
+            pnewdt = 1.0d0
+         write(*,*) 'thetaf_tau = ', thetaf_tau
+         write(*,*) 'thetaf_t = ', thetaf_t
+         write(*,*) 'thetafLmt = ', thetafLmt
+         write(*, *) 'umeror=', umeror
          else
-            pnewdt = 0.5d0
-         endif
+            umeror = abs((thetaf_tau - thetaf_t)/thetafLmt)
+         write(*,*) 'thetaf_tau = ', thetaf_tau
+         write(*,*) 'thetaf_t = ', thetaf_t
+         write(*,*) 'thetafLmt = ', thetafLmt
+         write(*, *) 'umeror=', umeror
+            if (umeror <= 0.5d0) then
+               pnewdt = 1.5d0
+            elseif (umeror > 0.5d0 .and. umeror <= 0.8d0) then
+               pnewdt = 1.25d0
+            elseif (umeror > 0.8d0 .and. umeror <= 1.25d0) then
+               pnewdt = 0.75d0
+            else
+               pnewdt = 0.5d0
+            endif
+         end if
 
          ! Compute/update the displacement residual vector
          Smat(1, 1) = T_tau(1, 1)
@@ -1529,8 +1546,18 @@ end subroutine AssembleElement
             Nvec(1,kk) = sh(kk)
          enddo
          !
+         write(*,*) 'CFMAX = ', CFMAX
+         write(*,*) 'DTHETAFDT = ', DTHETAFDT
+         write(*,*) 'RMACRO = ', RMACRO
+         write(*,*) 'DETF = ', DETF
          ResFac = - (CFMAX * DTHETAFDT + RMACRO) / DETF
          !
+         write(*,*) 'detmapJC = ', detmapJC
+         write(*,*) 'w(intpt) = ', w(intpt)
+         write(*,*) 'transpose(Nvec) = ', transpose(Nvec)
+         write(*,*) 'ResFac = ', ResFac
+         write(*,*) 'Mfluid = ', Mfluid
+         write(*,*) 'matmul(dshC,dMUdX) = ', matmul(dshC,dMUdX)
          Rc = Rc + detmapJC*w(intpt)*(transpose(Nvec)*ResFac - Mfluid*matmul(dshC,dMUdX))
          
          
@@ -1847,6 +1874,32 @@ end subroutine AssembleElement
       !----------------------------------------------------------------
       ! Return Abaqus the RHS vector and the Stiffness matrix.
       !
+      ! CHeck if there are any NaN values in the residuals or tangents
+      !
+      if (any(isnan(Ru))) then
+         write(*,*) 'NaN values found in Ru!'
+         call exit
+      endif
+      if (any(isnan(Rc))) then
+         write(*,*) 'NaN values found in Rc!'
+         call exit
+      endif
+      if (any(isnan(Kuu))) then
+         write(*,*) 'NaN values found in Kuu!'
+         call exit
+      endif
+      if (any(isnan(Kuc))) then
+         write(*,*) 'NaN values found in Kuc!'
+         call exit
+      endif
+      if (any(isnan(Kcu))) then
+         write(*,*) 'NaN values found in Kcu!'
+         call exit
+      endif
+      if (any(isnan(Kcc))) then
+         write(*,*) 'NaN values found in Kcc!'
+         call exit
+      endif
       
       call AssembleElement(nDim, nNode, nDofEl, &
          Ru,Rc,Kuu,Kuc,Kcu,Kcc, &
@@ -2358,7 +2411,7 @@ do face = 1, face_num/2
             - koff_i * cbmax * (thetab_i / (1.0d0 - thetab_i))                                                       
                                                                                                                     
         ! Explicit Euler Integration
-        !!!!!! MAY BE REPLACED WITH A MORE STABLE INTEGRATION SCHEME !!!!!!                                                                                
+        !!!!!! MAY BE REPLACED WITH A MORE STABLE INTEGRATION SCHEME !!!!!!                                                                            
         cb(node_num) = cb(node_num) + dtime * R_i                                                                    
                                                                                                                     
         ! Accumulate macroscopic pool for the NEXT time step                                                        
@@ -3188,26 +3241,26 @@ END DO
 
 RETURN
 END SUBROUTINE fslip
-! COMMENT WHEN RUNNING IN ABAQUS
-SUBROUTINE getoutdir(outdir, lenoutdir)
+! ! COMMENT WHEN RUNNING IN ABAQUS
+! SUBROUTINE getoutdir(outdir, lenoutdir)
 
 
 
-!>     GET CURRENT WORKING DIRECTORY
-INCLUDE 'aba_param.inc'
+! !>     GET CURRENT WORKING DIRECTORY
+! INCLUDE 'aba_param.inc'
 
 
-CHARACTER (LEN=256), INTENT(IN OUT)      :: outdir
-INTEGER, INTENT(OUT)                     :: lenoutdir
+! CHARACTER (LEN=256), INTENT(IN OUT)      :: outdir
+! INTEGER, INTENT(OUT)                     :: lenoutdir
 
 
 
-CALL getcwd(outdir)
-!        OUTDIR=OUTDIR(1:SCAN(OUTDIR,'\',BACK=.TRUE.)-1)
-lenoutdir=len_trim(outdir)
+! CALL getcwd(outdir)
+! !        OUTDIR=OUTDIR(1:SCAN(OUTDIR,'\',BACK=.TRUE.)-1)
+! lenoutdir=len_trim(outdir)
 
-RETURN
-END SUBROUTINE getoutdir
+! RETURN
+! END SUBROUTINE getoutdir
 SUBROUTINE getprops_gp(noel, npt, etadir, etadir_array)
 
 use global
@@ -3433,23 +3486,23 @@ END DO
 RETURN
 
 END SUBROUTINE indexx
-SUBROUTINE initialize(statev, phi_t, Vmol, cb0)
+SUBROUTINE initialize(statev, thetaf_t, Vmol, cb0)
 use global
 IMPLICIT NONE
 
 !      DOUBLE PRECISION TIME(2),KSTEP
 INTEGER :: pos1, i
-DOUBLE PRECISION, INTENT(IN)             :: phi_t, Vmol, cb0
+DOUBLE PRECISION, INTENT(IN)             :: thetaf_t, Vmol, cb0
 DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
 
 
 pos1=1
 !     VOLUME FRACTION
-statev(pos1)=phi_t
+statev(pos1)=thetaf_t
 !       DETERMINANT
 statev(pos1+1)=one
 !      CL CONTENT
-statev(pos1+2) = (1.0d0 - phi_t) / (Vmol * phi_t)
+statev(pos1+2) = (1.0d0 - thetaf_t) / (Vmol * thetaf_t)
 !      TOTAL CB
 statev(pos1+3) = cb0
 !       STRESSES and CL FLUX
@@ -4144,8 +4197,15 @@ DOUBLE PRECISION :: sb
 
 DOUBLE PRECISION :: tol
 
-
-
+write(*,*) 'zero: ', a
+write(*,*) 'cb_upper: ', b
+write(*,*) 'machep: ', machep
+write(*,*) 'tol: ', t
+write(*,*) 'cabp: ', cabp
+write(*,*) 'cfmax: ', cfmax
+write(*,*) 'cbmax: ', cbmax
+write(*,*) 'chi: ', chi
+write(*,*) 'Keq: ', Keq
 
 !     MAKE LOCAL COPIES OF A AND B.
 
@@ -10098,7 +10158,7 @@ subroutine solveThetaf(root, args, nargs, rootOld)
     ! 1. Dummy arguments explicitly strictly typed with INTENT
     integer, intent(in)     :: nargs
     real(8), intent(in)     :: args(nargs)
-    real(8), intent(in) :: rootOld
+    real(8), intent(in)     :: rootOld
     real(8), intent(out)    :: root
 
     ! 2. Local variables
@@ -11834,7 +11894,8 @@ INTEGER, INTENT(IN OUT)                  :: kinc
 COMMON /kfilp/prefdir
 COMMON /kfile/etadir
 
-DOUBLE PRECISION :: prefdir(nelem,4)
+! DOUBLE PRECISION :: prefdir(nelem,4)
+DOUBLE PRECISION :: prefdir(1,4)
 DOUBLE PRECISION :: etadir(nelem*8, 2+ndir)
 CHARACTER (LEN=256) ::  filename, jobdir, etafile
 INTEGER :: lenjobdir,i,j,k
@@ -12131,6 +12192,9 @@ affprops = (/bb, lambda0, cactin, Mactin, rhoactin/)
 ! nn = cactin/ll * na * mactin / rhoactin * 1.0e-24 ! AFFCL DIRECTION
 ! write(*,*) 'nn = ', nn
 
+write(*,*) 'Inside the material routine!'
+write(*,*) 'ELEM/GP: ', noel, npt
+
 !     CL CONCENTRATION
 !!! THIS NEEDS TO BE CHANGED AFTER DIFFUSION IS IMPLEMENTED IN UEL
 cabp = cactin*R  ! <-- Placeholder: Replace with true UEL cR later!
@@ -12139,11 +12203,14 @@ cfmax = Rfmax * cactin
 cbmax = Rbmax * cactin
 
 !        STATE VARIABLES AND CHEMICAL PARAMETERS
-IF ((time(1) == zero).AND.(kstep == 1)) THEN
+! IF ((time(1) == zero).AND.(kstep == 1)) THEN
+! IF ((kinc <= 1).AND.(kstep == 1)) THEN
+IF ((kinc <= 1).AND.(kstep == 1)) THEN
   ! Initial bound and free CL concentrations
   cb_upper = MIN(cabp, cbmax)
   machep = 2.22d-16
   tol = 1.0d-8
+  write(*,*) 'Calling pullchem at t=0'
   CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq)
   CALL initialize(statev,thetaf_t,vmol,cb0)
 END IF
@@ -12180,7 +12247,6 @@ CALL projlag(c,unit4,projl,ndi)
 !---------------------- COUPLED DIFFUSION -----------------------------
 !----------------------------------------------------------------------
 
-
 !     1. Solve for current free crosslinker fraction (THETAF)
       ARGS(1) = MU_TAU
       ARGS(2) = MU0
@@ -12192,6 +12258,7 @@ CALL projlag(c,unit4,projl,ndi)
       ARGS(8) = DET
       ARGS(9) = CB_TOT
       ARGS(10) = CFMAX
+      write(*,*) 'ARGS = ', ARGS
       CALL SOLVETHETAF(THETAF_TAU, ARGS, NARGS, THETAF_T)
 
       thetaf = THETAF_TAU
@@ -12201,8 +12268,18 @@ CALL projlag(c,unit4,projl,ndi)
       CALL thetafFunc(thetaf, f, df, ARGS, NARGS)
       DTHETAFDMU = one / df
 
+      write(*,*) 'kinc = ', kinc
+      write(*,*) 'kstep = ', kstep
+      write(*,*) 'DTIME = ', DTIME
+
       ! Rate of free crosslinker fraction
-      DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME
+      ! IF ((KINC <= 1) .AND. (KSTEP == 1)) THEN
+      IF ((KINC<=1) .AND. (KSTEP == 1)) THEN
+         DTHETAFDT = 0.0d0
+      ELSE
+         DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME
+      END IF
+
 
       ! Fluid mobility and permeability
       MFLUID = D * cf * (1.0d0 - thetaf)
@@ -12211,7 +12288,8 @@ CALL projlag(c,unit4,projl,ndi)
       DMDMU = D * cfmax * (1.0d0 - 2.0d0 * thetaf) * DTHETAFDMU
       DMDJ  = 0.0d0   ! Mobility no longer depends on volume!
 
-      ! Fluid flux vector (just visualization/SVARS)
+      ! Fluid flux vector (for visualization/SVARS)
+      jfluid = -MFLUID * DMUDX
 
       
 !       DETFE = DET * PHI_TAU
@@ -12286,9 +12364,10 @@ END IF
 CALL erfi(efi,bb)
 !     'FICTICIOUS' PK2 STRESS AND MATERIAL ELASTICITY TENSORS
 !------------ AFFINE NETWORK --------------
-IF ((phinet > zero) .AND. (nn > zero)) THEN
+IF (phinet > zero) THEN
   ! GET CL STIFFNESS DISTRIBUTION FOR CURRENT GP
   !CALL getprops_gp(noel, npt, etadir, etadir_array)
+  write(*,*) 'Calling affclnetfic_discrete at t = ', time(1)
   CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,filprops,  &
       affprops,efi,noel,det,prefdir,ndi,cb,dtime,cabp,cfmax,cbmax,chi,Keq,Koff0, &
       thetaf, cb_tot_new)
@@ -12296,6 +12375,10 @@ END IF
 
 ! Macroscopic reaction source (homogenized binding rate)
 RMACRO = (cb_tot_new - cb_tot) / DTIME
+write(*,*) 'cb_tot_new = ', cb_tot_new
+write(*,*) 'cb_tot = ', cb_tot
+write(*,*) 'DTIME = ', DTIME
+write(*,*) 'RMACRO in umat= ', RMACRO
 
 !      PKNETFIC=PKNETFICNAF+PKNETFICAF
 snetfic=snetficnaf+snetficaf

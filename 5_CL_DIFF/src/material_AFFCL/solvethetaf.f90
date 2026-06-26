@@ -9,7 +9,7 @@ subroutine solveThetaf(root, args, nargs, rootOld)
     ! 1. Dummy arguments explicitly strictly typed with INTENT
     integer, intent(in)     :: nargs
     real(8), intent(in)     :: args(nargs)
-    real(8), intent(in) :: rootOld
+    real(8), intent(in)     :: rootOld
     real(8), intent(out)    :: root
 
     ! 2. Local variables
