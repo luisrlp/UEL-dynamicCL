@@ -341,10 +341,9 @@ CALL projlag(c,unit4,projl,ndi)
       DMDJ  = 0.0d0   ! Mobility no longer depends on volume!
 
       ! Fluid flux vector (just visualization/SVARS)
-
+      jfluid = -MFLUID * DMUDX
       
 !       DETFE = DET * PHI_TAU
-      
 !       !     2. Time rate of swelling
 !       DPDT = (PHI_TAU - PHI_T) / DTIME
       
