@@ -44,6 +44,10 @@ DOUBLE PRECISION :: prefdir(nelem,4), pd(3),lambda_pref,prefdir0(3)
 DOUBLE PRECISION :: dx,kb,theta,na
 DOUBLE PRECISION :: cactin, Mactin, rhoactin
 DOUBLE PRECISION :: cb_i, thetab_i, Kon, Koff_i, R_i, dtime_sub, cb_sub
+INTEGER :: iter
+DOUBLE PRECISION :: cb_new, Res, cb_pert, dcb, r0f_p, l_p, r0_p
+DOUBLE PRECISION :: lambdaif_p, lambda0f_p, fi_p, koff_p, thetab_p, R_p, Res_p, dRes_dcb
+
 
 ! INTEGRATION SCHEME
   integer, parameter :: nfacedir = 2
@@ -230,53 +234,109 @@ do face = 1, face_num/2
 
         END IF
         
-        ! ! ================= KINETICS & ODE INTEGRATION =================                                            
-        ! thetab_i = cb_i / cbmax
-        
-        ! ! To avoid numerical issues
-        ! thetab_i = MIN(MAX(thetab_i, 1.0d-6), one - 1.0d-6)
-        
-        ! kon = Koff0 * Keq * exp(CHI * (1.0d0 - 2.0d0 * thetaf))                                                    
-        ! koff_i = Koff0 * exp((fi * dx) / (kb * theta))                                                              
-                                                                                                                    
-        ! R_i = kon * cfmax * (thetaf / (1.0d0 - thetaf)) &                                                            
-        !     - koff_i * cbmax * (thetab_i / (1.0d0 - thetab_i))                                                       
-                                                                                                                    
-        ! ! Explicit Euler Integration
-        ! !!!!!! MAY BE REPLACED WITH A MORE STABLE INTEGRATION SCHEME !!!!!!                                                                            
-        ! cb(node_num) = cb(node_num) + dtime * R_i            
-        
-        ! ================= KINETICS & ODE INTEGRATION (SUB-STEPPING) =================
-        ! To maintain stability during large Abaqus increments (e.g., 500s),
-        ! we divide the global dtime into stable micro-steps (max ~0.1s).
-        n_sub = MAX(1, INT(dtime / 0.1d0) + 1)
-        dtime_sub = dtime / DBLE(n_sub)
-        
-        cb_sub = cb(node_num)
+        ! --- 1. Macroscopic stretch ---
+        mf0i=node_xyz
+        CALL deffil(lambdai,mfi,mf0i,f,ndi)
+        CALL bangle(ang,f,mfi,noel,pd,ndi)
+        CALL density(rho,ang,bdisp,efi)
+
+        ! ================= KINETICS (IMPLICIT NEWTON-RAPHSON) =================
+        cb_i = MAX(cb(node_num), 1.0d-10)
+        cb_new = cb_i  ! Initial guess is the old state
         kon = Koff0 * Keq * exp(CHI * (1.0d0 - 2.0d0 * thetaf))
-        
-        ! Note: koff_i is assumed constant over the increment since the macroscopic 
-        ! stretch lambdai is fixed by Abaqus for this iteration.
-        koff_i = Koff0 * exp((fi * dx) / (kb * theta))
-        
-        DO isub = 1, n_sub
-            thetab_i = cb_sub / cbmax
-            thetab_i = MIN(MAX(thetab_i, 1.0d-6), one - 1.0d-6)
+
+        DO iter = 1, 30
+            ! --- A. Evaluate Residual at current guess (cb_new) ---
+            r0f = 1.6 * (10.0d3 * cb_new)**(-two/5.0d0)
+            l = aratio * r0f
+            r0 = r0f + r0c
+            IF((etac > zero).AND.(etac .LE. one)) THEN
+              lambdaif = etac*(r0/r0f)*(lambdai-one)+one
+              lambda0f = etac*(r0/r0f)*(lambda0-one)+one
+            ELSE
+              lambdaif = lambdai 
+            END IF
+            fi = zero
+            IF(lambdai .GE. 1.0d0) THEN 
+                CALL fil(fi,ffi,dwi,ddwi,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac)
+            END IF
+            koff_i = Koff0 * exp((fi * dx) / (kb * theta))
+            thetab_i = MIN(MAX(cb_new / cbmax, 1.0d-6), one - 1.0d-6)
+            R_i = kon * cfmax * (thetaf / (1.0d0 - thetaf)) - koff_i * cbmax * (thetab_i / (1.0d0 - thetab_i))
+            Res = cb_new - cb_i - dtime * R_i
             
-            R_i = kon * cfmax * (thetaf / (1.0d0 - thetaf)) &
-                - koff_i * cbmax * (thetab_i / (1.0d0 - thetab_i))
+            ! Check for convergence (Residual is near zero)
+            IF (ABS(Res) < 1.0d-10) EXIT
             
-            cb_sub = cb_sub + dtime_sub * R_i
+            ! --- B. Evaluate Residual at perturbed state (cb_pert) ---
+            cb_pert = cb_new * 1.0001d0 + 1.0d-12
+            dcb = cb_pert - cb_new
+            r0f_p = 1.6 * (10.0d3 * cb_pert)**(-two/5.0d0)
+            l_p = aratio * r0f_p
+            r0_p = r0f_p + r0c
+            IF((etac > zero).AND.(etac .LE. one)) THEN
+              lambdaif_p = etac*(r0_p/r0f_p)*(lambdai-one)+one
+              lambda0f_p = etac*(r0_p/r0f_p)*(lambda0-one)+one
+            ELSE
+              lambdaif_p = lambdai 
+            END IF
+            fi_p = zero
+            IF(lambdai .GE. 1.0d0) THEN 
+                CALL fil(fi_p,ffi,dwi,ddwi,lambdaif_p,lambda0,lambda0f_p,l_p,r0_p,r0f_p,mu0str,beta,b0,etac)
+            END IF
+            koff_p = Koff0 * exp((fi_p * dx) / (kb * theta))
+            thetab_p = MIN(MAX(cb_pert / cbmax, 1.0d-6), one - 1.0d-6)
+            R_p = kon * cfmax * (thetaf / (1.0d0 - thetaf)) - koff_p * cbmax * (thetab_p / (1.0d0 - thetab_p))
+            Res_p = cb_pert - cb_i - dtime * R_p
             
-            ! Ensure cb_sub does not drop into negative values during integration
-            cb_sub = MAX(cb_sub, 1.0d-8)
+            ! --- C. Update Guess using Numerical Derivative ---
+            dRes_dcb = (Res_p - Res) / dcb
+            cb_new = cb_new - Res / dRes_dcb
+            
+            ! Keep bounds strictly positive
+            cb_new = MAX(cb_new, 1.0d-10)
         END DO
         
-        cb(node_num) = cb_sub
-                                                                                                                    
+        ! Save the converged implicit solution
+        cb(node_num) = cb_new
+        ! ======================================================================
+
+        ! --- 2. Final state for Stress and Tangent accumulation ---
+        r0f = 1.6 * (10.0d3 * cb(node_num))**(-two/5.0d0)
+        l = aratio * r0f
+        r0 = r0f + r0c
+        n = l**(-1) * (cactin * NA * Mactin / rhoactin)
+        aux = n * (det**(-one))
+
+        IF((etac > zero).AND.(etac .LE. one)) THEN
+          lambdaif = etac*(r0/r0f)*(lambdai-one)+one
+          lambda0f = etac*(r0/r0f)*(lambda0-one)+one
+        ELSE
+          lambdaif = lambdai 
+        END IF
+
+        IF(lambdai > lambdaimax) lambdaimax=lambdai
+
+        fi = zero
+        IF(lambdai .GE. 1.0d0) THEN 
+          CALL fil(fi,ffi,dwi,ddwi,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac)
+          CALL sigfilfic(sfilfic,rho,lambdai,dwi,mfi,ai,ndi)
+          CALL csfilfic(cfilfic,rho,lambdai,dwi,ddwi,mfi,ai,ndi)
+
+          DO j1=1,ndi
+            DO k1=1,ndi
+                sfic(j1,k1) = sfic(j1,k1) + aux*sfilfic(j1,k1)
+                DO l1=1,ndi
+                  DO m1=1,ndi
+                    cfic(j1,k1,l1,m1) = cfic(j1,k1,l1,m1) + aux*cfilfic(j1,k1,l1,m1)
+                  END DO
+                END DO
+            END DO
+          END DO
+        END IF 
+         
         ! Accumulate macroscopic pool for the NEXT time step                                                        
-        ! (Note: ai is scaled by 2.0*pi because we only integrate one hemisphere)                                   
-        cb_tot_new = cb_tot_new + cb(node_num) * rho * ai                                              
+        cb_tot_new = cb_tot_new + cb(node_num) * rho * ai
         ! ==============================================================   
 
         !v=dwi

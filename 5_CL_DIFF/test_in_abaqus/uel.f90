@@ -1179,6 +1179,7 @@ end subroutine AssembleElement
                   dtheta(NNODE), muNew(NNODE), muOld(NNODE), dMU(NNODE), uNew(NNODE, NDOFEL), &
                   uOld(NNODE, NDOFEL), u_t(NNODE, NDOFEL), v(NNODE, 3), coordsC(MCRD, NNODE)
          integer :: i, j, k, l, m, n, nInttPt, nDim, intpt, pOrder, face, nIntt, ii, jj, pe, stat, q, &
+                    col, &
                   nInttV, nInttPtV, p, ngSdv, nlSdv, kk, lenJobName, lenOutDir, nInttS, faceFlag, &
                   nshr, ntens
          real(8) :: statev(nsdv), prev_statev(nsdv), Iden(3, 3), Le, theta0, phi0, Ru(3 * NNODE, 1), Rc(NNODE, 1), &
@@ -1192,8 +1193,8 @@ end subroutine AssembleElement
                   Gmat(9, 3 * NNODE), G0mat(9, 3 * NNODE), Amat(9, 9), Qmat(9, 9), dA, xLocal(nInttS), &
                   yLocal(nInttS), zLocal(nInttS), wS(nInttS), Kuc(3 * NNODE, NNODE), Kcu(NNODE, 3 * NNODE), &
                   Nvec(1, NNODE), ResFac, AmatUC(6, 1), TanFac, AmatCU(3, 9), DSIGDMU(3, 3), &
-                  SpCUMod(3, 3, 3), SpCUModFac(3, 3), pi, detF_t, PNEWDT
-         real(8) :: CFMAX,RMACRO
+                  SpCUModFac(3, 3), SpCUMod(3, 3, 3), pi, detF_t, PNEWDT
+         real(8) :: CFMAX,RMACRO,val
          character(len=256) :: jobName, outDir, fileName
 
          ! Get element parameters
@@ -1479,8 +1480,11 @@ end subroutine AssembleElement
                      dMUdX(i,1) = dMUdX(i,1) + muNew(k)*dshC(k,i)
                   enddo
                enddo
-               dMUdt = (mu_tau - mu_t)/dtime
-
+               if (DTIME > 1.0d-12) then
+                  dMUdt = (mu_tau - mu_t)/dtime
+               else
+                  dMUdt = 0.0d0
+               endif
 
                ! Obtain, and modify the deformation gradient at this integration
                !  point.  Modify the deformation gradient for use in the `F-bar'
@@ -1784,8 +1788,12 @@ end subroutine AssembleElement
          ! TanFac = (one/(detF*Vmol*thetaf_tau**two))* &
          !          (two*(DTHETAFDT/thetaf_tau)*DTHETAFDMU - DphidotDmu)
          !
-         TanFac = (CFMAX * DTHETAFDMU) / (DTIME * detF)
-
+         ! CHANGED!!!!!!!
+         if (DTIME > 1.0d-12) then
+            TanFac = (CFMAX * DTHETAFDMU) / (DTIME * detF)
+         else
+            TanFac = 0.0d0
+         endif
          Kcc = Kcc + detmapJC*w(intPt)* &
                   (TanFac*matmul(transpose(Nvec),Nvec) &
                   + Mfluid*matmul(dshC,transpose(dshC)) &
@@ -1835,7 +1843,6 @@ end subroutine AssembleElement
          !
          Kcu = Kcu - detMapJC*w(intpt)* &
                (matmul(matmul(dshC,AmatCU),Gmat))
-
 
          ! Compute/update the displacement - chemical potential tangent matrix
          !  The F-bar method will have some effect, however we neglect that here.
@@ -1965,7 +1972,7 @@ end subroutine AssembleElement
          call exit
       endif
       
-      call AssembleElement(nDim, nNode, nDofEl, &
+      call AssembleElement(nDim, nNode, NDOFEL, &
          Ru,Rc,Kuu,Kuc,Kcu,Kcc, &
          rhs, amatrx)
    !      write(*,*) rhs(:,1)
@@ -3093,6 +3100,7 @@ DOUBLE PRECISION, INTENT(IN)             :: thetaf
 DOUBLE PRECISION, INTENT(OUT)            :: cb_tot_new
 DOUBLE PRECISION, INTENT(IN OUT)         :: cb(ndir)
 
+INTEGER :: i1,j1,k1,l1,m1, im1, isub, n_sub
 INTEGER :: i1,j1,k1,l1,m1, im1, isub, n_sub
 DOUBLE PRECISION :: sfilfic(ndi,ndi), cfilfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
@@ -4868,26 +4876,26 @@ END DO
 
 RETURN
 END SUBROUTINE fslip
-! ! COMMENT WHEN RUNNING IN ABAQUS
-! SUBROUTINE getoutdir(outdir, lenoutdir)
+! COMMENT WHEN RUNNING IN ABAQUS
+SUBROUTINE getoutdir(outdir, lenoutdir)
 
 
 
-! !>     GET CURRENT WORKING DIRECTORY
+!>     GET CURRENT WORKING DIRECTORY
 ! INCLUDE 'aba_param.inc'
 
 
-! CHARACTER (LEN=256), INTENT(IN OUT)      :: outdir
-! INTEGER, INTENT(OUT)                     :: lenoutdir
+CHARACTER (LEN=256), INTENT(IN OUT)      :: outdir
+INTEGER, INTENT(OUT)                     :: lenoutdir
 
 
 
-! CALL getcwd(outdir)
-! !        OUTDIR=OUTDIR(1:SCAN(OUTDIR,'\',BACK=.TRUE.)-1)
-! lenoutdir=len_trim(outdir)
+CALL getcwd(outdir)
+!        OUTDIR=OUTDIR(1:SCAN(OUTDIR,'\',BACK=.TRUE.)-1)
+lenoutdir=len_trim(outdir)
 
-! RETURN
-! END SUBROUTINE getoutdir
+RETURN
+END SUBROUTINE getoutdir
 SUBROUTINE getprops_gp(noel, npt, etadir, etadir_array)
 
 use global
@@ -13893,27 +13901,32 @@ CALL projlag(c,unit4,projl,ndi)
 
       ! Evaluate tangent at converged root
       CALL thetafFunc(thetaf, f, df, ARGS, NARGS)
-      DTHETAFDMU = one / df
+      DTHETAFDMU = one / (RGAS * THETA * df)
 
       ! write(*,*) 'kinc = ', kinc
       ! write(*,*) 'kstep = ', kstep
       ! write(*,*) 'DTIME = ', DTIME
 
       ! Rate of free crosslinker fraction
-      ! IF ((KINC <= 1) .AND. (KSTEP == 1)) THEN
       IF ((KINC<=1) .AND. (KSTEP == 1)) THEN
          DTHETAFDT = 0.0d0
-      ELSE
+      ELSE IF (DTIME > 1.0d-12) THEN
          DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME
+      ELSE
+         DTHETAFDT = 0.0d0
       END IF
-
 
       ! Fluid mobility and permeability
       MFLUID = D * cf * (1.0d0 - thetaf)
 
       ! Mobility tangents
       DMDMU = D * cfmax * (1.0d0 - 2.0d0 * thetaf) * DTHETAFDMU
-      DMDJ  = 0.0d0   ! Mobility no longer depends on volume!
+      ! dm/dJ via Implicit Function Theorem on H(thetaf, mu, J) = 0:
+      !   dthetaf/dJ = (k*Vmol) / (RT * Jc * det * df)
+      !   dm/dJ = dm/dthetaf * dthetaf/dJ
+      Jc = 1.0d0 + VMOL * cb_tot + VMOL * cfmax * thetaf
+      DMDJ  = D * cfmax * (1.0d0 - 2.0d0 * thetaf) &
+            * (k * VMOL) / (RGAS * THETA * Jc * det * df)
 
       ! Fluid flux vector (for visualization/SVARS)
       jfluid = -MFLUID * DMUDX
@@ -14000,7 +14013,11 @@ IF (phinet > zero) THEN
 END IF
 
 ! Macroscopic reaction source (homogenized binding rate)
-RMACRO = (cb_tot_new - cb_tot) / DTIME
+IF (DTIME > 1.0d-12) THEN
+  RMACRO = (cb_tot_new - cb_tot) / DTIME
+ELSE
+  RMACRO = 0.0d0
+END IF
 write(*,*) 'cb_tot_new = ', cb_tot_new
 write(*,*) 'cb_tot = ', cb_tot
 ! write(*,*) 'DTIME = ', DTIME
@@ -14096,7 +14113,8 @@ ddsigdde=cvol+ciso+cjr
 !     CHEMICAL POTENTIAL - DISPLACEMENT MODULUS
 DO I1 = 1, NDI
     DO J1 = 1, NDI
-      SPCUMODFAC(I1,J1) = MFLUID * UNIT2(I1,J1)
+      ! Existing mobility term + dm/dJ contribution (via J * delta_il)
+      SPCUMODFAC(I1,J1) = (MFLUID + DMDJ * det) * UNIT2(I1,J1)
     END DO
 END DO
 

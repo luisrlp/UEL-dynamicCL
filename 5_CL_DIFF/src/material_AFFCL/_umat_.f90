@@ -334,27 +334,32 @@ CALL projlag(c,unit4,projl,ndi)
 
       ! Evaluate tangent at converged root
       CALL thetafFunc(thetaf, f, df, ARGS, NARGS)
-      DTHETAFDMU = one / df
+      DTHETAFDMU = one / (RGAS * THETA * df)
 
       write(*,*) 'kinc = ', kinc
       write(*,*) 'kstep = ', kstep
       write(*,*) 'DTIME = ', DTIME
 
       ! Rate of free crosslinker fraction
-      ! IF ((KINC <= 1) .AND. (KSTEP == 1)) THEN
       IF ((KINC<=1) .AND. (KSTEP == 1)) THEN
          DTHETAFDT = 0.0d0
-      ELSE
+      ELSE IF (DTIME > 1.0d-12) THEN
          DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME
+      ELSE
+         DTHETAFDT = 0.0d0
       END IF
-
 
       ! Fluid mobility and permeability
       MFLUID = D * cf * (1.0d0 - thetaf)
 
       ! Mobility tangents
       DMDMU = D * cfmax * (1.0d0 - 2.0d0 * thetaf) * DTHETAFDMU
-      DMDJ  = 0.0d0   ! Mobility no longer depends on volume!
+      ! dm/dJ via Implicit Function Theorem on H(thetaf, mu, J) = 0:
+      !   dthetaf/dJ = (k*Vmol) / (RT * Jc * det * df)
+      !   dm/dJ = dm/dthetaf * dthetaf/dJ
+      Jc = 1.0d0 + VMOL * cb_tot + VMOL * cfmax * thetaf
+      DMDJ  = D * cfmax * (1.0d0 - 2.0d0 * thetaf) &
+            * (k * VMOL) / (RGAS * THETA * Jc * det * df)
 
       ! Fluid flux vector (for visualization/SVARS)
       jfluid = -MFLUID * DMUDX
@@ -441,7 +446,11 @@ IF (phinet > zero) THEN
 END IF
 
 ! Macroscopic reaction source (homogenized binding rate)
-RMACRO = (cb_tot_new - cb_tot) / DTIME
+IF (DTIME > 1.0d-12) THEN
+  RMACRO = (cb_tot_new - cb_tot) / DTIME
+ELSE
+  RMACRO = 0.0d0
+END IF
 write(*,*) 'cb_tot_new = ', cb_tot_new
 write(*,*) 'cb_tot = ', cb_tot
 write(*,*) 'DTIME = ', DTIME
@@ -537,7 +546,8 @@ ddsigdde=cvol+ciso+cjr
 !     CHEMICAL POTENTIAL - DISPLACEMENT MODULUS
 DO I1 = 1, NDI
     DO J1 = 1, NDI
-      SPCUMODFAC(I1,J1) = MFLUID * UNIT2(I1,J1)
+      ! Existing mobility term + dm/dJ contribution (via J * delta_il)
+      SPCUMODFAC(I1,J1) = (MFLUID + DMDJ * det) * UNIT2(I1,J1)
     END DO
 END DO
 

@@ -23,6 +23,7 @@
                   dtheta(NNODE), muNew(NNODE), muOld(NNODE), dMU(NNODE), uNew(NNODE, NDOFEL), &
                   uOld(NNODE, NDOFEL), u_t(NNODE, NDOFEL), v(NNODE, 3), coordsC(MCRD, NNODE)
          integer :: i, j, k, l, m, n, nInttPt, nDim, intpt, pOrder, face, nIntt, ii, jj, pe, stat, q, &
+                    col, &
                   nInttV, nInttPtV, p, ngSdv, nlSdv, kk, lenJobName, lenOutDir, nInttS, faceFlag, &
                   nshr, ntens
          real(8) :: statev(nsdv), prev_statev(nsdv), Iden(3, 3), Le, theta0, phi0, Ru(3 * NNODE, 1), Rc(NNODE, 1), &
@@ -36,8 +37,8 @@
                   Gmat(9, 3 * NNODE), G0mat(9, 3 * NNODE), Amat(9, 9), Qmat(9, 9), dA, xLocal(nInttS), &
                   yLocal(nInttS), zLocal(nInttS), wS(nInttS), Kuc(3 * NNODE, NNODE), Kcu(NNODE, 3 * NNODE), &
                   Nvec(1, NNODE), ResFac, AmatUC(6, 1), TanFac, AmatCU(3, 9), DSIGDMU(3, 3), &
-                  SpCUMod(3, 3, 3), SpCUModFac(3, 3), pi, detF_t, PNEWDT
-         real(8) :: CFMAX,RMACRO
+                  SpCUModFac(3, 3), SpCUMod(3, 3, 3), pi, detF_t, PNEWDT
+         real(8) :: CFMAX,RMACRO,val
          character(len=256) :: jobName, outDir, fileName
 
          ! Get element parameters
@@ -323,8 +324,11 @@
                      dMUdX(i,1) = dMUdX(i,1) + muNew(k)*dshC(k,i)
                   enddo
                enddo
-               dMUdt = (mu_tau - mu_t)/dtime
-
+               if (DTIME > 1.0d-12) then
+                  dMUdt = (mu_tau - mu_t)/dtime
+               else
+                  dMUdt = 0.0d0
+               endif
 
                ! Obtain, and modify the deformation gradient at this integration
                !  point.  Modify the deformation gradient for use in the `F-bar'
@@ -628,8 +632,12 @@
          ! TanFac = (one/(detF*Vmol*thetaf_tau**two))* &
          !          (two*(DTHETAFDT/thetaf_tau)*DTHETAFDMU - DphidotDmu)
          !
-         TanFac = (CFMAX * DTHETAFDMU) / (DTIME * detF)
-
+         ! CHANGED!!!!!!!
+         if (DTIME > 1.0d-12) then
+            TanFac = (CFMAX * DTHETAFDMU) / (DTIME * detF)
+         else
+            TanFac = 0.0d0
+         endif
          Kcc = Kcc + detmapJC*w(intPt)* &
                   (TanFac*matmul(transpose(Nvec),Nvec) &
                   + Mfluid*matmul(dshC,transpose(dshC)) &
@@ -679,7 +687,6 @@
          !
          Kcu = Kcu - detMapJC*w(intpt)* &
                (matmul(matmul(dshC,AmatCU),Gmat))
-
 
          ! Compute/update the displacement - chemical potential tangent matrix
          !  The F-bar method will have some effect, however we neglect that here.
@@ -809,7 +816,7 @@
          call exit
       endif
       
-      call AssembleElement(nDim, nNode, nDofEl, &
+      call AssembleElement(nDim, nNode, NDOFEL, &
          Ru,Rc,Kuu,Kuc,Kcu,Kcc, &
          rhs, amatrx)
    !      write(*,*) rhs(:,1)
