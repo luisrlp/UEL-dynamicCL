@@ -84,15 +84,15 @@ DOUBLE PRECISION :: sb
 
 DOUBLE PRECISION :: tol
 
-write(*,*) 'zero: ', a
-write(*,*) 'cb_upper: ', b
-write(*,*) 'machep: ', machep
-write(*,*) 'tol: ', t
-write(*,*) 'cabp: ', cabp
-write(*,*) 'cfmax: ', cfmax
-write(*,*) 'cbmax: ', cbmax
-write(*,*) 'chi: ', chi
-write(*,*) 'Keq: ', Keq
+! write(*,*) 'zero: ', a
+! write(*,*) 'cb_upper: ', b
+! write(*,*) 'machep: ', machep
+! write(*,*) 'tol: ', t
+! write(*,*) 'cabp: ', cabp
+! write(*,*) 'cfmax: ', cfmax
+! write(*,*) 'cbmax: ', cbmax
+! write(*,*) 'chi: ', chi
+! write(*,*) 'Keq: ', Keq
 
 !     MAKE LOCAL COPIES OF A AND B.
 

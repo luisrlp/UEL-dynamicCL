@@ -31,7 +31,7 @@ DOUBLE PRECISION :: aux0,aux1,aux2,aux3,aux4,aux5,aux6,y
 a=zero
 b=1.0E09
 machep=2.2204E-16
-t=1.0E-6
+t=1.0E-14 ! 1.0E-6
 f=zero
 
 CALL pullforce(f, a, b, machep, t, lambdaf,lambda0f,ll,r0f,mu0,beta,b0)

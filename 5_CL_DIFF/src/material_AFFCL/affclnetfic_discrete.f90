@@ -33,7 +33,7 @@ DOUBLE PRECISION, INTENT(IN)             :: thetaf
 DOUBLE PRECISION, INTENT(OUT)            :: cb_tot_new
 DOUBLE PRECISION, INTENT(IN OUT)         :: cb(ndir)
 
-INTEGER :: i1,j1,k1,l1,m1, im1
+INTEGER :: i1,j1,k1,l1,m1, im1, isub, n_sub
 DOUBLE PRECISION :: sfilfic(ndi,ndi), cfilfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
 DOUBLE PRECISION :: aux,lambdai,dwi,ddwi,rwi,lambdaic
@@ -43,7 +43,7 @@ DOUBLE PRECISION :: bdisp,ang, frac(4)
 DOUBLE PRECISION :: prefdir(nelem,4), pd(3),lambda_pref,prefdir0(3)
 DOUBLE PRECISION :: dx,kb,theta,na
 DOUBLE PRECISION :: cactin, Mactin, rhoactin
-DOUBLE PRECISION :: cb_i, thetab_i, Kon, Koff_i, R_i
+DOUBLE PRECISION :: cb_i, thetab_i, Kon, Koff_i, R_i, dtime_sub, cb_sub
 
 ! INTEGRATION SCHEME
   integer, parameter :: nfacedir = 2
@@ -230,21 +230,49 @@ do face = 1, face_num/2
 
         END IF
         
-        ! ================= KINETICS & ODE INTEGRATION =================                                            
-        thetab_i = cb_i / cbmax
+        ! ! ================= KINETICS & ODE INTEGRATION =================                                            
+        ! thetab_i = cb_i / cbmax
         
-        ! To avoid numerical issues
-        thetab_i = MIN(MAX(thetab_i, 1.0d-6), one - 1.0d-6)
+        ! ! To avoid numerical issues
+        ! thetab_i = MIN(MAX(thetab_i, 1.0d-6), one - 1.0d-6)
         
-        kon = Koff0 * Keq * exp(CHI * (1.0d0 - 2.0d0 * thetaf))                                                    
-        koff_i = Koff0 * exp((fi * dx) / (kb * theta))                                                              
+        ! kon = Koff0 * Keq * exp(CHI * (1.0d0 - 2.0d0 * thetaf))                                                    
+        ! koff_i = Koff0 * exp((fi * dx) / (kb * theta))                                                              
                                                                                                                     
-        R_i = kon * cfmax * (thetaf / (1.0d0 - thetaf)) &                                                            
-            - koff_i * cbmax * (thetab_i / (1.0d0 - thetab_i))                                                       
+        ! R_i = kon * cfmax * (thetaf / (1.0d0 - thetaf)) &                                                            
+        !     - koff_i * cbmax * (thetab_i / (1.0d0 - thetab_i))                                                       
                                                                                                                     
-        ! Explicit Euler Integration
-        !!!!!! MAY BE REPLACED WITH A MORE STABLE INTEGRATION SCHEME !!!!!!                                                                            
-        cb(node_num) = cb(node_num) + dtime * R_i                                                                    
+        ! ! Explicit Euler Integration
+        ! !!!!!! MAY BE REPLACED WITH A MORE STABLE INTEGRATION SCHEME !!!!!!                                                                            
+        ! cb(node_num) = cb(node_num) + dtime * R_i            
+        
+        ! ================= KINETICS & ODE INTEGRATION (SUB-STEPPING) =================
+        ! To maintain stability during large Abaqus increments (e.g., 500s),
+        ! we divide the global dtime into stable micro-steps (max ~0.1s).
+        n_sub = MAX(1, INT(dtime / 0.1d0) + 1)
+        dtime_sub = dtime / DBLE(n_sub)
+        
+        cb_sub = cb(node_num)
+        kon = Koff0 * Keq * exp(CHI * (1.0d0 - 2.0d0 * thetaf))
+        
+        ! Note: koff_i is assumed constant over the increment since the macroscopic 
+        ! stretch lambdai is fixed by Abaqus for this iteration.
+        koff_i = Koff0 * exp((fi * dx) / (kb * theta))
+        
+        DO isub = 1, n_sub
+            thetab_i = cb_sub / cbmax
+            thetab_i = MIN(MAX(thetab_i, 1.0d-6), one - 1.0d-6)
+            
+            R_i = kon * cfmax * (thetaf / (1.0d0 - thetaf)) &
+                - koff_i * cbmax * (thetab_i / (1.0d0 - thetab_i))
+            
+            cb_sub = cb_sub + dtime_sub * R_i
+            
+            ! Ensure cb_sub does not drop into negative values during integration
+            cb_sub = MAX(cb_sub, 1.0d-8)
+        END DO
+        
+        cb(node_num) = cb_sub
                                                                                                                     
         ! Accumulate macroscopic pool for the NEXT time step                                                        
         ! (Note: ai is scaled by 2.0*pi because we only integrate one hemisphere)                                   
