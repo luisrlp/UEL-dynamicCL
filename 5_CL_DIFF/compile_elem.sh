@@ -9,10 +9,10 @@ CONCAT_FILE="uel.f90"
 cat src/element/*.f90 src/material_AFFCL/*.f90 > $CONCAT_FILE
 
 # Compile global.f to generate global.mod
-gfortran -c global.f90
+gfortran -g -O0 -fbacktrace -ffpe-trap=invalid,zero,overflow -c global.f90
 
 # Compile the concatenated file and main.for
-gfortran -o my_program main.f90 $CONCAT_FILE global.o
+gfortran -g -O0 -fbacktrace -ffpe-trap=invalid,zero,overflow -o my_program main.f90 $CONCAT_FILE global.o
 
 # Compile concat_file with global.f90 into folder test_in_abaqus
 cat global.f90 $CONCAT_FILE > test_in_abaqus/uel.f90

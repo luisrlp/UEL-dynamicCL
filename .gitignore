@@ -2,6 +2,9 @@
 # Directories to Ignore
 # =========================
 literature/
+mathematica_nbs/
+workplan/
+python_scripts/
 
 # =========================
 # Specific Files to Ignore
