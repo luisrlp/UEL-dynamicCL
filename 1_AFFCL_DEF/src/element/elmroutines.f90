@@ -880,7 +880,8 @@
       call matInv3Dd(mapJ, mapJ_inv, detMapJ, stat)
       if (stat == 0) then
          write(*, *) 'Problem: detF.lt.zero in mapShape3D'
-         call exit
+         ! call exit
+         return
       end if
 
       ! Calculate first derivatives wrt x, y, z

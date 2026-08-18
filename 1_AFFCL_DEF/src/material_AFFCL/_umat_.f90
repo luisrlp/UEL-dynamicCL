@@ -354,7 +354,7 @@ CALL setjr(cjr,sigma,unit2,ndi)
 !----------------------------------------------------------------------
 
 !     ELASTICITY TENSOR
-ddsigdde=cvol+ciso+cjr
+ddsigdde=cvol+ciso!+cjr
 
 
 !----------------------------------------------------------------------

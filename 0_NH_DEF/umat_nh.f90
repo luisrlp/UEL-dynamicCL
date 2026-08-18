@@ -1,22 +1,22 @@
-SUBROUTINE getoutdir(outdir, lenoutdir)
+! SUBROUTINE getoutdir(outdir, lenoutdir)
 
 
 
-!>     GET CURRENT WORKING DIRECTORY
-INCLUDE 'aba_param.inc'
+! !>     GET CURRENT WORKING DIRECTORY
+! INCLUDE 'aba_param.inc'
 
 
-CHARACTER (LEN=256), INTENT(IN OUT)      :: outdir
-INTEGER, INTENT(OUT)                     :: lenoutdir
+! CHARACTER (LEN=256), INTENT(IN OUT)      :: outdir
+! INTEGER, INTENT(OUT)                     :: lenoutdir
 
 
 
-CALL getcwd(outdir)
-!        OUTDIR=OUTDIR(1:SCAN(OUTDIR,'\',BACK=.TRUE.)-1)
-lenoutdir=len_trim(outdir)
+! CALL getcwd(outdir)
+! !        OUTDIR=OUTDIR(1:SCAN(OUTDIR,'\',BACK=.TRUE.)-1)
+! lenoutdir=len_trim(outdir)
 
-RETURN
-END SUBROUTINE getoutdir
+! RETURN
+! END SUBROUTINE getoutdir
 !********************************************************************
 ! Record of revisions:                                              |
 !        Date        Programmer        Description of change        |
@@ -323,7 +323,7 @@ END SUBROUTINE getoutdir
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-       CALL SDVWRITE(DET, STATEV)
+       CALL SDVWRITE(DET, STATEV, STRESS)
 !     END DO
 !----------------------------------------------------------------------
       !write(*,*) 'F0'
@@ -1448,16 +1448,29 @@ DOUBLE PRECISION, INTENT(IN)             :: statev(nsdv)
 RETURN
 
 END SUBROUTINE sdvread
-SUBROUTINE sdvwrite(det,statev)
-! VISCOUS DISSIPATION: WRITE STATE VARS
-    use global
-    IMPLICIT NONE
+SUBROUTINE sdvwrite(det,statev,sigma)
+!>    VISCOUS DISSIPATION: WRITE STATE VARS
+use global
+implicit none
 
-    DOUBLE PRECISION STATEV(NSDV),DET
-    !write your sdvs here. they should be allocated 
-    !after the viscous terms (check hvwrite)
-     STATEV(1)=DET
-    RETURN
+INTEGER :: pos1, min_idx
+!
+DOUBLE PRECISION, INTENT(IN)             :: det
+! DOUBLE PRECISION, INTENT(IN)             :: etac_sdv(nsdv-1)
+DOUBLE PRECISION, INTENT(IN)             :: sigma(6)
+DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
+!
+pos1=0
+statev(pos1+1)=det
+
+! Find out how many stress components we actually have room for
+min_idx = MIN(6, nsdv - 1)
+
+IF (min_idx > 0) THEN
+    statev(2 : 1 + min_idx) = sigma(1 : min_idx)
+END IF
+
+RETURN
 
 END SUBROUTINE sdvwrite
 SUBROUTINE setiso(ciso,cfic,pe,siso,sfic,unit2,ndi)

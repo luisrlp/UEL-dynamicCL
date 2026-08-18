@@ -37,7 +37,8 @@
                   yLocal(nInttS), zLocal(nInttS), wS(nInttS), Kuc(3 * NNODE, NNODE), Kcu(NNODE, 3 * NNODE), &
                   Nvec(1, NNODE), ResFac, AmatUC(6, 1), TanFac, AmatCU(3, 9), SpUCMod(3, 3), &
                   SpCUMod(3, 3, 3), SpCUModFac(3, 3), pi, detF_t, PNEWDT
-         real(8) :: Bmatgeo(3,3 * NNODE), Kgeo(3 * NNODE, 3 * NNODE), geo_scalar
+         real(8) :: Kgeo(3 * NNODE, 3 * NNODE), geo_scalar
+         integer :: rowA, colB
          character(len=256) :: jobName, outDir, fileName
 
          ! Get element parameters
@@ -336,16 +337,16 @@
          phi_tau = statev(1)
          phi_t = prev_statev(1)
          umeror = abs((phi_tau - phi_t)/phiLmt)
-         write(*, *) 'umeror=', umeror
-         if (umeror <= 0.5d0) then
-            pnewdt = 1.5d0
-         elseif (umeror > 0.5d0 .and. umeror <= 0.8d0) then
-            pnewdt = 1.25d0
-         elseif (umeror > 0.8d0 .and. umeror <= 1.25d0) then
-            pnewdt = 0.75d0
-         else
-            pnewdt = 0.5d0
-         endif
+         ! write(*, *) 'umeror=', umeror
+         ! if (umeror <= 0.5d0) then
+         !    pnewdt = 1.5d0
+         ! elseif (umeror > 0.5d0 .and. umeror <= 0.8d0) then
+         !    pnewdt = 1.25d0
+         ! elseif (umeror > 0.8d0 .and. umeror <= 1.25d0) then
+         !    pnewdt = 0.75d0
+         ! else
+         !    pnewdt = 0.5d0
+         ! endif
 
          ! Compute/update the displacement residual vector
          Smat(1, 1) = T_tau(1, 1)
@@ -366,13 +367,6 @@
             Bmat(5, 3 + nDim * (kk - 1)) = dshC(kk, 2)
             Bmat(6, 1 + nDim * (kk - 1)) = dshC(kk, 3)
             Bmat(6, 3 + nDim * (kk - 1)) = dshC(kk, 1)
-         end do
-
-         Bmatgeo = 0.0d0
-         do kk = 1, nNode
-            Bmatgeo(1, 1 + nDim * (kk-1)) = dshC(kk,1)
-            Bmatgeo(2, 2 + nDim * (kk-1)) = dshC(kk,2)
-            Bmatgeo(3, 3 + nDim * (kk-1)) = dshC(kk,3)
          end do
 
          BodyForceRes = 0.0d0
@@ -493,6 +487,22 @@
           Amat(9, 8) = SpTanMod(3, 3, 2, 3)
           Amat(9, 9) = SpTanMod(3, 3, 3, 3)
 
+          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+          ! --------------------------------------------------------
+          ! FIX 1: INJECT GEOMETRIC STRESS INTO AMAT
+          ! This instantly provides the true Kgeo AND fixes the Qmat penalty
+          ! --------------------------------------------------------
+          do i = 1, 3
+             do j = 1, 3
+                do l = 1, 3
+                   rowA = i + 3*(j-1)
+                   colB = i + 3*(l-1)
+                   Amat(rowA, colB) = Amat(rowA, colB) + T_tau(j, l)
+                end do
+             end do
+          end do
+          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
           Qmat = 0.0d0
           Qmat(1, 1) = (1.0d0 / 3.0d0) * (Amat(1, 1) + Amat(1, 5) + Amat(1, 9)) - (2.0d0 / 3.0d0) * T_tau(1, 1)
           Qmat(2, 1) = (1.0d0 / 3.0d0) * (Amat(2, 1) + Amat(2, 5) + Amat(2, 9)) - (2.0d0 / 3.0d0) * T_tau(2, 1)
@@ -522,20 +532,20 @@
           Qmat(8, 9) = Qmat(8, 1)
           Qmat(9, 9) = Qmat(9, 1)
 
-          Kgeo = 0.0d0 !matmul(matmul(transpose(Bmatgeo), T_tau), Bmatgeo)
-          do i = 1, nNode
-            do j = 1, nNode
-              ! 1. Calculate the geometric scalar for this pair of nodes (gradient dot stress dot gradient)
-              geo_scalar = dshC(i,1)*T_tau(1,1)*dshC(j,1) + dshC(i,1)*T_tau(1,2)*dshC(j,2) + dshC(i,1)*T_tau(1,3)*dshC(j,3) &
-                         + dshC(i,2)*T_tau(2,1)*dshC(j,1) + dshC(i,2)*T_tau(2,2)*dshC(j,2) + dshC(i,2)*T_tau(2,3)*dshC(j,3) &
-                         + dshC(i,3)*T_tau(3,1)*dshC(j,1) + dshC(i,3)*T_tau(3,2)*dshC(j,2) + dshC(i,3)*T_tau(3,3)*dshC(j,3)
+          Kgeo = 0.0d0 
+         !  do i = 1, nNode
+         !    do j = 1, nNode
+         !      ! 1. Calculate the geometric scalar for this pair of nodes (gradient dot stress dot gradient)
+         !      geo_scalar = dshC(i,1)*T_tau(1,1)*dshC(j,1) + dshC(i,1)*T_tau(1,2)*dshC(j,2) + dshC(i,1)*T_tau(1,3)*dshC(j,3) &
+         !                 + dshC(i,2)*T_tau(2,1)*dshC(j,1) + dshC(i,2)*T_tau(2,2)*dshC(j,2) + dshC(i,2)*T_tau(2,3)*dshC(j,3) &
+         !                 + dshC(i,3)*T_tau(3,1)*dshC(j,1) + dshC(i,3)*T_tau(3,2)*dshC(j,2) + dshC(i,3)*T_tau(3,3)*dshC(j,3)
               
-              ! 2. Add the scalar to the x, y, and z diagonal DOFs of this 3x3 block
-              Kgeo(1 + nDim*(i-1), 1 + nDim*(j-1)) = geo_scalar
-              Kgeo(2 + nDim*(i-1), 2 + nDim*(j-1)) = geo_scalar
-              Kgeo(3 + nDim*(i-1), 3 + nDim*(j-1)) = geo_scalar
-            end do
-          end do
+         !      ! 2. Add the scalar to the x, y, and z diagonal DOFs of this 3x3 block
+         !      Kgeo(1 + nDim*(i-1), 1 + nDim*(j-1)) = geo_scalar
+         !      Kgeo(2 + nDim*(i-1), 2 + nDim*(j-1)) = geo_scalar
+         !      Kgeo(3 + nDim*(i-1), 3 + nDim*(j-1)) = geo_scalar
+         !    end do
+         !  end do
           if ((nNode == 8) .and. (nIntt == 8)) then
             ! This is the tangent using the F-bar method with the 8 node fully integrated linear element
             Kuu = Kuu + detMapJC * w(intpt) * &

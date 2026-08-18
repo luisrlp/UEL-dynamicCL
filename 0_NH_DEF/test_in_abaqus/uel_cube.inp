@@ -20,7 +20,7 @@ Sample UEL usage
       7,           0.,           1.,           0.
       8,           0.,           0.,           0.
 ** ----------------------------------------------------------------
-*User Element, type=U3,Nodes=8,Coordinates=3,Properties=3,Iproperties=2,Variables=8,Unsymm
+*User Element, type=U3,Nodes=8,Coordinates=3,Properties=3,Iproperties=2,Variables=56,Unsymm
 1,2,3
 ** MESH
 *Element, type=U3, elset=main_mesh
@@ -86,7 +86,7 @@ Sample UEL usage
 **
 *uel property, elset=main_mesh
 **              nlSdv   ngSdv
-<K>,<C10>,<C01>,    1,    1
+<K>,<C10>,<C01>,    7,    7
 **
 ** *Solid section, elset=extra_element, material=extra_material
 *Solid section, elset=dummy_mesh, material=dummy_material
@@ -105,7 +105,7 @@ Sample UEL usage
 **
 *Material, name=dummy_material
 *User output variables
-1
+7
 *elastic
 1.e-20
 ** *User material,
@@ -223,11 +223,11 @@ Sample UEL usage
 ** ----------------------------------------------------------------
 **     BIAXIAL BCS
 ** ----------------------------------------------------------------
-**INCLUDE, file=bcs_bi.inp
+*INCLUDE, file=bcs_bi.inp
 ** ----------------------------------------------------------------
 **     SHEAR BCS
 ** ----------------------------------------------------------------
-*INCLUDE, file=bcs_sh.inp
+**INCLUDE, file=bcs_sh.inp
 ** ----------------------------------------------------------------
 ** ----------------------------------------------------------------
 ** OUTPUT

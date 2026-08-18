@@ -144,12 +144,12 @@ off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
 !----------------------------------------------------------------------
 ! A random value of a given property is assigned for each direction/node (test_num = n_nodes )
 
-DO test=1, ndir 
-  IF (test .LE. nsdv-1) THEN
-    !etac_sdv(test) = etac_array(test)
-    etac_sdv(test) = etac
-  END IF
-END DO
+! DO test=1, ndir 
+!   IF (test .LE. nsdv-1) THEN
+!     !etac_sdv(test) = etac_array(test)
+!     etac_sdv(test) = etac
+!   END IF
+! END DO
 !----------------------------------------------------------------------
   
   !preferred direction measures (macroscale measures)
@@ -163,7 +163,7 @@ END DO
 
 !  Pick a face of the icosahedron, and identify its vertices as A, B, C.
 !
-! Integrate only one hemisphere of the icosahedron (faces 1 to 10) 
+! Integrate only one hemisphere of the icosahedron
 do face = 1, face_num/2
 !
     a = face_point(1,face)

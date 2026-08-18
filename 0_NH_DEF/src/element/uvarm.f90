@@ -14,7 +14,7 @@
 
         character(len=80) :: CMNAME, ORNAME
         character(len=3) :: FLGRAY(15)
-        real :: UVAR(NUVARM), DIRECT(3,3), T(3,3), TIME(2)
+        DOUBLE PRECISION :: UVAR(NUVARM), DIRECT(3,3), T(3,3), TIME(2)
         integer :: ARRAY(15), JARRAY(15), JMAC(*), JMATYP(*), COORD(*)
         integer :: i1
 

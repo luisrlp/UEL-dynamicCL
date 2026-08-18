@@ -214,7 +214,8 @@ Sample UEL usage
 **
 *Step, name=static1, nlgeom=Yes, inc=10000
 *Static
-0.001, 0.01, 1e-05,0.001
+0.0001, 0.01, 1e-07,0.001
+** 0.01, 1., 1e-05, 0.1
 ** *Coupled temperature-displacement, deltmx=100.0
 ** 0.4,20.,1.e-6,0.2
 ************************************************************************
@@ -242,9 +243,9 @@ Set-3, ZSYMM
 *Boundary
 Set-4, XSYMM
 *Boundary
-Set-2, 2,2, 0.3
+Set-2, 2,2, 0.5
 *Boundary
-Set-7, 1,1, 0.3
+Set-7, 1,1, 0.5
 **
 ** LOADS
 **

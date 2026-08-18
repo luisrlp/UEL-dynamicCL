@@ -12,9 +12,9 @@ Set-3, ZSYMM
 *Boundary
 Set-4, XSYMM
 *Boundary
-Set-2, 2,2, 0.3
+Set-2, 2,2, 0.5
 *Boundary
-Set-7, 1,1, 0.3
+Set-7, 1,1, 0.5
 **
 ** LOADS
 **

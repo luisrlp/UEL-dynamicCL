@@ -32,7 +32,7 @@
       ! Set the offset here for UVARM plotting, must match input file!
       parameter(ElemOffset=1000)
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      PARAMETER(NELEM=1, NSDV=1)
+      PARAMETER(NELEM=1, NSDV=7)
       PARAMETER(ZERO=0.D0, ONE=1.0D0,TWO=2.0D0)
       PARAMETER(THREE=3.0D0,FOUR=4.0D0,SIX=6.0D0)
       PARAMETER(HALF=0.5d0,THIRD=1.d0/3.d0)

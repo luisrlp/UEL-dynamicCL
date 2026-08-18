@@ -304,7 +304,7 @@
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-       CALL SDVWRITE(DET, STATEV)
+       CALL SDVWRITE(DET, STATEV, STRESS)
 !     END DO
 !----------------------------------------------------------------------
       !write(*,*) 'F0'

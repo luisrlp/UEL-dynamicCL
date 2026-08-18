@@ -974,7 +974,8 @@ end subroutine AssembleElement
       call matInv3Dd(mapJ, mapJ_inv, detMapJ, stat)
       if (stat == 0) then
          write(*, *) 'Problem: detF.lt.zero in mapShape3D'
-         call exit
+         ! call exit
+         return
       end if
 
       ! Calculate first derivatives wrt x, y, z
@@ -1122,6 +1123,8 @@ end subroutine AssembleElement
                   yLocal(nInttS), zLocal(nInttS), wS(nInttS), Kuc(3 * NNODE, NNODE), Kcu(NNODE, 3 * NNODE), &
                   Nvec(1, NNODE), ResFac, AmatUC(6, 1), TanFac, AmatCU(3, 9), SpUCMod(3, 3), &
                   SpCUMod(3, 3, 3), SpCUModFac(3, 3), pi, detF_t, PNEWDT
+         real(8) :: Kgeo(3 * NNODE, 3 * NNODE), geo_scalar
+         integer :: rowA, colB
          character(len=256) :: jobName, outDir, fileName
 
          ! Get element parameters
@@ -1421,17 +1424,17 @@ end subroutine AssembleElement
          phiLmt = 0.005d0
          phi_tau = statev(1)
          phi_t = prev_statev(1)
-         umeror = abs((phi_tau - phi_t)/phiLmt)
-         ! write(*, *) 'umeror=', umeror
-         if (umeror <= 0.5d0) then
-            pnewdt = 1.5d0
-         elseif (umeror > 0.5d0 .and. umeror <= 0.8d0) then
-            pnewdt = 1.25d0
-         elseif (umeror > 0.8d0 .and. umeror <= 1.25d0) then
-            pnewdt = 0.75d0
-         else
-            pnewdt = 0.5d0
-         endif
+         ! umeror = abs((phi_tau - phi_t)/phiLmt)
+         ! ! write(*, *) 'umeror=', umeror
+         ! if (umeror <= 0.5d0) then
+         !    pnewdt = 1.5d0
+         ! elseif (umeror > 0.5d0 .and. umeror <= 0.8d0) then
+         !    pnewdt = 1.25d0
+         ! elseif (umeror > 0.8d0 .and. umeror <= 1.25d0) then
+         !    pnewdt = 0.75d0
+         ! else
+         !    pnewdt = 0.5d0
+         ! endif
 
          ! Compute/update the displacement residual vector
          Smat(1, 1) = T_tau(1, 1)
@@ -1460,6 +1463,7 @@ end subroutine AssembleElement
             BodyForceRes(2 + nDim * (kk - 1), 1) = sh(kk) * body(2)
             BodyForceRes(3 + nDim * (kk - 1), 1) = sh(kk) * body(3)
          end do
+
 
          Ru = Ru + detmapJC * w(intpt) * &
             (-matmul(transpose(Bmat), Smat) + BodyForceRes)      ! Compute/update the displacement tangent matrix
@@ -1572,6 +1576,22 @@ end subroutine AssembleElement
           Amat(9, 8) = SpTanMod(3, 3, 2, 3)
           Amat(9, 9) = SpTanMod(3, 3, 3, 3)
 
+          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+          ! --------------------------------------------------------
+          ! FIX 1: INJECT GEOMETRIC STRESS INTO AMAT
+          ! This instantly provides the true Kgeo AND fixes the Qmat penalty
+          ! --------------------------------------------------------
+          do i = 1, 3
+             do j = 1, 3
+                do l = 1, 3
+                   rowA = i + 3*(j-1)
+                   colB = i + 3*(l-1)
+                   Amat(rowA, colB) = Amat(rowA, colB) + T_tau(j, l)
+                end do
+             end do
+          end do
+          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
           Qmat = 0.0d0
           Qmat(1, 1) = (1.0d0 / 3.0d0) * (Amat(1, 1) + Amat(1, 5) + Amat(1, 9)) - (2.0d0 / 3.0d0) * T_tau(1, 1)
           Qmat(2, 1) = (1.0d0 / 3.0d0) * (Amat(2, 1) + Amat(2, 5) + Amat(2, 9)) - (2.0d0 / 3.0d0) * T_tau(2, 1)
@@ -1601,10 +1621,25 @@ end subroutine AssembleElement
           Qmat(8, 9) = Qmat(8, 1)
           Qmat(9, 9) = Qmat(9, 1)
 
+          Kgeo = 0.0d0 
+         !  do i = 1, nNode
+         !    do j = 1, nNode
+         !      ! 1. Calculate the geometric scalar for this pair of nodes (gradient dot stress dot gradient)
+         !      geo_scalar = dshC(i,1)*T_tau(1,1)*dshC(j,1) + dshC(i,1)*T_tau(1,2)*dshC(j,2) + dshC(i,1)*T_tau(1,3)*dshC(j,3) &
+         !                 + dshC(i,2)*T_tau(2,1)*dshC(j,1) + dshC(i,2)*T_tau(2,2)*dshC(j,2) + dshC(i,2)*T_tau(2,3)*dshC(j,3) &
+         !                 + dshC(i,3)*T_tau(3,1)*dshC(j,1) + dshC(i,3)*T_tau(3,2)*dshC(j,2) + dshC(i,3)*T_tau(3,3)*dshC(j,3)
+              
+         !      ! 2. Add the scalar to the x, y, and z diagonal DOFs of this 3x3 block
+         !      Kgeo(1 + nDim*(i-1), 1 + nDim*(j-1)) = geo_scalar
+         !      Kgeo(2 + nDim*(i-1), 2 + nDim*(j-1)) = geo_scalar
+         !      Kgeo(3 + nDim*(i-1), 3 + nDim*(j-1)) = geo_scalar
+         !    end do
+         !  end do
           if ((nNode == 8) .and. (nIntt == 8)) then
             ! This is the tangent using the F-bar method with the 8 node fully integrated linear element
             Kuu = Kuu + detMapJC * w(intpt) * &
                  (matmul(matmul(transpose(Gmat), Amat), Gmat) + &
+                  Kgeo + &
                  matmul(transpose(Gmat), matmul(Qmat, (G0mat - Gmat))))
           else
             ! This is the tangent NOT using the F-bar method with all other elements
@@ -2108,12 +2143,12 @@ off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
 !----------------------------------------------------------------------
 ! A random value of a given property is assigned for each direction/node (test_num = n_nodes )
 
-DO test=1, ndir 
-  IF (test .LE. nsdv-1) THEN
-    !etac_sdv(test) = etac_array(test)
-    etac_sdv(test) = etac
-  END IF
-END DO
+! DO test=1, ndir 
+!   IF (test .LE. nsdv-1) THEN
+!     !etac_sdv(test) = etac_array(test)
+!     etac_sdv(test) = etac
+!   END IF
+! END DO
 !----------------------------------------------------------------------
   
   !preferred direction measures (macroscale measures)
@@ -2127,7 +2162,8 @@ END DO
 
 !  Pick a face of the icosahedron, and identify its vertices as A, B, C.
 !
-  do face = 1, face_num
+! Integrate only one hemisphere of the icosahedron
+do face = 1, face_num/2
 !
     a = face_point(1,face)
     b = face_point(2,face)
@@ -2165,7 +2201,7 @@ END DO
         CALL deffil(lambdai,mfi,mf0i,f,ndi)
 
         CALL bangle(ang,f,mfi,noel,pd,ndi)
-  
+        
         CALL density(rho,ang,bdisp,efi)
 
         !!!! Assigning random value to etac
@@ -2186,16 +2222,17 @@ END DO
           lambdaimax=lambdai
         END IF
         IF(lambdai .GE. 1.0d0)THEN 
-          
           CALL fil(fi,ffi,dwi,ddwi,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0,beta,b0,etac)
           ! CALL filpce(lambdai, fi, dwi, ddwi)
           ! call cpu_time(t_end)
 
           ! write (*,*) 'Time for fil: ', t_end - t_start, ' seconds'
+          
+          ! Factor of 2 accounts for the hemisphere not explicitly integrated.
+          CALL sigfilfic(sfilfic,2*rho,lambdai,dwi,mfi,ai,ndi)
 
-          CALL sigfilfic(sfilfic,rho,lambdai,dwi,mfi,ai,ndi)
+          CALL csfilfic(cfilfic,2*rho,lambdai,dwi,ddwi,mfi,ai,ndi)
 
-          CALL csfilfic(cfilfic,rho,lambdai,dwi,ddwi,mfi,ai,ndi)
 
           DO j1=1,ndi
             DO k1=1,ndi
@@ -2997,6 +3034,7 @@ END DO
 
 RETURN
 END SUBROUTINE fslip
+! ! COMMENT WHEN RUNNING ABAQUS
 ! SUBROUTINE getoutdir(outdir, lenoutdir)
 
 
@@ -11678,7 +11716,7 @@ CALL setjr(cjr,sigma,unit2,ndi)
 !----------------------------------------------------------------------
 
 !     ELASTICITY TENSOR
-ddsigdde=cvol+ciso+cjr
+ddsigdde=cvol+ciso!+cjr
 
 
 !----------------------------------------------------------------------
