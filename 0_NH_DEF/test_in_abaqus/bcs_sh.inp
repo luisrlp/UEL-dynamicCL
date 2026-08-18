@@ -4,8 +4,10 @@ Set-3, ZSYMM
 *Boundary
 Set-1, 1,2,0.0
 *Boundary
-Set-2, 1,1, .3
+** Set-2, 1,1, .6
 Set-2, 2,2, .0
+*Cload
+Set-2, 1, 5.
 ** *Boundary
 ** 1, 2,3
 ** 2, 1,3

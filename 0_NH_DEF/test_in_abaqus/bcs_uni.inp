@@ -19,6 +19,9 @@ Set-1, YSYMM
 Set-2, 2,2, 0.6
 **Boundary, type=displacement,amplitude=amp
 **Set-2, 2,2, 0.15
+** Point load in y
+** *Cload
+** Set-2, 2, 4.
 **
 ** ----------------------------------------------------------------
 ** LOADS

@@ -37,6 +37,7 @@
                   yLocal(nInttS), zLocal(nInttS), wS(nInttS), Kuc(3 * NNODE, NNODE), Kcu(NNODE, 3 * NNODE), &
                   Nvec(1, NNODE), ResFac, AmatUC(6, 1), TanFac, AmatCU(3, 9), SpUCMod(3, 3), &
                   SpCUMod(3, 3, 3), SpCUModFac(3, 3), pi, detF_t, PNEWDT
+         real(8) :: Bmatgeo(3,3 * NNODE), Kgeo(3 * NNODE, 3 * NNODE), geo_scalar
          character(len=256) :: jobName, outDir, fileName
 
          ! Get element parameters
@@ -367,6 +368,13 @@
             Bmat(6, 3 + nDim * (kk - 1)) = dshC(kk, 1)
          end do
 
+         Bmatgeo = 0.0d0
+         do kk = 1, nNode
+            Bmatgeo(1, 1 + nDim * (kk-1)) = dshC(kk,1)
+            Bmatgeo(2, 2 + nDim * (kk-1)) = dshC(kk,2)
+            Bmatgeo(3, 3 + nDim * (kk-1)) = dshC(kk,3)
+         end do
+
          BodyForceRes = 0.0d0
          do kk = 1, nNode
             BodyForceRes(1 + nDim * (kk - 1), 1) = sh(kk) * body(1)
@@ -514,10 +522,25 @@
           Qmat(8, 9) = Qmat(8, 1)
           Qmat(9, 9) = Qmat(9, 1)
 
+          Kgeo = 0.0d0 !matmul(matmul(transpose(Bmatgeo), T_tau), Bmatgeo)
+          do i = 1, nNode
+            do j = 1, nNode
+              ! 1. Calculate the geometric scalar for this pair of nodes (gradient dot stress dot gradient)
+              geo_scalar = dshC(i,1)*T_tau(1,1)*dshC(j,1) + dshC(i,1)*T_tau(1,2)*dshC(j,2) + dshC(i,1)*T_tau(1,3)*dshC(j,3) &
+                         + dshC(i,2)*T_tau(2,1)*dshC(j,1) + dshC(i,2)*T_tau(2,2)*dshC(j,2) + dshC(i,2)*T_tau(2,3)*dshC(j,3) &
+                         + dshC(i,3)*T_tau(3,1)*dshC(j,1) + dshC(i,3)*T_tau(3,2)*dshC(j,2) + dshC(i,3)*T_tau(3,3)*dshC(j,3)
+              
+              ! 2. Add the scalar to the x, y, and z diagonal DOFs of this 3x3 block
+              Kgeo(1 + nDim*(i-1), 1 + nDim*(j-1)) = geo_scalar
+              Kgeo(2 + nDim*(i-1), 2 + nDim*(j-1)) = geo_scalar
+              Kgeo(3 + nDim*(i-1), 3 + nDim*(j-1)) = geo_scalar
+            end do
+          end do
           if ((nNode == 8) .and. (nIntt == 8)) then
             ! This is the tangent using the F-bar method with the 8 node fully integrated linear element
             Kuu = Kuu + detMapJC * w(intpt) * &
                  (matmul(matmul(transpose(Gmat), Amat), Gmat) + &
+                  Kgeo + &
                  matmul(transpose(Gmat), matmul(Qmat, (G0mat - Gmat))))
           else
             ! This is the tangent NOT using the F-bar method with all other elements
