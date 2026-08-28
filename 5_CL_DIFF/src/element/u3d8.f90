@@ -269,6 +269,7 @@
 
                ! Obtain state variables from previous increment
                !
+               ! CHECK IF THESE ARE THE CORRECT CONDITIONS FOR THE IF STATEMENT
                if ((KINC <= 1) .and. (KSTEP == 1)) then
                ! this is the first increment, of the first step
                !  give initial conditions (or just anything)

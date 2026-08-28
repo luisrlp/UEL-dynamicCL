@@ -273,6 +273,7 @@ cbmax = Rbmax * cactin
 !        STATE VARIABLES AND CHEMICAL PARAMETERS
 ! IF ((time(1) == zero).AND.(kstep == 1)) THEN
 ! IF ((kinc <= 1).AND.(kstep == 1)) THEN
+! CHECK IF THESE ARE THE CORRECT CONDITIONS FOR THE IF STATEMENT
 IF ((kinc <= 1).AND.(kstep == 1)) THEN
   ! Initial bound and free CL concentrations
   cb_upper = MIN(cabp, cbmax)
@@ -285,10 +286,10 @@ END IF
 !        READ STATEV
 CALL sdvread(statev, cb, cb_tot)
 ! --------------------------------------------
-cf = cabp - cb_tot
-thetaf = cf / cfmax
-! Avoid numerical issues
-thetaf = MIN(MAX(thetaf, 1.0d-6), 1.0d0 - 1.0d-6)
+! cf = cabp - cb_tot
+! thetaf = cf / cfmax
+! ! Avoid numerical issues
+! thetaf = MIN(MAX(thetaf, 1.0d-6), 1.0d0 - 1.0d-6)
 !----------------------------------------------------------------------
 !---------------------------- KINEMATICS ------------------------------
 !----------------------------------------------------------------------
@@ -341,13 +342,25 @@ CALL projlag(c,unit4,projl,ndi)
       write(*,*) 'DTIME = ', DTIME
 
       ! Rate of free crosslinker fraction
+      ! IF ((KINC<=1) .AND. (KSTEP == 1)) THEN
+      !    DTHETAFDT = 0.0d0
+      ! ELSE IF (DTIME > 1.0d-12) THEN
+      !    DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME
+      ! ELSE
+      !    DTHETAFDT = 0.0d0
+      ! END IF
       IF ((KINC<=1) .AND. (KSTEP == 1)) THEN
-         DTHETAFDT = 0.0d0
+        ! THETAF_T from UEL is null on the first call.
+        ! Compute the exact theoretical thetaf at t=0 instead:
+        DTHETAFDT = (THETAF_TAU - ((cabp - cb0) / cfmax)) / DTIME
+             
       ELSE IF (DTIME > 1.0d-12) THEN
-         DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME
+        DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME
+            
       ELSE
-         DTHETAFDT = 0.0d0
+        DTHETAFDT = 0.0d0
       END IF
+
 
       ! Fluid mobility and permeability
       MFLUID = D * cf * (1.0d0 - thetaf)
@@ -432,13 +445,10 @@ IF (phinet < one) THEN
 END IF
 !---- FILAMENTS NETWORK -----------------------------------------------
 !     IMAGINARY ERROR FUNCTION BASED ON DISPERSION PARAMETER
-! CALL erfi(efi,bb,nterm) ! (original)
 CALL erfi(efi,bb)
 !     'FICTICIOUS' PK2 STRESS AND MATERIAL ELASTICITY TENSORS
 !------------ AFFINE NETWORK --------------
 IF (phinet > zero) THEN
-  ! GET CL STIFFNESS DISTRIBUTION FOR CURRENT GP
-  !CALL getprops_gp(noel, npt, etadir, etadir_array)
   write(*,*) 'Calling affclnetfic_discrete at t = ', time(1)
   CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,filprops,  &
       affprops,efi,noel,det,prefdir,ndi,cb,dtime,cabp,cfmax,cbmax,chi,Keq,Koff0, &

@@ -1,53 +1,3 @@
-
-      module global
-
-      ! This module is used to transfer SDV's from the UEL
-      !  to the UVARM so that SDV's can be visualized on a
-      !  dummy mesh
-      !
-      !  globalSdv(X,Y,Z)
-      !   X - element pointer
-      !   Y - integration point pointer
-      !   Z - SDV pointer
-      !
-      !  numElem
-      !   Total number of elements in the real mesh, the dummy
-      !   mesh needs to have the same number of elements, and 
-      !   the dummy mesh needs to have the same number of integ
-      !   points.  You must set that parameter value here.
-      !
-      !  ElemOffset
-      !   Offset between element numbers on the real mesh and
-      !    dummy mesh.  That is set in the input file, and 
-      !    that value must be set here the same.
-
-      integer numElem,ElemOffset,err
-      INTEGER NWP,NELEM,NCH,NSDV,NTERM,FACTOR,NDIR,NGP
-      DOUBLE PRECISION  ONE, TWO, THREE, FOUR, SIX, ZERO
-      DOUBLE PRECISION HALF,THIRD
-      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      ! Set the number of UEL elements used here
-      parameter(numElem=1)
-      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      ! Set the offset here for UVARM plotting, must match input file!
-      parameter(ElemOffset=1000)
-      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      PARAMETER (NTERM=60) ! 60
-      PARAMETER (FACTOR=6) ! 6
-      PARAMETER (NDIR=20 * FACTOR**2)
-      PARAMETER (NGP=8)
-      PARAMETER(NELEM=1, NSDV=7)
-      PARAMETER(ZERO=0.D0, ONE=1.0D0,TWO=2.0D0)
-      PARAMETER(THREE=3.0D0,FOUR=4.0D0,SIX=6.0D0)
-      PARAMETER(HALF=0.5d0,THIRD=1.d0/3.d0)
-      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      CHARACTER(256) DIR2, DIR3
-      PARAMETER (DIR2='prefdir.inp')
-      PARAMETER (DIR3='etadir.inp')
-      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      real*8, allocatable :: globalSdv(:,:,:)
-
-      end module global
 SUBROUTINE csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
 
 
@@ -422,7 +372,7 @@ pi=four*ATAN(one)
 aux1=SQRT(bb/(two*pi))
 aux2=DEXP(bb*(COS(two*ang)+one))
 rho=four*aux1*aux2*(erfi**(-one))
-!      RHO=RHO*((FOUR*PI)**(-ONE)
+RHO=RHO*((FOUR*PI)**(-ONE))
 
 RETURN
 END SUBROUTINE density
@@ -1103,7 +1053,7 @@ CALL setjr(cjr,sigma,unit2,ndi)
 !----------------------------------------------------------------------
 
 !     ELASTICITY TENSOR
-ddsigdde=cvol+ciso+cjr
+ddsigdde=cvol+ciso!+cjr
 
 
 !----------------------------------------------------------------------
@@ -7958,12 +7908,12 @@ off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
 !----------------------------------------------------------------------
 ! A random value of a given property is assigned for each direction/node (test_num = n_nodes )
 
-DO test=1, ndir 
-  IF (test .LE. nsdv-1) THEN
-    !etac_sdv(test) = etac_array(test)
-    etac_sdv(test) = etac
-  END IF
-END DO
+! DO test=1, ndir 
+!   IF (test .LE. nsdv-1) THEN
+!     !etac_sdv(test) = etac_array(test)
+!     etac_sdv(test) = etac
+!   END IF
+! END DO
 !----------------------------------------------------------------------
   
   !preferred direction measures (macroscale measures)
@@ -7977,8 +7927,8 @@ END DO
 
 !  Pick a face of the icosahedron, and identify its vertices as A, B, C.
 !
-! Use only one hemisphere of the icosahedron
-  do face = 1, face_num/2
+! Integrate only one hemisphere of the icosahedron
+do face = 1, face_num/2
 !
     a = face_point(1,face)
     b = face_point(2,face)
@@ -8013,12 +7963,12 @@ END DO
 
         !direction of the sphere triangle barycenter - direction i
         mf0i=node_xyz
+        write(*,*) 'mf0i = ', mf0i
         CALL deffil(lambdai,mfi,mf0i,f,ndi)
 
         CALL bangle(ang,f,mfi,noel,pd,ndi)
         
         CALL density(rho,ang,bdisp,efi)
-
         !!!! Assigning random value to etac
         !etac = etac_array(node_num + 1)
         ! write(*,*) "lambdai: ", lambdai
@@ -8043,7 +7993,7 @@ END DO
 
           ! write (*,*) 'Time for fil: ', t_end - t_start, ' seconds'
           
-          !
+          ! Factor of 2 accounts for the hemisphere not explicitly integrated.
           CALL sigfilfic(sfilfic,2*rho,lambdai,dwi,mfi,ai,ndi)
 
           CALL csfilfic(cfilfic,2*rho,lambdai,dwi,ddwi,mfi,ai,ndi)
@@ -8947,6 +8897,7 @@ INTEGER :: i1,j1
 DOUBLE PRECISION :: aux
 
 aux=rho*lambda**(-one)*rw*dw
+
 DO i1=1,ndi
   DO j1=1,ndi
     sfic(i1,j1)=aux*m(i1)*m(j1)

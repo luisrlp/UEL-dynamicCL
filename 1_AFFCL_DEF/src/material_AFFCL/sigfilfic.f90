@@ -20,6 +20,7 @@ INTEGER :: i1,j1
 DOUBLE PRECISION :: aux
 
 aux=rho*lambda**(-one)*rw*dw
+
 DO i1=1,ndi
   DO j1=1,ndi
     sfic(i1,j1)=aux*m(i1)*m(j1)

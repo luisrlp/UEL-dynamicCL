@@ -6,18 +6,18 @@ subroutine solveThetaf(root, args, nargs, rootOld)
 
     implicit none
 
-    ! 1. Dummy arguments explicitly strictly typed with INTENT
+    ! Dummy arguments
     integer, intent(in)     :: nargs
     real(8), intent(in)     :: args(nargs)
     real(8), intent(in)     :: rootOld
     real(8), intent(out)    :: root
 
-    ! 2. Local variables
+    ! Local variables
     integer :: j
     real(8) :: f, df, fl, fh, xl, xh, x1, x2, swap, dxold
     real(8) :: dx, temp, rootMax, rootMin
 
-    ! 3. Modern parameter declarations
+    ! Parameter declarations
     integer, parameter :: maxit = 50
     real(8), parameter :: xacc  = 1.0d-6
     real(8), parameter :: zero  = 0.0d0
@@ -106,7 +106,7 @@ subroutine solveThetaf(root, args, nargs, rootOld)
         ! The one new function evaluation per iteration
         call thetafFunc(root, f, df, args, nargs)
 
-        ! Maintain the bracket on the root
+        ! Maintain the bracket on the root 
         if (f < 0.0d0) then
             xl = root
             fl = f

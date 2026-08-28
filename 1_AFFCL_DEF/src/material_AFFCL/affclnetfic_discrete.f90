@@ -204,7 +204,7 @@ do face = 1, face_num/2
         CALL bangle(ang,f,mfi,noel,pd,ndi)
         
         CALL density(rho,ang,bdisp,efi)
-
+        
         !!!! Assigning random value to etac
         !etac = etac_array(node_num + 1)
         ! write(*,*) "lambdai: ", lambdai

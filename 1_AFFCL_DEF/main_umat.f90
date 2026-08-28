@@ -58,32 +58,37 @@ PROPS(4)=1.0000d0 ! 1.0d0
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! SINGLE FILAMENT PARAMS
 !L (default: 1.96)
-PROPS(5)= 1.96d0
+PROPS(5)= 3.0338 * 1.2! 1.96d0
 !CACTIN
 ! PROPS(5)=9.5d0
 !R0F
-PROPS(6)= 1.63d0
+PROPS(6)= 3.0338!1.63d0
 !R
 ! PROPS(6)=0.1d0
 !R0C
 PROPS(7) = 0.014d0
 !ETAC
-PROPS(8)= 0.5d0
+PROPS(8)= 2.d0/3.d0
 !mu0
 !PROPS(7)=38600.0d0
-PROPS(9)= 38600.0d0
+PROPS(9)= 100000000000000.0d0!38600.0d0
 !beta
 PROPS(10)=0.5d0
 !PROPS(8)=0.5d0
 !B0 = tk*lp*k0
 ! PROPS(11)=294.d0*16.d0*1.38d-5
-PROPS(11) = 16.0
+PROPS(11) = 16.0 !!! Temperature in umat: 294k !!! 
 !lambda0.
 PROPS(12)=1.00d0
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !AFFINE NETWORK PARAMS
 !n - isotropic filaments per unit volume
-PROPS(13)=7.66D0 ! 7.6627
+PROPS(13)= 6.022d5 * 42.d-3/16 * 0.0095 / PROPS(5) !7.66D0 ! 7.6627
+! write(*,*) 'PROPS(13) = ', 
+! na = 6.022e23
+! mactin = 42.0          ! [kDa]
+! rhoactin = 16.0        ! [MDa/microm]
+! nn = cactin/ll * na * mactin / rhoactin * 1.0e-24
 !A
 ! PROPS(13)=1.2d0
 !B....
@@ -107,15 +112,15 @@ PROPS(14)=0.001d0
     !
     !################################################################################################!
     !!     TENSILE MONOTONIC LOAD TEST
-    !  DFGRD1(1,1)=  1.15D0
-     DFGRD1(1,2)=  0.2D0
+     DFGRD1(1,1)=  1.2D0
+    !  DFGRD1(1,2)=  0.3D0
      DFGRD1(1,3)=  0.0d0
      DFGRD1(2,1)=  0.0d0
-    !  DFGRD1(2,2)=  DFGRD1(1,1)
+     DFGRD1(2,2)=  DFGRD1(1,1) !1/SQRT(DFGRD1(1,1))
      DFGRD1(2,3)=  0.0d0
      DFGRD1(3,1)=  0.0d0
      DFGRD1(3,2)=  0.0d0
-    !  DFGRD1(3,3)=  1/DFGRD1(1,1)**2
+     DFGRD1(3,3)=  1/DFGRD1(1,1)**2
     !
 ! DFGRD1(1,1)=  0.999409865502331
 ! DFGRD1(1,2)=  6.840823995929941E-001
@@ -142,10 +147,10 @@ PROPS(14)=0.001d0
     !
     
      write(*,*) 'STRESS'
-     write(*,*) STRESS
-    !  write(*,*) STRESS(1,1), STRESS(1,2), STRESS(1,3)
-    !  write(*,*) STRESS(2,1), STRESS(2,2), STRESS(2,3)
-    !  write(*,*) STRESS(3,1), STRESS(3,2), STRESS(3,3)
+    !  write(*,*) STRESS
+     write(*,*) STRESS(1,1), STRESS(1,2), STRESS(1,3)
+     write(*,*) STRESS(2,1), STRESS(2,2), STRESS(2,3)
+     write(*,*) STRESS(3,1), STRESS(3,2), STRESS(3,3)
      write(*,*)
      write(*,*) 'DDSDDE'
      write(*,*) DDSDDE
