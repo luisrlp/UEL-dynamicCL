@@ -2,7 +2,7 @@ subroutine thetafFunc(thetaf, f, df, args, nargs)
     ! This subroutine serves as the function we would like to solve for                                         
     ! the free crosslinker volume fraction (thetaf = cf/cfmax)                                                  
     ! by finding thetaf such that f = 0                                                                         
-                                                                                                                
+    use global                                                                                                        
     implicit none                                                                                               
                                                                                                                 
     integer, intent(in)              :: nargs                                                                   
@@ -12,9 +12,9 @@ subroutine thetafFunc(thetaf, f, df, args, nargs)
                                                                                                                 
     DOUBLE PRECISION                 :: mu, mu0, Rgas, theta, chi, Vmol, Kbulk                                                           
     DOUBLE PRECISION                 :: detF, RT, Jc, Je, cb, cfmax
-    DOUBLE PRECISION, parameter      :: zero  = 0.0d0                                                                         
-    DOUBLE PRECISION, parameter      :: one   = 1.0d0                                                                         
-    DOUBLE PRECISION, parameter      :: two   = 2.0d0                                                                         
+    ! DOUBLE PRECISION, parameter      :: zero  = 0.0d0                                                                         
+    ! DOUBLE PRECISION, parameter      :: one   = 1.0d0                                                                         
+    ! DOUBLE PRECISION, parameter      :: two   = 2.0d0                                                                         
                                                                                                                 
     ! Obtain relevant quantities                                                                                
     mu    = args(1)                                                                                             

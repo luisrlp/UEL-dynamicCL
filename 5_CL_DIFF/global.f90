@@ -45,7 +45,7 @@
       !   Slots  1          : thetaf (polymer volume fraction)
       !   Slot   2          : det (Jacobian J)
       !   Slot   3          : cR (fluid content)
-      !   Slot   4          : cb0 (total CL concentration)
+      !   Slot   4          : cb0 (total bound CL concentration)
       !   Slots  5 to 10    : Cauchy stress (6 components)
       !   Slots  11 to 13   : grad(mu) flux (3 components)
       !   Slots  14 to 16   : fluid flux J_fluid (3 components)

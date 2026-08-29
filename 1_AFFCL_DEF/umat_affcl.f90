@@ -7963,12 +7963,12 @@ do face = 1, face_num/2
 
         !direction of the sphere triangle barycenter - direction i
         mf0i=node_xyz
-        write(*,*) 'mf0i = ', mf0i
         CALL deffil(lambdai,mfi,mf0i,f,ndi)
 
         CALL bangle(ang,f,mfi,noel,pd,ndi)
         
         CALL density(rho,ang,bdisp,efi)
+        
         !!!! Assigning random value to etac
         !etac = etac_array(node_num + 1)
         ! write(*,*) "lambdai: ", lambdai

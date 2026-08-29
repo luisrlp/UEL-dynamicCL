@@ -492,8 +492,7 @@
 
           !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
           ! --------------------------------------------------------
-          ! FIX 1: INJECT GEOMETRIC STRESS INTO AMAT
-          ! This instantly provides the true Kgeo AND fixes the Qmat penalty
+          ! INJECT GEOMETRIC STIFFNESS CONTRIBUTION INTO AMAT
           ! --------------------------------------------------------
           do i = 1, 3
              do j = 1, 3

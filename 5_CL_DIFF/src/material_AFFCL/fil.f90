@@ -1,4 +1,7 @@
-SUBROUTINE fil(f,ff,dw,ddw,lambdaf,lambda0,lambda0f,ll,r0,r0f,mu0,beta,b0,etac)
+SUBROUTINE fil(f,ff,dw,ddw, &
+            lambdai,lambdaf,lambda0,lambda0f,&
+            ll,r0,r0f,mu0,beta,b0,etac,&
+            cb,DfDcb)
 
 
 
@@ -10,6 +13,8 @@ DOUBLE PRECISION, INTENT(OUT)            :: f
 DOUBLE PRECISION, INTENT(OUT)            :: ff
 DOUBLE PRECISION, INTENT(OUT)            :: dw
 DOUBLE PRECISION, INTENT(OUT)            :: ddw
+DOUBLE PRECISION, INTENT(OUT)            :: DfDcb
+DOUBLE PRECISION, INTENT(IN OUT)         :: lambdai
 DOUBLE PRECISION, INTENT(IN OUT)         :: lambdaf
 DOUBLE PRECISION, INTENT(IN OUT)         :: lambda0
 DOUBLE PRECISION, INTENT(IN OUT)         :: lambda0f
@@ -20,13 +25,12 @@ DOUBLE PRECISION, INTENT(IN OUT)         :: mu0
 DOUBLE PRECISION, INTENT(IN OUT)         :: beta
 DOUBLE PRECISION, INTENT(IN OUT)         :: b0
 DOUBLE PRECISION, INTENT(IN OUT)         :: etac
-
-
-
-
+DOUBLE PRECISION, INTENT(IN OUT)         :: cb
+DOUBLE PRECISION :: aratio, r0c
 DOUBLE PRECISION :: a,b,machep,t
 DOUBLE PRECISION :: aux, pi,alpha
 DOUBLE PRECISION :: aux0,aux1,aux2,aux3,aux4,aux5,aux6,y
+DOUBLE PRECISION :: aux00,aux01,aux02,aux03,aux04,aux05
 
 a=zero
 b=1.0E09
@@ -60,9 +64,21 @@ aux6=one-r0f*((ll)**(-one))
 
 y=aux0*(aux2*aux2*(aux1**(-one)))-beta*(aux2*(aux3**(-one)))-two
 
+! Strain energy derivatives
 dw=lambda0*(r0)*f
 ! dw = pi*pi*r0*b0/(ll*ll)*(((ll/r0-1)/(ll/r0-lambda))**TWO - one)
 ddw=aux4*((one+y*aux5*aux6)**(-one))
+
+! Force derivative wrt cb
+aratio=ll/r0f
+r0c = r0 - r0f
+aux00 = two / 5.d0 * cb ** (- two / 5.d0)
+aux01 = 2 * f
+aux02 = etac * r0c / r0f * (lambdai - 1)
+aux03 = b0 * pi * pi / (r0f * aratio)**2
+aux04 = (a - lambdaf) * beta
+aux05 = (f + aux03) / aux04
+DfDcb = aux00 * (aux01 + aux02 * aux05)
 
 RETURN
 END SUBROUTINE fil

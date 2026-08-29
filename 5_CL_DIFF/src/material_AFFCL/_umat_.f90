@@ -18,7 +18,7 @@
 
     SUBROUTINE MATERIAL(SIGMA,STATEV,DDSIGDDE,DFGRD0,DFGRD1,DET, &
     TIME,DTIME,PREDEF,NDI,NSHR,NTENS,NSTATEV,PROPS,NPROPS,COORDS, &
-    PNEWDT,NOEL,NPT,KSTEP,KINC,MU_TAU,THETAF_T,THETAF_TAU,DTHETAFDT, &
+    PNEWDT,NOEL,NPT,KSTEP,KINC,MU_TAU,THETAF_TAU,DTHETAFDT, &
       DTHETAFDMU,RMACRO,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,CFMAX,DSIGDMU,SPCUMODFAC)
 !
 use global  
@@ -37,14 +37,14 @@ REAL(KIND=8) :: STRESS(NTENS), STATEV(NSTATEV), &
                 PROPS(NPROPS), COORDS(3), DROT(3,3), DFGRD0(3,3), DFGRD1(3,3), &
                 FIBORI(NELEM,4), ARGS(NARGS)
 
-REAL(8), INTENT(IN)      :: MU_TAU, THETAF_T, DMUDX(3,1)
+REAL(8), INTENT(IN)      :: MU_TAU, DMUDX(3,1)
 ! REAL(8), INTENT(OUT)     :: SPUCMOD(NDI,NDI), SPCUMODFAC(NDI,NDI)
 REAL(8), INTENT(OUT)     :: DSIGDMU(NDI,NDI), SPCUMODFAC(NDI,NDI)
 REAL(8), INTENT(OUT)     :: THETAF_TAU, DTHETAFDT, DTHETAFDMU, RMACRO! DPHIDMU, DPHIDOTDMU
 REAL(8), INTENT(OUT)     :: MFLUID, DMDMU, DMDJ, VMOL, CFMAX
 
 ! cfmax can probably be defined at the element level
-
+REAL(8) :: THETAF_T
 ! DIFFUSION VARIABLES
 REAL(8) :: CHI, D, MU0, RGAS
 REAL(8) :: PHI_PER, PHI_M, dPdt_per, dPdt_m, DELTAMU, JFLUID(3,1)
@@ -94,7 +94,7 @@ DOUBLE PRECISION :: cmnetficaf(ndi,ndi,ndi,ndi), cmnetficnaf(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: cnetficaf(ndi,ndi,ndi,ndi), cnetficnaf(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: efi, kb, dx, Lp, theta
 DOUBLE PRECISION :: R, Rfmax, Rbmax, Keq, Koff0, Kon0
-DOUBLE PRECISION :: cb(ndir), cb0, cbmax, thetab, thetaf !, cfmax
+DOUBLE PRECISION :: cb(ndir), cb0, cbmax, thetab, thetaf0 !, cfmax
 DOUBLE PRECISION :: cb_tot, cb_tot_new, cf
 DOUBLE PRECISION :: cb_upper, machep, tol
 DOUBLE PRECISION :: Jc, f, df
@@ -240,28 +240,9 @@ Kon0 = Koff0 * Keq
 
 filprops = (/a, r0c, etac, mu0str, beta, Lp, theta, dx, kb, NA/)
 affprops = (/bb, lambda0, cactin, Mactin, rhoactin/)
-! affprops = (/bb, lambda0, cactin, R, Rfmax, Rbmax, kb, b0, rgas, Mactin, rhoactin, NA/)
 
-! All of these will be needed (but not here)
-! Check whether they should be at UEL/UMAT/AFFCL DIRECTION
-!     CL CONCENTRATION
-! cabp = cactin*R
-! write(*,*) 'cabp = ', cabp
-!     FILAMENT END-TO-END DISTANCE
-! r0f = 1.6 * cabp**(-2.0/5.0) ! AFFCL DIRECTION
-! write(*,*) 'r0f = ', r0f
-!     FILAMENT CONTOUR LENGTH
-! ll = a * r0f ! AFFCL DIRECTION
-! write(*,*) 'll = ', ll
-!     FILAMENT DENSITY
-! na = 6.022e23
-! mactin = 42.0          ! [kDa]
-! rhoactin = 16.0        ! [MDa/microm]
-! nn = cactin/ll * na * mactin / rhoactin * 1.0e-24 ! AFFCL DIRECTION
-! write(*,*) 'nn = ', nn
-
-write(*,*) 'Inside the material routine!'
-write(*,*) 'ELEM/GP: ', noel, npt
+! write(*,*) 'Inside the material routine!'
+! write(*,*) 'ELEM/GP: ', noel, npt
 
 !     CL CONCENTRATION
 !!! THIS NEEDS TO BE CHANGED AFTER DIFFUSION IS IMPLEMENTED IN UEL
@@ -271,25 +252,19 @@ cfmax = Rfmax * cactin
 cbmax = Rbmax * cactin
 
 !        STATE VARIABLES AND CHEMICAL PARAMETERS
-! IF ((time(1) == zero).AND.(kstep == 1)) THEN
 ! IF ((kinc <= 1).AND.(kstep == 1)) THEN
-! CHECK IF THESE ARE THE CORRECT CONDITIONS FOR THE IF STATEMENT
-IF ((kinc <= 1).AND.(kstep == 1)) THEN
-  ! Initial bound and free CL concentrations
+IF (STATEV(1) == 0.0d0) THEN
+! Initial bound and free CL concentrations
   cb_upper = MIN(cabp, cbmax)
   machep = 2.22d-16
-  tol = 1.0d-8
+  tol = 1.0d-12
   write(*,*) 'Calling pullchem at t=0'
   CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq)
-  CALL initialize(statev,thetaf_t,vmol,cb0)
+  thetaf0 = (cabp - cb0) / cfmax
+  CALL initialize(statev,thetaf0,vmol,cb0)
 END IF
 !        READ STATEV
-CALL sdvread(statev, cb, cb_tot)
-! --------------------------------------------
-! cf = cabp - cb_tot
-! thetaf = cf / cfmax
-! ! Avoid numerical issues
-! thetaf = MIN(MAX(thetaf, 1.0d-6), 1.0d0 - 1.0d-6)
+CALL sdvread(statev, thetaf_t, cb, cb_tot)
 !----------------------------------------------------------------------
 !---------------------------- KINEMATICS ------------------------------
 !----------------------------------------------------------------------
@@ -316,7 +291,7 @@ CALL projlag(c,unit4,projl,ndi)
 !---------------------- COUPLED DIFFUSION -----------------------------
 !----------------------------------------------------------------------
 
-!     1. Solve for current free crosslinker fraction (THETAF)
+!     1. Solve for current free crosslinker fraction (THETAF_TAU)
       ARGS(1) = MU_TAU
       ARGS(2) = MU0
       ARGS(3) = RGAS
@@ -327,51 +302,36 @@ CALL projlag(c,unit4,projl,ndi)
       ARGS(8) = DET
       ARGS(9) = CB_TOT
       ARGS(10) = CFMAX
-      write(*,*) 'ARGS = ', ARGS
+      ! write(*,*) 'ARGS = ', ARGS
       CALL SOLVETHETAF(THETAF_TAU, ARGS, NARGS, THETAF_T)
 
-      thetaf = THETAF_TAU
-      cf = thetaf * cfmax
+      cf = THETAF_TAU * cfmax
+      Jc = 1.0d0 + VMOL * (cb_tot + cf)
 
       ! Evaluate tangent at converged root
-      CALL thetafFunc(thetaf, f, df, ARGS, NARGS)
+      CALL thetafFunc(THETAF_TAU, f, df, ARGS, NARGS)
       DTHETAFDMU = one / (RGAS * THETA * df)
 
-      write(*,*) 'kinc = ', kinc
-      write(*,*) 'kstep = ', kstep
-      write(*,*) 'DTIME = ', DTIME
+      ! write(*,*) 'kinc = ', kinc
+      ! write(*,*) 'kstep = ', kstep
+      ! write(*,*) 'DTIME = ', DTIME
 
-      ! Rate of free crosslinker fraction
-      ! IF ((KINC<=1) .AND. (KSTEP == 1)) THEN
-      !    DTHETAFDT = 0.0d0
-      ! ELSE IF (DTIME > 1.0d-12) THEN
-      !    DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME
-      ! ELSE
-      !    DTHETAFDT = 0.0d0
-      ! END IF
-      IF ((KINC<=1) .AND. (KSTEP == 1)) THEN
-        ! THETAF_T from UEL is null on the first call.
-        ! Compute the exact theoretical thetaf at t=0 instead:
-        DTHETAFDT = (THETAF_TAU - ((cabp - cb0) / cfmax)) / DTIME
-             
-      ELSE IF (DTIME > 1.0d-12) THEN
-        DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME
-            
+      IF (DTIME > 1.0d-12) THEN
+        DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME            
       ELSE
         DTHETAFDT = 0.0d0
       END IF
 
 
       ! Fluid mobility and permeability
-      MFLUID = D * cf * (1.0d0 - thetaf)
+      MFLUID = D * cf * (1.0d0 - THETAF_TAU)
 
       ! Mobility tangents
-      DMDMU = D * cfmax * (1.0d0 - 2.0d0 * thetaf) * DTHETAFDMU
-      ! dm/dJ via Implicit Function Theorem on H(thetaf, mu, J) = 0:
+      DMDMU = D * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) * DTHETAFDMU
+      ! dm/dJ via Implicit Function Theorem on H(THETAF_TAU, mu, J) = 0:
       !   dthetaf/dJ = (k*Vmol) / (RT * Jc * det * df)
       !   dm/dJ = dm/dthetaf * dthetaf/dJ
-      Jc = 1.0d0 + VMOL * cb_tot + VMOL * cfmax * thetaf
-      DMDJ  = D * cfmax * (1.0d0 - 2.0d0 * thetaf) &
+      DMDJ  = D * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) &
             * (k * VMOL) / (RGAS * THETA * Jc * det * df)
 
       ! Fluid flux vector (for visualization/SVARS)
@@ -425,8 +385,6 @@ CALL projlag(c,unit4,projl,ndi)
 !----------------------------------------------------------------------
 !---- VOLUMETRIC ------------------------------------------------------
 !     STRAIN-ENERGY
-! THIS NEEDS TO BE CHANGED!!!!!!!!!!!!!!
-Jc = 1.0d0 + VMOL * cb_tot + VMOL * cfmax * thetaf
 CALL vol(ssev,pv,ppv,k,det,Jc)
 
 !---- ISOCHORIC ISOTROPIC ---------------------------------------------
@@ -451,8 +409,8 @@ CALL erfi(efi,bb)
 IF (phinet > zero) THEN
   write(*,*) 'Calling affclnetfic_discrete at t = ', time(1)
   CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,filprops,  &
-      affprops,efi,noel,det,prefdir,ndi,cb,dtime,cabp,cfmax,cbmax,chi,Keq,Koff0, &
-      thetaf, cb_tot_new)
+      affprops,efi,noel,det,prefdir,ndi,cb,dtime,cfmax,cbmax,chi,Keq,Koff0, &
+      thetaf_tau, cb_tot_new)
 END IF
 
 ! Macroscopic reaction source (homogenized binding rate)
@@ -461,10 +419,8 @@ IF (DTIME > 1.0d-12) THEN
 ELSE
   RMACRO = 0.0d0
 END IF
-write(*,*) 'cb_tot_new = ', cb_tot_new
 write(*,*) 'cb_tot = ', cb_tot
-write(*,*) 'DTIME = ', DTIME
-write(*,*) 'RMACRO in umat= ', RMACRO
+write(*,*) 'cb_tot_new = ', cb_tot_new
 
 !      PKNETFIC=PKNETFICNAF+PKNETFICAF
 snetfic=snetficnaf+snetficaf
@@ -540,7 +496,7 @@ CALL setjr(cjr,sigma,unit2,ndi)
 !----------------------------------------------------------------------
 
 !     ELASTICITY TENSOR
-ddsigdde=cvol+ciso+cjr
+ddsigdde=cvol+ciso ! +cjr
 
 !----------------------------------------------------------------------
 !------------------------- CROSS-COUPLINGS ----------------------------

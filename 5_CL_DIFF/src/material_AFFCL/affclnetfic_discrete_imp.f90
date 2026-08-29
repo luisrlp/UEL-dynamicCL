@@ -2,8 +2,8 @@
 !           efi,noel,det,prefdir,ndi) ! (original)
 
 SUBROUTINE affclnetfic_discrete(sfic,cfic,f,filprops,affprops,  &
-  efi,noel,det,prefdir,ndi,cb,dtime,cabp,cfmax,cbmax,chi,Keq,Koff0, &
-  thetaf, cb_tot_new)
+  efi,noel,det,prefdir,ndi,cb,dtime,cfmax,cbmax,chi,Keq,Koff0, &
+  thetaf, cbtau_tot)
 
 
 
@@ -23,30 +23,31 @@ INTEGER, INTENT(IN OUT)                  :: noel
 DOUBLE PRECISION, INTENT(IN OUT)         :: det
 
 DOUBLE PRECISION, INTENT(IN)             :: dtime
-DOUBLE PRECISION, INTENT(IN)             :: cabp
 DOUBLE PRECISION, INTENT(IN)             :: cfmax
 DOUBLE PRECISION, INTENT(IN)             :: cbmax
 DOUBLE PRECISION, INTENT(IN)             :: CHI
 DOUBLE PRECISION, INTENT(IN)             :: Keq
 DOUBLE PRECISION, INTENT(IN)             :: Koff0
 DOUBLE PRECISION, INTENT(IN)             :: thetaf
-DOUBLE PRECISION, INTENT(OUT)            :: cb_tot_new
+DOUBLE PRECISION, INTENT(OUT)            :: cbtau_tot
 DOUBLE PRECISION, INTENT(IN OUT)         :: cb(ndir)
 
 INTEGER :: i1,j1,k1,l1,m1, im1, isub, n_sub
+INTEGER, PARAMETER :: nargs = 16
+DOUBLE PRECISION :: args(nargs)
 DOUBLE PRECISION :: sfilfic(ndi,ndi), cfilfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
 DOUBLE PRECISION :: aux,lambdai,dwi,ddwi,rwi,lambdaic
 DOUBLE PRECISION :: l,Lp,r0f,r0,mu0str,b0,beta,lambda0,lambda0f,rho,n,fi,ffi,aratio
-DOUBLE PRECISION :: r0c,etac,lambdaif,lambdaimax
+DOUBLE PRECISION :: r0c,etac,lambdaif
 DOUBLE PRECISION :: bdisp,ang, frac(4)
 DOUBLE PRECISION :: prefdir(nelem,4), pd(3),lambda_pref,prefdir0(3)
 DOUBLE PRECISION :: dx,kb,theta,na
 DOUBLE PRECISION :: cactin, Mactin, rhoactin
-DOUBLE PRECISION :: cb_i, thetab_i, Kon, Koff_i, R_i, dtime_sub, cb_sub
+DOUBLE PRECISION :: cbt_i, cbtau_i, thetab_i, Kon, Koff_i, R_i, dtime_sub, cb_sub
 INTEGER :: iter
 DOUBLE PRECISION :: cb_new, Res, cb_pert, dcb, r0f_p, l_p, r0_p
-DOUBLE PRECISION :: lambdaif_p, lambda0f_p, fi_p, koff_p, thetab_p, R_p, Res_p, dRes_dcb
+DOUBLE PRECISION :: dummy_DfDcb
 
 
 ! INTEGRATION SCHEME
@@ -127,9 +128,8 @@ off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
     r0=r0f+r0c
   
     aa = zero
-    lambdaimax=zero
 
-    cb_tot_new = zero
+    cbtau_tot = zero
 !----------------------------------------------------------------------
   
   ! preferred direction measures (macroscale measures)
@@ -180,129 +180,44 @@ do face = 1, face_num/2
 
         call sphere01_triangle_vertices_to_area ( a2_xyz, b2_xyz, c2_xyz, ai )
         
-        ! ================= DYNAMIC GEOMETRY =================
-        cb_i = MAX(cb(node_num), 1.0d-8)
-        r0f = 1.6 * (10.0d3 * cb_i)**(-two/5.0d0)
-        l = aratio * r0f
-        r0 = r0f + r0c
-        n = l**(-1) * (cactin * NA * Mactin / rhoactin)
-        aux = n * (det**(-one))
-        ! ====================================================
-
         !direction of the sphere triangle barycenter - direction i
         mf0i=node_xyz
         CALL deffil(lambdai,mfi,mf0i,f,ndi)
-
-        CALL bangle(ang,f,mfi,noel,pd,ndi)
-  
-        CALL density(rho,ang,bdisp,efi)
-
-        fi = zero
-
-        ! Comment following if statement when using filpce
-        IF((etac > zero).AND.(etac .LE. one))THEN
-          lambdaif=etac*(r0/r0f)*(lambdai-one)+one
-          lambda0f=etac*(r0/r0f)*(lambda0-one)+one
-          lambdaic=(lambdai*r0-lambdaif*r0f)/r0c
-        ELSE
-          lambdaif=lambdai ! False for a filament attached to a stiff crosslinker (etac = 1), only valid for etac = 0 (???)
-          lambdaic=zero ! False for a stiff crosslinker (etac = 1), only valid for etac = 0 (???)
-        END IF
-        IF(lambdai > lambdaimax)THEN
-          lambdaimax=lambdai
-        END IF
-        IF(lambdai .GE. 1.0d0)THEN 
-          
-          CALL fil(fi,ffi,dwi,ddwi,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac)
-          ! CALL filpce(lambdai, fi, dwi, ddwi)
-
-          ! Factor of 2 accounts for the hemisphere not explicitly integrated.
-          CALL sigfilfic(sfilfic,rho,lambdai,dwi,mfi,ai,ndi)
-
-          CALL csfilfic(cfilfic,rho,lambdai,dwi,ddwi,mfi,ai,ndi)
-
-          DO j1=1,ndi
-            DO k1=1,ndi
-                sfic(j1,k1)=sfic(j1,k1)+aux*sfilfic(j1,k1)
-                DO l1=1,ndi
-                  DO m1=1,ndi
-                    cfic(j1,k1,l1,m1)=cfic(j1,k1,l1,m1)+aux*cfilfic(j1,k1,l1,m1)
-                  END DO
-                END DO
-            END DO
-          END DO
-
-        END IF
         
-        ! --- 1. Macroscopic stretch ---
-        mf0i=node_xyz
-        CALL deffil(lambdai,mfi,mf0i,f,ndi)
         CALL bangle(ang,f,mfi,noel,pd,ndi)
+        
         CALL density(rho,ang,bdisp,efi)
+        
+        fi = zero
+        dummy_DfDcb = zero
 
-        ! ================= KINETICS (IMPLICIT NEWTON-RAPHSON) =================
-        cb_i = MAX(cb(node_num), 1.0d-10)
-        cb_new = cb_i  ! Initial guess is the old state
+          ! ================= KINETICS (IMPLICIT NEWTON-RAPHSON) =================
+        cbt_i = MAX(cb(node_num), 1.0d-10)
+        cbtau_i = cbt_i  ! Initial guess is the old state
         kon = Koff0 * Keq * exp(CHI * (1.0d0 - 2.0d0 * thetaf))
 
-        DO iter = 1, 30
-            ! --- A. Evaluate Residual at current guess (cb_new) ---
-            r0f = 1.6 * (10.0d3 * cb_new)**(-two/5.0d0)
-            l = aratio * r0f
-            r0 = r0f + r0c
-            IF((etac > zero).AND.(etac .LE. one)) THEN
-              lambdaif = etac*(r0/r0f)*(lambdai-one)+one
-              lambda0f = etac*(r0/r0f)*(lambda0-one)+one
-            ELSE
-              lambdaif = lambdai 
-            END IF
-            fi = zero
-            IF(lambdai .GE. 1.0d0) THEN 
-                CALL fil(fi,ffi,dwi,ddwi,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac)
-            END IF
-            koff_i = Koff0 * exp((fi * dx) / (kb * theta))
-            thetab_i = MIN(MAX(cb_new / cbmax, 1.0d-6), one - 1.0d-6)
-            R_i = kon * cfmax * (thetaf / (1.0d0 - thetaf)) - koff_i * cbmax * (thetab_i / (1.0d0 - thetab_i))
-            Res = cb_new - cb_i - dtime * R_i
-            
-            ! Check for convergence (Residual is near zero)
-            IF (ABS(Res) < 1.0d-10) EXIT
-            
-            ! --- B. Evaluate Residual at perturbed state (cb_pert) ---
-            cb_pert = cb_new * 1.0001d0 + 1.0d-12
-            dcb = cb_pert - cb_new
-            r0f_p = 1.6 * (10.0d3 * cb_pert)**(-two/5.0d0)
-            l_p = aratio * r0f_p
-            r0_p = r0f_p + r0c
-            IF((etac > zero).AND.(etac .LE. one)) THEN
-              lambdaif_p = etac*(r0_p/r0f_p)*(lambdai-one)+one
-              lambda0f_p = etac*(r0_p/r0f_p)*(lambda0-one)+one
-            ELSE
-              lambdaif_p = lambdai 
-            END IF
-            fi_p = zero
-            IF(lambdai .GE. 1.0d0) THEN 
-                CALL fil(fi_p,ffi,dwi,ddwi,lambdaif_p,lambda0,lambda0f_p,l_p,r0_p,r0f_p,mu0str,beta,b0,etac)
-            END IF
-            koff_p = Koff0 * exp((fi_p * dx) / (kb * theta))
-            thetab_p = MIN(MAX(cb_pert / cbmax, 1.0d-6), one - 1.0d-6)
-            R_p = kon * cfmax * (thetaf / (1.0d0 - thetaf)) - koff_p * cbmax * (thetab_p / (1.0d0 - thetab_p))
-            Res_p = cb_pert - cb_i - dtime * R_p
-            
-            ! --- C. Update Guess using Numerical Derivative ---
-            dRes_dcb = (Res_p - Res) / dcb
-            cb_new = cb_new - Res / dRes_dcb
-            
-            ! Keep bounds strictly positive
-            cb_new = MAX(cb_new, 1.0d-10)
-        END DO
-        
-        ! Save the converged implicit solution
-        cb(node_num) = cb_new
-        ! ======================================================================
+        args(1)  = lambdai
+        args(2)  = lambda0
+        args(3)  = aratio
+        args(4)  = etac
+        args(5)  = mu0str
+        args(6)  = beta
+        args(7)  = b0
+        args(8)  = r0c
+        args(9)  = cbmax
+        args(10) = cfmax
+        args(11) = dx / (kb * theta)
+        args(12) = dtime
+        args(13) = kon
+        args(14) = Koff0
+        args(15) = thetaf
+        args(16) = cbt_i
 
-        ! --- 2. Final state for Stress and Tangent accumulation ---
-        r0f = 1.6 * (10.0d3 * cb(node_num))**(-two/5.0d0)
+        CALL solveKinetics(cbtau_i, args, nargs, cbt_i)
+
+        cb(node_num) = cbtau_i
+        ! FINAL STATE UPDATE
+        r0f = 1.6 * (1.0d3 * cb(node_num))**(-two/5.0d0)
         l = aratio * r0f
         r0 = r0f + r0c
         n = l**(-1) * (cactin * NA * Mactin / rhoactin)
@@ -315,11 +230,9 @@ do face = 1, face_num/2
           lambdaif = lambdai 
         END IF
 
-        IF(lambdai > lambdaimax) lambdaimax=lambdai
-
         fi = zero
         IF(lambdai .GE. 1.0d0) THEN 
-          CALL fil(fi,ffi,dwi,ddwi,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac)
+          CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),dummy_DfDcb)
           CALL sigfilfic(sfilfic,rho,lambdai,dwi,mfi,ai,ndi)
           CALL csfilfic(cfilfic,rho,lambdai,dwi,ddwi,mfi,ai,ndi)
 
@@ -335,14 +248,13 @@ do face = 1, face_num/2
           END DO
         END IF 
          
-        ! Accumulate macroscopic pool for the NEXT time step                                                        
-        cb_tot_new = cb_tot_new + cb(node_num) * rho * ai
+        ! Update total bound CL concentration for this integration point                                                       
+        cbtau_tot = cbtau_tot + cb(node_num) * rho * ai
         ! ==============================================================   
 
         !v=dwi
         !rr = rr + ai * v
         !area_total = area_total + ai
-        !write(*,*) etac
 
       end do
     end do
@@ -355,12 +267,6 @@ do face = 1, face_num/2
   deallocate ( face_order )
   deallocate ( face_point )
   deallocate ( point_coord )
-  ! IF (elem_num == 45) THEN
-  !   IF(lambdaimax > 1.00d0)THEN
-  !     ! write(*,*) 'WARNING (lambdamax > 1.15)!!!!!!!'
-  !     write(*,*) 'lambdamax = ', lambdaimax
-  !   END IF
-  ! END IF
 
 RETURN
 END SUBROUTINE affclnetfic_discrete

@@ -23,7 +23,7 @@
                   dtheta(NNODE), muNew(NNODE), muOld(NNODE), dMU(NNODE), uNew(NNODE, NDOFEL), &
                   uOld(NNODE, NDOFEL), u_t(NNODE, NDOFEL), v(NNODE, 3), coordsC(MCRD, NNODE)
          integer :: i, j, k, l, m, n, nInttPt, nDim, intpt, pOrder, face, nIntt, ii, jj, pe, stat, q, &
-                    col, &
+                    col, rowA, colB, &
                   nInttV, nInttPtV, p, ngSdv, nlSdv, kk, lenJobName, lenOutDir, nInttS, faceFlag, &
                   nshr, ntens
          real(8) :: statev(nsdv), prev_statev(nsdv), Iden(3, 3), Le, theta0, phi0, Ru(3 * NNODE, 1), Rc(NNODE, 1), &
@@ -31,8 +31,8 @@
                   dshxi(NNODE, 3), dsh0(NNODE, 3), dshC0(NNODE, 3), detMapJ0C, Vmol, Fc_tau(3, 3), &
                   Fc_t(3, 3), detFc_tau, detFc_t, w(nIntt), DmDmu, DmDJ, sh(NNODE), detMapJ, thetaf_t, &
                   dsh(NNODE, 3), detMapJC, thetafLmt, umeror, dshC(NNODE, 3), mu_tau, mu_t, dMUdX(3, 1), &
-                  dMUdt, F_tau(3, 3), F_t(3, 3), detF_tau, xi(nIntt, 3), detF, TR_tau(3, 3), T_tau(3, 3), &
-                  xi0(nIntt, 3), Ff_t(3, 3), Ff_tau(3, 3), SpTanMod(3, 3, 3, 3), thetaf_tau, DTHETAFDT, DTHETAFDMU, &
+                  dMUdt, F_tau(3, 3), F_t(3, 3), detF_tau, xi(nIntt, 3), detF, TR_tau(3, 3), sigma_tau(3, 3), &
+                  xi0(nIntt, 3), Ff_t(3, 3), Ff_tau(3, 3), DDSIGDDE(3, 3, 3, 3), thetaf_tau, DTHETAFDT, DTHETAFDMU, &
                   DphidotDmu, Mfluid, Smat(6, 1), Bmat(6, 3 * NNODE), BodyForceRes(3 * NNODE, 1), flux, &
                   Gmat(9, 3 * NNODE), G0mat(9, 3 * NNODE), Amat(9, 9), Qmat(9, 9), dA, xLocal(nInttS), &
                   yLocal(nInttS), zLocal(nInttS), wS(nInttS), Kuc(3 * NNODE, NNODE), Kcu(NNODE, 3 * NNODE), &
@@ -271,14 +271,11 @@
                !
                ! CHECK IF THESE ARE THE CORRECT CONDITIONS FOR THE IF STATEMENT
                if ((KINC <= 1) .and. (KSTEP == 1)) then
-               ! this is the first increment, of the first step
-               !  give initial conditions (or just anything)
-               ! statev = 0.9999d0 !initial determinant of the deformation gradient
-               prev_statev(1) = 0.5
-               prev_statev(2) = one
-               ! statev(1) = phi0
+               ! Initial conditions
+               statev = 0.0d0
+               prev_statev = 0.0d0
                statev(2) = one
-               thetaf_t  = 0.5d0
+               prev_statev(2) = one
                else
                ! this is not the first increment, read old values
                statev = SVARS(1 + jj : nsdv + jj)
@@ -367,11 +364,9 @@
                !  all the specific forms and parameters needed for the solution
                !
                write(*,*) 'Calling the material routine!'
-               call material(T_tau, statev, SpTanMod, &
-                       F_t, F_tau, detF_tau, &
-                       TIME, DTIME, PREDEF, &
-                       nDim, nshr, ntens, nsdv, PROPS, NPROPS, coords, PNEWDT, &
-                       JELEM, intpt, KSTEP, KINC,MU_TAU,THETAF_T,THETAF_TAU,DTHETAFDT, &
+               call material(sigma_tau, statev, DDSIGDDE, F_t, F_tau, detF_tau, &
+                       TIME, DTIME, PREDEF, nDim, nshr, ntens, nsdv, PROPS, NPROPS, coords, &
+                       PNEWDT, JELEM, intpt, KSTEP, KINC,MU_TAU,THETAF_TAU,DTHETAFDT, &
                        DTHETAFDMU,RMACRO,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,CFMAX,DSIGDMU,SPCUMODFAC)
                !
                !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -394,41 +389,41 @@
          write(*,*) 'statev(1) = ', statev(1)
          write(*,*) 'thetaf_tau = ', thetaf_tau
          ! thetafLmt = 0.005d0
-         thetafLmt = 0.01d0
-         thetaf_tau = statev(1)
-         thetaf_t = prev_statev(1)
-         if ((KINC<=1) .and. (KSTEP == 1)) then
-            ! First increment: perfectly converged, keep time step constant         
-            umeror = 0.0d0
-            pnewdt = 1.0d0
-         write(*,*) 'thetaf_tau = ', thetaf_tau
-         write(*,*) 'thetaf_t = ', thetaf_t
-         write(*,*) 'thetafLmt = ', thetafLmt
-         write(*, *) 'umeror=', umeror
-         else
-            umeror = abs((thetaf_tau - thetaf_t)/thetafLmt)
-         write(*,*) 'thetaf_tau = ', thetaf_tau
-         write(*,*) 'thetaf_t = ', thetaf_t
-         write(*,*) 'thetafLmt = ', thetafLmt
-         write(*, *) 'umeror=', umeror
-            if (umeror <= 0.5d0) then
-               pnewdt = 1.5d0
-            elseif (umeror > 0.5d0 .and. umeror <= 0.8d0) then
-               pnewdt = 1.25d0
-            elseif (umeror > 0.8d0 .and. umeror <= 1.25d0) then
-               pnewdt = 0.75d0
-            else
-               pnewdt = 0.5d0
-            endif
-         end if
+         ! thetafLmt = 0.01d0
+         ! thetaf_tau = statev(1)
+         ! thetaf_t = prev_statev(1)
+         ! if ((KINC<=1) .and. (KSTEP == 1)) then
+         !    ! First increment: perfectly converged, keep time step constant         
+         !    umeror = 0.0d0
+         !    pnewdt = 1.0d0
+         ! write(*,*) 'thetaf_tau = ', thetaf_tau
+         ! write(*,*) 'thetaf_t = ', thetaf_t
+         ! write(*,*) 'thetafLmt = ', thetafLmt
+         ! write(*, *) 'umeror=', umeror
+         ! else
+         !    umeror = abs((thetaf_tau - thetaf_t)/thetafLmt)
+         ! write(*,*) 'thetaf_tau = ', thetaf_tau
+         ! write(*,*) 'thetaf_t = ', thetaf_t
+         ! write(*,*) 'thetafLmt = ', thetafLmt
+         ! write(*, *) 'umeror=', umeror
+         !    if (umeror <= 0.5d0) then
+         !       pnewdt = 1.5d0
+         !    elseif (umeror > 0.5d0 .and. umeror <= 0.8d0) then
+         !       pnewdt = 1.25d0
+         !    elseif (umeror > 0.8d0 .and. umeror <= 1.25d0) then
+         !       pnewdt = 0.75d0
+         !    else
+         !       pnewdt = 0.5d0
+         !    endif
+         ! end if
 
          ! Compute/update the displacement residual vector
-         Smat(1, 1) = T_tau(1, 1)
-         Smat(2, 1) = T_tau(2, 2)
-         Smat(3, 1) = T_tau(3, 3)
-         Smat(4, 1) = T_tau(1, 2)
-         Smat(5, 1) = T_tau(2, 3)
-         Smat(6, 1) = T_tau(1, 3)
+         Smat(1, 1) = sigma_tau(1, 1)
+         Smat(2, 1) = sigma_tau(2, 2)
+         Smat(3, 1) = sigma_tau(3, 3)
+         Smat(4, 1) = sigma_tau(1, 2)
+         Smat(5, 1) = sigma_tau(2, 3)
+         Smat(6, 1) = sigma_tau(1, 3)
 
          Bmat = 0.0d0
          do kk = 1, nNode
@@ -459,18 +454,18 @@
             Nvec(1,kk) = sh(kk)
          enddo
          !
-         write(*,*) 'CFMAX = ', CFMAX
-         write(*,*) 'DTHETAFDT = ', DTHETAFDT
-         write(*,*) 'RMACRO = ', RMACRO
-         write(*,*) 'DETF = ', DETF
+         ! write(*,*) 'CFMAX = ', CFMAX
+         ! write(*,*) 'DTHETAFDT = ', DTHETAFDT
+         ! write(*,*) 'RMACRO = ', RMACRO
+         ! write(*,*) 'DETF = ', DETF
          ResFac = - (CFMAX * DTHETAFDT + RMACRO) / DETF
          !
-         write(*,*) 'detmapJC = ', detmapJC
-         write(*,*) 'w(intpt) = ', w(intpt)
-         write(*,*) 'transpose(Nvec) = ', transpose(Nvec)
-         write(*,*) 'ResFac = ', ResFac
-         write(*,*) 'Mfluid = ', Mfluid
-         write(*,*) 'matmul(dshC,dMUdX) = ', matmul(dshC,dMUdX)
+         ! write(*,*) 'detmapJC = ', detmapJC
+         ! write(*,*) 'w(intpt) = ', w(intpt)
+         ! write(*,*) 'transpose(Nvec) = ', transpose(Nvec)
+         ! write(*,*) 'ResFac = ', ResFac
+         ! write(*,*) 'Mfluid = ', Mfluid
+         ! write(*,*) 'matmul(dshC,dMUdX) = ', matmul(dshC,dMUdX)
          Rc = Rc + detmapJC*w(intpt)*(transpose(Nvec)*ResFac - Mfluid*matmul(dshC,dMUdX))
          
          
@@ -504,98 +499,113 @@
           end do
 
           Amat = 0.0d0
-          Amat(1, 1) = SpTanMod(1, 1, 1, 1)
-          Amat(1, 2) = SpTanMod(1, 1, 2, 1)
-          Amat(1, 3) = SpTanMod(1, 1, 3, 1)
-          Amat(1, 4) = SpTanMod(1, 1, 1, 2)
-          Amat(1, 5) = SpTanMod(1, 1, 2, 2)
-          Amat(1, 6) = SpTanMod(1, 1, 3, 2)
-          Amat(1, 7) = SpTanMod(1, 1, 1, 3)
-          Amat(1, 8) = SpTanMod(1, 1, 2, 3)
-          Amat(1, 9) = SpTanMod(1, 1, 3, 3)
-          Amat(2, 1) = SpTanMod(2, 1, 1, 1)
-          Amat(2, 2) = SpTanMod(2, 1, 2, 1)
-          Amat(2, 3) = SpTanMod(2, 1, 3, 1)
-          Amat(2, 4) = SpTanMod(2, 1, 1, 2)
-          Amat(2, 5) = SpTanMod(2, 1, 2, 2)
-          Amat(2, 6) = SpTanMod(2, 1, 3, 2)
-          Amat(2, 7) = SpTanMod(2, 1, 1, 3)
-          Amat(2, 8) = SpTanMod(2, 1, 2, 3)
-          Amat(2, 9) = SpTanMod(2, 1, 3, 3)
-          Amat(3, 1) = SpTanMod(3, 1, 1, 1)
-          Amat(3, 2) = SpTanMod(3, 1, 2, 1)
-          Amat(3, 3) = SpTanMod(3, 1, 3, 1)
-          Amat(3, 4) = SpTanMod(3, 1, 1, 2)
-          Amat(3, 5) = SpTanMod(3, 1, 2, 2)
-          Amat(3, 6) = SpTanMod(3, 1, 3, 2)
-          Amat(3, 7) = SpTanMod(3, 1, 1, 3)
-          Amat(3, 8) = SpTanMod(3, 1, 2, 3)
-          Amat(3, 9) = SpTanMod(3, 1, 3, 3)
-          Amat(4, 1) = SpTanMod(1, 2, 1, 1)
-          Amat(4, 2) = SpTanMod(1, 2, 2, 1)
-          Amat(4, 3) = SpTanMod(1, 2, 3, 1)
-          Amat(4, 4) = SpTanMod(1, 2, 1, 2)
-          Amat(4, 5) = SpTanMod(1, 2, 2, 2)
-          Amat(4, 6) = SpTanMod(1, 2, 3, 2)
-          Amat(4, 7) = SpTanMod(1, 2, 1, 3)
-          Amat(4, 8) = SpTanMod(1, 2, 2, 3)
-          Amat(4, 9) = SpTanMod(1, 2, 3, 3)
-          Amat(5, 1) = SpTanMod(2, 2, 1, 1)
-          Amat(5, 2) = SpTanMod(2, 2, 2, 1)
-          Amat(5, 3) = SpTanMod(2, 2, 3, 1)
-          Amat(5, 4) = SpTanMod(2, 2, 1, 2)
-          Amat(5, 5) = SpTanMod(2, 2, 2, 2)
-          Amat(5, 6) = SpTanMod(2, 2, 3, 2)
-          Amat(5, 7) = SpTanMod(2, 2, 1, 3)
-          Amat(5, 8) = SpTanMod(2, 2, 2, 3)
-          Amat(5, 9) = SpTanMod(2, 2, 3, 3)
-          Amat(6, 1) = SpTanMod(3, 2, 1, 1)
-          Amat(6, 2) = SpTanMod(3, 2, 2, 1)
-          Amat(6, 3) = SpTanMod(3, 2, 3, 1)
-          Amat(6, 4) = SpTanMod(3, 2, 1, 2)
-          Amat(6, 5) = SpTanMod(3, 2, 2, 2)
-          Amat(6, 6) = SpTanMod(3, 2, 3, 2)
-          Amat(6, 7) = SpTanMod(3, 2, 1, 3)
-          Amat(6, 8) = SpTanMod(3, 2, 2, 3)
-          Amat(6, 9) = SpTanMod(3, 2, 3, 3)
-          Amat(7, 1) = SpTanMod(1, 3, 1, 1)
-          Amat(7, 2) = SpTanMod(1, 3, 2, 1)
-          Amat(7, 3) = SpTanMod(1, 3, 3, 1)
-          Amat(7, 4) = SpTanMod(1, 3, 1, 2)
-          Amat(7, 5) = SpTanMod(1, 3, 2, 2)
-          Amat(7, 6) = SpTanMod(1, 3, 3, 2)
-          Amat(7, 7) = SpTanMod(1, 3, 1, 3)
-          Amat(7, 8) = SpTanMod(1, 3, 2, 3)
-          Amat(7, 9) = SpTanMod(1, 3, 3, 3)
-          Amat(8, 1) = SpTanMod(2, 3, 1, 1)
-          Amat(8, 2) = SpTanMod(2, 3, 2, 1)
-          Amat(8, 3) = SpTanMod(2, 3, 3, 1)
-          Amat(8, 4) = SpTanMod(2, 3, 1, 2)
-          Amat(8, 5) = SpTanMod(2, 3, 2, 2)
-          Amat(8, 6) = SpTanMod(2, 3, 3, 2)
-          Amat(8, 7) = SpTanMod(2, 3, 1, 3)
-          Amat(8, 8) = SpTanMod(2, 3, 2, 3)
-          Amat(8, 9) = SpTanMod(2, 3, 3, 3)
-          Amat(9, 1) = SpTanMod(3, 3, 1, 1)
-          Amat(9, 2) = SpTanMod(3, 3, 2, 1)
-          Amat(9, 3) = SpTanMod(3, 3, 3, 1)
-          Amat(9, 4) = SpTanMod(3, 3, 1, 2)
-          Amat(9, 5) = SpTanMod(3, 3, 2, 2)
-          Amat(9, 6) = SpTanMod(3, 3, 3, 2)
-          Amat(9, 7) = SpTanMod(3, 3, 1, 3)
-          Amat(9, 8) = SpTanMod(3, 3, 2, 3)
-          Amat(9, 9) = SpTanMod(3, 3, 3, 3)
+          Amat(1, 1) = DDSIGDDE(1, 1, 1, 1)
+          Amat(1, 2) = DDSIGDDE(1, 1, 2, 1)
+          Amat(1, 3) = DDSIGDDE(1, 1, 3, 1)
+          Amat(1, 4) = DDSIGDDE(1, 1, 1, 2)
+          Amat(1, 5) = DDSIGDDE(1, 1, 2, 2)
+          Amat(1, 6) = DDSIGDDE(1, 1, 3, 2)
+          Amat(1, 7) = DDSIGDDE(1, 1, 1, 3)
+          Amat(1, 8) = DDSIGDDE(1, 1, 2, 3)
+          Amat(1, 9) = DDSIGDDE(1, 1, 3, 3)
+          Amat(2, 1) = DDSIGDDE(2, 1, 1, 1)
+          Amat(2, 2) = DDSIGDDE(2, 1, 2, 1)
+          Amat(2, 3) = DDSIGDDE(2, 1, 3, 1)
+          Amat(2, 4) = DDSIGDDE(2, 1, 1, 2)
+          Amat(2, 5) = DDSIGDDE(2, 1, 2, 2)
+          Amat(2, 6) = DDSIGDDE(2, 1, 3, 2)
+          Amat(2, 7) = DDSIGDDE(2, 1, 1, 3)
+          Amat(2, 8) = DDSIGDDE(2, 1, 2, 3)
+          Amat(2, 9) = DDSIGDDE(2, 1, 3, 3)
+          Amat(3, 1) = DDSIGDDE(3, 1, 1, 1)
+          Amat(3, 2) = DDSIGDDE(3, 1, 2, 1)
+          Amat(3, 3) = DDSIGDDE(3, 1, 3, 1)
+          Amat(3, 4) = DDSIGDDE(3, 1, 1, 2)
+          Amat(3, 5) = DDSIGDDE(3, 1, 2, 2)
+          Amat(3, 6) = DDSIGDDE(3, 1, 3, 2)
+          Amat(3, 7) = DDSIGDDE(3, 1, 1, 3)
+          Amat(3, 8) = DDSIGDDE(3, 1, 2, 3)
+          Amat(3, 9) = DDSIGDDE(3, 1, 3, 3)
+          Amat(4, 1) = DDSIGDDE(1, 2, 1, 1)
+          Amat(4, 2) = DDSIGDDE(1, 2, 2, 1)
+          Amat(4, 3) = DDSIGDDE(1, 2, 3, 1)
+          Amat(4, 4) = DDSIGDDE(1, 2, 1, 2)
+          Amat(4, 5) = DDSIGDDE(1, 2, 2, 2)
+          Amat(4, 6) = DDSIGDDE(1, 2, 3, 2)
+          Amat(4, 7) = DDSIGDDE(1, 2, 1, 3)
+          Amat(4, 8) = DDSIGDDE(1, 2, 2, 3)
+          Amat(4, 9) = DDSIGDDE(1, 2, 3, 3)
+          Amat(5, 1) = DDSIGDDE(2, 2, 1, 1)
+          Amat(5, 2) = DDSIGDDE(2, 2, 2, 1)
+          Amat(5, 3) = DDSIGDDE(2, 2, 3, 1)
+          Amat(5, 4) = DDSIGDDE(2, 2, 1, 2)
+          Amat(5, 5) = DDSIGDDE(2, 2, 2, 2)
+          Amat(5, 6) = DDSIGDDE(2, 2, 3, 2)
+          Amat(5, 7) = DDSIGDDE(2, 2, 1, 3)
+          Amat(5, 8) = DDSIGDDE(2, 2, 2, 3)
+          Amat(5, 9) = DDSIGDDE(2, 2, 3, 3)
+          Amat(6, 1) = DDSIGDDE(3, 2, 1, 1)
+          Amat(6, 2) = DDSIGDDE(3, 2, 2, 1)
+          Amat(6, 3) = DDSIGDDE(3, 2, 3, 1)
+          Amat(6, 4) = DDSIGDDE(3, 2, 1, 2)
+          Amat(6, 5) = DDSIGDDE(3, 2, 2, 2)
+          Amat(6, 6) = DDSIGDDE(3, 2, 3, 2)
+          Amat(6, 7) = DDSIGDDE(3, 2, 1, 3)
+          Amat(6, 8) = DDSIGDDE(3, 2, 2, 3)
+          Amat(6, 9) = DDSIGDDE(3, 2, 3, 3)
+          Amat(7, 1) = DDSIGDDE(1, 3, 1, 1)
+          Amat(7, 2) = DDSIGDDE(1, 3, 2, 1)
+          Amat(7, 3) = DDSIGDDE(1, 3, 3, 1)
+          Amat(7, 4) = DDSIGDDE(1, 3, 1, 2)
+          Amat(7, 5) = DDSIGDDE(1, 3, 2, 2)
+          Amat(7, 6) = DDSIGDDE(1, 3, 3, 2)
+          Amat(7, 7) = DDSIGDDE(1, 3, 1, 3)
+          Amat(7, 8) = DDSIGDDE(1, 3, 2, 3)
+          Amat(7, 9) = DDSIGDDE(1, 3, 3, 3)
+          Amat(8, 1) = DDSIGDDE(2, 3, 1, 1)
+          Amat(8, 2) = DDSIGDDE(2, 3, 2, 1)
+          Amat(8, 3) = DDSIGDDE(2, 3, 3, 1)
+          Amat(8, 4) = DDSIGDDE(2, 3, 1, 2)
+          Amat(8, 5) = DDSIGDDE(2, 3, 2, 2)
+          Amat(8, 6) = DDSIGDDE(2, 3, 3, 2)
+          Amat(8, 7) = DDSIGDDE(2, 3, 1, 3)
+          Amat(8, 8) = DDSIGDDE(2, 3, 2, 3)
+          Amat(8, 9) = DDSIGDDE(2, 3, 3, 3)
+          Amat(9, 1) = DDSIGDDE(3, 3, 1, 1)
+          Amat(9, 2) = DDSIGDDE(3, 3, 2, 1)
+          Amat(9, 3) = DDSIGDDE(3, 3, 3, 1)
+          Amat(9, 4) = DDSIGDDE(3, 3, 1, 2)
+          Amat(9, 5) = DDSIGDDE(3, 3, 2, 2)
+          Amat(9, 6) = DDSIGDDE(3, 3, 3, 2)
+          Amat(9, 7) = DDSIGDDE(3, 3, 1, 3)
+          Amat(9, 8) = DDSIGDDE(3, 3, 2, 3)
+          Amat(9, 9) = DDSIGDDE(3, 3, 3, 3)
+
+         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+          ! --------------------------------------------------------
+          ! INJECT GEOMETRIC STIFFNESS CONTRIBUTION INTO AMAT
+          ! --------------------------------------------------------
+          do i = 1, 3
+             do j = 1, 3
+                do l = 1, 3
+                   rowA = i + 3*(j-1)
+                   colB = i + 3*(l-1)
+                   Amat(rowA, colB) = Amat(rowA, colB) + sigma_tau(j, l)
+                end do
+             end do
+          end do
+          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
           Qmat = 0.0d0
-          Qmat(1, 1) = (1.0d0 / 3.0d0) * (Amat(1, 1) + Amat(1, 5) + Amat(1, 9)) - (2.0d0 / 3.0d0) * T_tau(1, 1)
-          Qmat(2, 1) = (1.0d0 / 3.0d0) * (Amat(2, 1) + Amat(2, 5) + Amat(2, 9)) - (2.0d0 / 3.0d0) * T_tau(2, 1)
-          Qmat(3, 1) = (1.0d0 / 3.0d0) * (Amat(3, 1) + Amat(3, 5) + Amat(3, 9)) - (2.0d0 / 3.0d0) * T_tau(3, 1)
-          Qmat(4, 1) = (1.0d0 / 3.0d0) * (Amat(4, 1) + Amat(4, 5) + Amat(4, 9)) - (2.0d0 / 3.0d0) * T_tau(1, 2)
-          Qmat(5, 1) = (1.0d0 / 3.0d0) * (Amat(5, 1) + Amat(5, 5) + Amat(5, 9)) - (2.0d0 / 3.0d0) * T_tau(2, 2)
-          Qmat(6, 1) = (1.0d0 / 3.0d0) * (Amat(6, 1) + Amat(6, 5) + Amat(6, 9)) - (2.0d0 / 3.0d0) * T_tau(3, 2)
-          Qmat(7, 1) = (1.0d0 / 3.0d0) * (Amat(7, 1) + Amat(7, 5) + Amat(7, 9)) - (2.0d0 / 3.0d0) * T_tau(1, 3)
-          Qmat(8, 1) = (1.0d0 / 3.0d0) * (Amat(8, 1) + Amat(8, 5) + Amat(8, 9)) - (2.0d0 / 3.0d0) * T_tau(2, 3)
-          Qmat(9, 1) = (1.0d0 / 3.0d0) * (Amat(9, 1) + Amat(9, 5) + Amat(9, 9)) - (2.0d0 / 3.0d0) * T_tau(3, 3)
+          Qmat(1, 1) = (1.0d0 / 3.0d0) * (Amat(1, 1) + Amat(1, 5) + Amat(1, 9)) - (2.0d0 / 3.0d0) * sigma_tau(1, 1)
+          Qmat(2, 1) = (1.0d0 / 3.0d0) * (Amat(2, 1) + Amat(2, 5) + Amat(2, 9)) - (2.0d0 / 3.0d0) * sigma_tau(2, 1)
+          Qmat(3, 1) = (1.0d0 / 3.0d0) * (Amat(3, 1) + Amat(3, 5) + Amat(3, 9)) - (2.0d0 / 3.0d0) * sigma_tau(3, 1)
+          Qmat(4, 1) = (1.0d0 / 3.0d0) * (Amat(4, 1) + Amat(4, 5) + Amat(4, 9)) - (2.0d0 / 3.0d0) * sigma_tau(1, 2)
+          Qmat(5, 1) = (1.0d0 / 3.0d0) * (Amat(5, 1) + Amat(5, 5) + Amat(5, 9)) - (2.0d0 / 3.0d0) * sigma_tau(2, 2)
+          Qmat(6, 1) = (1.0d0 / 3.0d0) * (Amat(6, 1) + Amat(6, 5) + Amat(6, 9)) - (2.0d0 / 3.0d0) * sigma_tau(3, 2)
+          Qmat(7, 1) = (1.0d0 / 3.0d0) * (Amat(7, 1) + Amat(7, 5) + Amat(7, 9)) - (2.0d0 / 3.0d0) * sigma_tau(1, 3)
+          Qmat(8, 1) = (1.0d0 / 3.0d0) * (Amat(8, 1) + Amat(8, 5) + Amat(8, 9)) - (2.0d0 / 3.0d0) * sigma_tau(2, 3)
+          Qmat(9, 1) = (1.0d0 / 3.0d0) * (Amat(9, 1) + Amat(9, 5) + Amat(9, 9)) - (2.0d0 / 3.0d0) * sigma_tau(3, 3)
           Qmat(1, 5) = Qmat(1, 1)
           Qmat(2, 5) = Qmat(2, 1)
           Qmat(3, 5) = Qmat(3, 1)

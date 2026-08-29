@@ -1,8 +1,6 @@
-subroutine solveThetaf(root, args, nargs, rootOld)
+subroutine solveKinetics(root, args, nargs, rootOld)
 
-    ! This subroutine will numerically solve for the free
-    ! crosslinker fraction (thetaf) based on the current
-    ! chemical potential. See Numerical Recipes RTSAFE.
+    ! Numerical Recipes RTSAFE.
 
     implicit none
 
@@ -16,25 +14,28 @@ subroutine solveThetaf(root, args, nargs, rootOld)
     integer :: j
     real(8) :: f, df, fl, fh, xl, xh, x1, x2, swap, dxold
     real(8) :: dx, temp, rootMax, rootMin
+    real(8) :: cbmax
 
     ! Parameter declarations
     integer, parameter :: maxit = 50
     real(8), parameter :: xacc  = 1.0d-12
     real(8), parameter :: zero  = 0.0d0
 
-    ! Set the safe bounds for thetaf (must be strictly between 0 and 1)
-    rootMax = 1.0d0 - 1.0d-8
+    cbmax = args(9)
+
+    ! Set the safe bounds for the root
+    rootMax = cbmax - 1.0d-10
     rootMin = 1.0d-8
 
     x1 = rootMin
     x2 = rootMax
-    call thetafFunc(x1, fl, df, args, nargs)
-    call thetafFunc(x2, fh, df, args, nargs)
+    call kineticsFunc(x1, fl, df, args, nargs)
+    call kineticsFunc(x2, fh, df, args, nargs)
 
     ! Check if the root is safely bracketed
     if (fl * fh >= zero) then
         root = rootOld
-        write(*,*) 'FYI, root not bracketed on thetaf'
+        write(*,*) 'FYI, root not bracketed on cb'
         write(*,*) 'fl=', fl
         write(*,*) 'fh=', fh
         write(*,*) 'rootOld=', rootOld
@@ -71,7 +72,7 @@ subroutine solveThetaf(root, args, nargs, rootOld)
     dxold = abs(x2 - x1)
     dx    = dxold
     
-    call thetafFunc(root, f, df, args, nargs)
+    call kineticsFunc(root, f, df, args, nargs)
 
     ! Loop over allowed iterations (Replaced old DO 10 loop)
     do j = 1, maxit
@@ -103,7 +104,7 @@ subroutine solveThetaf(root, args, nargs, rootOld)
         if (abs(dx) < xacc) return
 
         ! The one new function evaluation per iteration
-        call thetafFunc(root, f, df, args, nargs)
+        call kineticsFunc(root, f, df, args, nargs)
 
         ! Maintain the bracket on the root 
         if (f < 0.0d0) then
@@ -117,7 +118,11 @@ subroutine solveThetaf(root, args, nargs, rootOld)
     end do
 
     ! If loop finishes without returning, maximum iterations were exceeded
-    write(*, '(/1X,A)') 'solveThetaf EXCEEDING MAXIMUM ITERATIONS'
+    write(*, '(/1X,A)') 'solveKinetics EXCEEDING MAXIMUM ITERATIONS'
+    write(*, '(/1X,A)') 'rootOld = ', rootOld
+    write(*, '(/1X,A)') 'root = ', root
+    write(*, '(/1X,A)') 'f = ', f
+    write(*, '(/1X,A)') 'df = ', df
     
     return
-end subroutine solveThetaf
+end subroutine solveKinetics

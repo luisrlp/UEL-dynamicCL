@@ -1,6 +1,4 @@
-import math                                                                         
-from scipy.optimize import brentq                                                   
-                                                                                    
+import math                                                                                    
 # --- YOUR MATERIAL PROPERTIES --- 
 # Copy from properties.inp                                                 
 K = 1000.0
@@ -10,12 +8,12 @@ PHINET = 1.0
 a = 1.2
 R0C = 0.014
 ETAC = 0.5
-MU0STRETCH = 38600.0
+MU0STRETCH = 38600000000000.0
 BETA = 0.5
 LP = 16.0
 THETA = 25.0 + 273.0
-DX = 0.001
-BB = 0.001
+DX = 0.1
+BB = 0.000001
 LAMBDA0 = 1.0
 CACTIN = 0.0095
 R = 0.1
@@ -44,8 +42,21 @@ def evalh(cb0):
     rhs = cb0 * (1.0 - thetaf0) * math.exp(-CHI * (1.0 - 2.0 * thetaf0))            
     return lhs - rhs
 
-# Solve for cb0 using Brent's method (same as pullchem.f90)
-cb0_root = brentq(evalh, 0.0, min(CR, C_MAX))
+# Bisection solver
+def bisection(f, a, b, tol=1e-12):
+    if f(a)*f(b) >= 0:
+        return a
+    while (b - a)/2.0 > tol:
+        midpoint = (a + b)/2.0
+        if f(midpoint) == 0:
+            return midpoint
+        elif f(a)*f(midpoint) < 0:
+            b = midpoint
+        else:
+            a = midpoint
+    return (a + b)/2.0
+
+cb0_root = bisection(evalh, 0.0, min(CR, C_MAX))
 
 # --- CALCULATE EXACT INITMU ---
 cf0 = CR - cb0_root
@@ -59,4 +70,5 @@ INITMU = MU0 + RGAS * THETA * (
     (K * VMOL / (RGAS * THETA)) * (math.log(JE) / JC)
 )
 
-print(f"Exact INITMU for Abaqus = {INITMU:.6f}")
+print(f"THETAF_T for Abaqus = {thetaf0:.6f}")
+print(f"INITMU for Abaqus = {INITMU:.6f}")
