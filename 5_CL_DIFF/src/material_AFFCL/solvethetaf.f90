@@ -65,6 +65,7 @@ subroutine solveThetaf(root, args, nargs, rootOld)
     end if
 
     ! Initialize the guess for the root, the "step size before last", and the last step
+    root = rootOld
     if (rootOld < rootMin) root = rootMin ! rootOld = rootMin
     if (rootOld > rootMax) root = rootMax ! rootOld = rootMax
     

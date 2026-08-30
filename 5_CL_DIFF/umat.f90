@@ -62,6 +62,114 @@
       real*8, allocatable :: globalSdv(:,:,:)
 
       end module global
+SUBROUTINE bangle(ang,f,mf,noel,pdir,ndi)
+
+!>    ANGLE BETWEEN FILAMENT AND PREFERED DIRECTION
+
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: ang
+DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: mf(ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: pdir(ndi)
+INTEGER, INTENT(IN OUT)                  :: noel
+!
+!
+INTEGER :: inoel,i,j
+DOUBLE PRECISION :: dnorm, mfa(ndi),aux
+DOUBLE PRECISION :: c(ndi,ndi),egvc(ndi,ndi),egvl(ndi)
+!
+inoel=0
+i=0
+!DO i=1,nelem
+!               ELEMENT IDENTIFICATION
+!  IF(noel == INT(prefdir(i,1))) THEN
+!    inoel=i
+!  END IF
+!END DO
+!
+!DO i=1,ndi
+!  j=i+1
+!       PREFERED ORIENTATION  ORIENTATION NORMALIZED
+!  pdir(i)=prefdir(inoel,j)
+!END DO
+!        ALTERNATIVE APPROACH: BUNDLES FOLLOW PRINCIPAL DIRECTIONS
+!c=matmul(transpose(f),f)
+!CALL spectral(c,egvl,egvc)
+!       WRITE(*,*) EGVC
+!pdir(1)=egvc(1,1)
+!pdir(2)=egvc(2,1)
+!pdir(3)=egvc(3,1)
+!        END OF ALTERNATIVE
+
+!     PREFERED ORIENTATION
+dnorm=dot_product(pdir,pdir)
+dnorm=DSQRT(dnorm)
+!     PREFERED ORIENTATION  NORMALIZED
+pdir=pdir/dnorm
+
+!       FILAMENT ORIENTATION
+mfa=mf
+dnorm=dot_product(mfa,mfa)
+dnorm=dsqrt(dnorm)
+
+!       FILAMENT ORIENTATION  NORMALIZED
+mfa=mfa/dnorm
+!        ANGLE BETWEEN PREFERED ORIENTATION AND FILAMENT - BANGLE
+aux=dot_product(mfa,pdir)
+!        if AUX.GT.ONE
+!        endif
+!        write(*,*) aux
+ang=acos(aux)
+
+RETURN
+END SUBROUTINE bangle
+
+SUBROUTINE chemicalstat(frac,frac0,k,dtime)
+
+
+use global
+IMPLICIT NONE
+
+DOUBLE PRECISION, INTENT(OUT)            :: frac(4)
+DOUBLE PRECISION, INTENT(IN)             :: frac0(4)
+DOUBLE PRECISION, INTENT(IN)             :: k(7)
+DOUBLE PRECISION, INTENT(IN)             :: dtime
+
+
+DOUBLE PRECISION :: stiff(4,4)
+
+DOUBLE PRECISION :: aux
+INTEGER :: i1,j1
+
+frac=zero
+stiff=zero
+stiff(1,1)=-k(1)
+stiff(1,2)=k(2)
+stiff(1,4)=k(7)
+stiff(2,1)=k(1)
+stiff(2,2)=-k(2)-k(3)
+stiff(2,3)=k(4)
+stiff(3,2)=k(3)
+stiff(3,3)=-k(4)-k(5)
+stiff(3,4)=k(6)
+stiff(4,3)=k(5)
+stiff(4,4)=-k(6)-k(7)
+
+DO i1=1,4
+  aux=zero
+  DO j1=1,4
+    aux=aux+stiff(i1,j1)*frac0(j1)
+  END DO
+  frac(i1)=aux*dtime+frac0(i1)
+END DO
+
+!      FRAC0=FRAC
+
+RETURN
+END SUBROUTINE chemicalstat
 SUBROUTINE csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
 
 
@@ -82,6 +190,249 @@ call push4(cisomatfic,cmisomatfic,distgr,det,ndi)
 
 RETURN
 END SUBROUTINE csisomatfic
+SUBROUTINE cmatisomatfic(cmisomatfic,cbar,cbari1,cbari2,  &
+        diso,unit2,unit4,det,ndi)
+
+
+
+!>    ISOTROPIC MATRIX: MATERIAL 'FICTICIOUS' ELASTICITY TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(IN OUT)         :: cmisomatfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: cbar(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: cbari1
+DOUBLE PRECISION, INTENT(IN OUT)         :: cbari2
+DOUBLE PRECISION, INTENT(IN)             :: diso(5)
+DOUBLE PRECISION, INTENT(IN)             :: unit2(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: unit4(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: det
+
+
+
+INTEGER :: i1,j1,k1,l1
+    
+
+DOUBLE PRECISION :: dudi1,dudi2,d2ud2i1,d2ud2i2,d2udi1i2
+DOUBLE PRECISION :: aux,aux1,aux2,aux3,aux4
+DOUBLE PRECISION :: uij,ukl,cij,ckl
+
+dudi1=diso(1)
+dudi2=diso(2)
+d2ud2i1=diso(3)
+d2ud2i2=diso(4)
+d2udi1i2=diso(5)
+
+aux1=four*(d2ud2i1+two*cbari1*d2udi1i2+ dudi2+cbari1*cbari1*d2ud2i2)
+aux2=-four*(d2udi1i2+cbari1*d2ud2i2)
+aux3=four*d2ud2i2
+aux4=-four*dudi2
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    DO k1=1,ndi
+      DO l1=1,ndi
+        uij=unit2(i1,j1)
+        ukl=unit2(k1,l1)
+        cij=cbar(i1,j1)
+        ckl=cbar(k1,l1)
+        aux=aux1*uij*ukl+ aux2*(uij*ckl+cij*ukl)+aux3*cij*ckl+  &
+            aux4*unit4(i1,j1,k1,l1)
+        cmisomatfic(i1,j1,k1,l1)=aux * det**(-four/three)
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE cmatisomatfic
+SUBROUTINE contraction22(aux,lt,rt,ndi)
+!>       DOUBLE CONTRACTION BETWEEN 2nd ORDER AND 2ND ORDER  TENSOR
+!>      INPUT:
+!>       LT - RIGHT 2ND ORDER TENSOR
+!>       RT - LEFT  2nd ODER TENSOR
+!>      OUTPUT:
+!>       aux - DOUBLE CONTRACTED TENSOR (scalar)
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(IN)             :: lt(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: rt(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: aux
+INTEGER :: i1,j1
+
+
+    aux=zero
+    DO i1=1,ndi
+      DO j1=1,ndi
+        aux=aux+lt(i1,j1)*rt(j1,i1)
+      END DO
+    END DO
+RETURN
+END SUBROUTINE contraction22
+SUBROUTINE contraction24(s,LT,rt,ndi)
+
+
+
+!>       DOUBLE CONTRACTION BETWEEN 4TH ORDER AND 2ND ORDER  TENSOR
+!>      INPUT:
+!>       LT - RIGHT 2ND ORDER TENSOR
+!>       RT - LEFT  4TH ODER TENSOR
+!>      OUTPUT:
+!>       S - DOUBLE CONTRACTED TENSOR (2ND ORDER)
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: s(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: lt(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: rt(ndi,ndi,ndi,ndi)
+
+
+
+INTEGER :: i1,j1,k1,l1
+
+
+DOUBLE PRECISION :: aux
+
+
+
+DO k1=1,ndi
+  DO l1=1,ndi
+    aux=zero
+    DO i1=1,ndi
+      DO j1=1,ndi
+        aux=aux+lt(k1,l1)*rt(i1,j1,k1,l1)
+      END DO
+    END DO
+    s(k1,l1)=aux
+  END DO
+END DO
+RETURN
+END SUBROUTINE contraction24
+SUBROUTINE contraction42(s,LT,rt,ndi)
+
+
+
+!>       DOUBLE CONTRACTION BETWEEN 4TH ORDER AND 2ND ORDER  TENSOR
+!>      INPUT:
+!>       LT - left 4TH ORDER TENSOR
+!>       RT - right  2ND ODER TENSOR
+!>      OUTPUT:
+!>       S - DOUBLE CONTRACTED TENSOR (2ND ORDER)
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: s(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: LT(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: rt(ndi,ndi)
+
+
+INTEGER :: i1,j1,k1,l1
+
+
+DOUBLE PRECISION :: aux
+
+
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    aux=zero
+    DO k1=1,ndi
+      DO l1=1,ndi
+        aux=aux+LT(i1,j1,k1,l1)*rt(k1,l1)
+      END DO
+    END DO
+    s(i1,j1)=aux
+  END DO
+END DO
+RETURN
+END SUBROUTINE contraction42
+SUBROUTINE contraction44(s,LT,rt,ndi)
+
+
+
+!>       DOUBLE CONTRACTION BETWEEN 4TH ORDER TENSORS
+!>      INPUT:
+!>       LT - RIGHT 4TH ORDER TENSOR
+!>       RT - LEFT  4TH ORDER TENSOR
+!>      OUTPUT:
+!>       S - DOUBLE CONTRACTED TENSOR (4TH ORDER)
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: s(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: LT(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: rt(ndi,ndi,ndi,ndi)
+
+
+
+INTEGER :: i1,j1,k1,l1,m1,n1
+
+
+DOUBLE PRECISION :: aux
+
+
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    DO k1=1,ndi
+      DO l1=1,ndi
+        aux=zero
+        DO m1=1,ndi
+          DO n1=1,ndi
+            aux=aux+LT(i1,j1,m1,n1)*rt(m1,n1,k1,l1)
+          END DO
+        END DO
+        s(i1,j1,k1,l1)=aux
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE contraction44
+SUBROUTINE csfilfic(cfic,rho,lambda,dw,ddw,m,rw,ndi)
+
+
+
+!>    AFFINE NETWORK: 'FICTICIOUS' ELASTICITY TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: rho
+DOUBLE PRECISION, INTENT(IN OUT)         :: lambda
+DOUBLE PRECISION, INTENT(IN)             :: dw
+DOUBLE PRECISION, INTENT(IN)             :: ddw
+DOUBLE PRECISION, INTENT(IN)             :: m(ndi)
+DOUBLE PRECISION, INTENT(IN)             :: rw
+
+
+
+INTEGER :: i1,j1,k1,l1
+
+DOUBLE PRECISION :: aux, aux0
+
+aux0=ddw-(lambda**(-one))*dw
+aux=rho*aux0*rw*(lambda**(-two))
+DO i1=1,ndi
+  DO j1=1,ndi
+    DO k1=1,ndi
+      DO l1=1,ndi
+        cfic(i1,j1,k1,l1)=aux*m(i1)*m(j1)*m(k1)*m(l1)
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE csfilfic
 SUBROUTINE deffil(lambda,m,m0,f,ndi)
 
 
@@ -114,171 +465,121 @@ lambda=SQRT(lambda)
 
 RETURN
 END SUBROUTINE deffil
-SUBROUTINE contraction22(aux,lt,rt,ndi)
-!>       DOUBLE CONTRACTION BETWEEN 2nd ORDER AND 2ND ORDER  TENSOR
-!>      INPUT:
-!>       LT - RIGHT 2ND ORDER TENSOR
-!>       RT - LEFT  2nd ODER TENSOR
-!>      OUTPUT:
-!>       aux - DOUBLE CONTRACTED TENSOR (scalar)
+SUBROUTINE deformation(f,c,b,ndi)
+
+
+
+!>     RIGHT AND LEFT CAUCHY-GREEN DEFORMATION TENSORS
 use global
 IMPLICIT NONE
 
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(IN)             :: lt(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rt(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: aux
+INTEGER, INTENT(IN OUT)                  :: ndi
+DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: c(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: b(ndi,ndi)
+
+
+!     RIGHT CAUCHY-GREEN DEFORMATION TENSOR
+c=matmul(transpose(f),f)
+!     LEFT CAUCHY-GREEN DEFORMATION TENSOR
+b=matmul(f,transpose(f))
+RETURN
+END SUBROUTINE deformation
+! SUBROUTINE erfi(erf,b,nterm) (original)
+SUBROUTINE erfi(erf,b)
+
+
+!>    IMAGINARY ERROR FUNCTION OF SQRT(B); B IS THE DISPERSION PARAM
+use global
+IMPLICIT NONE
+
+DOUBLE PRECISION, INTENT(OUT)            :: erf
+DOUBLE PRECISION, INTENT(IN OUT)         :: b
+! INTEGER, INTENT(IN)                      :: nterm (original)
+
+
+DOUBLE PRECISION :: pi
+DOUBLE PRECISION :: aux,aux1,aux2,aux3,aux4,fact
 INTEGER :: i1,j1
 
-
-    aux=zero
-    DO i1=1,ndi
-      DO j1=1,ndi
-        aux=aux+lt(i1,j1)*rt(j1,i1)
-      END DO
-    END DO
-RETURN
-END SUBROUTINE contraction22
-SUBROUTINE vol(ssev,pv,ppv,k,det,Jc)
-
-! Code converted using TO_F90 by Alan Miller
-! Date: 2020-12-12  Time: 12:08:12
-
-!>     VOLUMETRIC CONTRIBUTION :STRAIN ENERGY FUNCTION AND DERIVATIVES
-use global
-implicit none
-
-
-DOUBLE PRECISION :: Je
-DOUBLE PRECISION, INTENT(OUT)            :: ssev
-DOUBLE PRECISION, INTENT(OUT)            :: pv
-DOUBLE PRECISION, INTENT(OUT)            :: ppv
-DOUBLE PRECISION, INTENT(IN)             :: k
-DOUBLE PRECISION, INTENT(IN)             :: det
-DOUBLE PRECISION, INTENT(IN)             :: Jc
-
-Je = det / Jc
-
-! Volumetric Strain Energy: Psi_vol = 0.5 * K * (ln(Je))^2
-SSEV = 0.5D0 * k * (DLOG(Je))**2
-
-! Cauchy Pressure: PV = (K * ln(Je)) / J
-PV = (k * DLOG(Je)) / det
-
-! Tangent Modulus Term (p + J*dp/dJ): PPV = K / J
-PPV = k / det
-
-RETURN
-END SUBROUTINE vol
-SUBROUTINE fslip(f,fbar,det,ndi)
-
-
-
-!>     DISTORTION GRADIENT
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(IN)             :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: fbar(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: det
-
-
-INTEGER :: i1,j1
-
-DOUBLE PRECISION :: scale1
-
-!     JACOBIAN DETERMINANT/VOLUME RATIO (J = det(F))
-det = f(1,1) * f(2,2) * f(3,3) - f(1,2) * f(2,1) * f(3,3)
-
-IF (ndi == 3) THEN
-  det = det + f(1,2) * f(2,3) * f(3,1) + f(1,3) * f(3,2) * f(2,1)  &
-      - f(1,3) * f(3,1) * f(2,2) - f(2,3) * f(3,2) * f(1,1)
-END IF
-
-scale1=det**(-one /three)
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    fbar(i1,j1)=scale1*f(i1,j1)
-  END DO
+pi=four*ATAN(one)
+aux=SQRT(two*b)
+aux1=two*aux
+aux2=(two/three)*(aux**three)
+aux4=zero
+DO j1=3,nterm
+  i1=j1-1
+  CALL factorial (fact,i1)
+  aux3=two*j1-one
+  aux4=aux4+(aux**aux3)/(half*aux3*fact)
 END DO
 
+erf=pi**(-one/two)*(aux1+aux2+aux4)
 RETURN
-END SUBROUTINE fslip
-SUBROUTINE projlag(c,aa,pl,ndi)
+END SUBROUTINE erfi
+SUBROUTINE evalg(g,f,lambda,lambda0,l,r0,mu0,beta,b0)
 
 
 
-!>    LAGRANGIAN PROJECTION TENSOR
-!      INPUTS:
-!          IDENTITY TENSORS - A, AA
-!          ISOCHORIC LEFT CAUCHY GREEN TENSOR - C
-!          INVERSE OF C - CINV
-!      OUTPUTS:
-!          4TH ORDER SYMMETRIC LAGRANGIAN PROJECTION TENSOR - PL
+!>     ESTABLISHMENT OF G(F)=LHS-RHS(F) THAT RELATES
+!>       STRETCHFORCE RELATIONSHIP OF A SINGLE EXNTESIBLE FILAMENT
 use global
 IMPLICIT NONE
 
-INTEGER, INTENT(IN OUT)                      :: ndi
-DOUBLE PRECISION, INTENT(IN)             :: c(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: aa(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: pl(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: g
+DOUBLE PRECISION, INTENT(IN)             :: f
+DOUBLE PRECISION, INTENT(IN)             :: lambda
+DOUBLE PRECISION, INTENT(IN)             :: lambda0
+DOUBLE PRECISION, INTENT(IN)             :: l
+DOUBLE PRECISION, INTENT(IN)             :: r0
+DOUBLE PRECISION, INTENT(IN)             :: mu0
+DOUBLE PRECISION, INTENT(IN OUT)         :: beta
+DOUBLE PRECISION, INTENT(IN OUT)         :: b0
 
-
-
-INTEGER :: i,j,k,l
-
-DOUBLE PRECISION :: cinv(ndi,ndi)
-
-CALL matinv3d(c,cinv,ndi)
-
-DO i=1,ndi
-  DO j=1,ndi
-    DO k=1,ndi
-      DO l=1,ndi
-        pl(i,j,k,l)=aa(i,j,k,l)-(one/three)*(cinv(i,j)*c(k,l))
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE projlag
-SUBROUTINE evalh(h,cb0,cabp,cfmax,cbmax,chi,Keq)
-
-
-
-!>     ESTABLISHMENT OF H(F)=LHS-RHS(F) THAT RELATES
-!>       KEQ - CB0 RELATIONSHIP OF A SINGLE EXNTESIBLE FILAMENT
-use global
-IMPLICIT NONE
-
-DOUBLE PRECISION, INTENT(OUT)            :: h
-DOUBLE PRECISION, INTENT(IN)             :: cb0
-DOUBLE PRECISION, INTENT(IN)             :: Keq
-DOUBLE PRECISION, INTENT(IN)             :: cabp
-DOUBLE PRECISION, INTENT(IN)             :: cfmax
-DOUBLE PRECISION, INTENT(IN)             :: cbmax
-DOUBLE PRECISION, INTENT(IN)             :: chi
 
 DOUBLE PRECISION :: lhs,rhs
 
 
-DOUBLE PRECISION :: aux0,aux1,aux2,aux3,aux4
+DOUBLE PRECISION :: aux0,aux1,aux,aux2,aux3,aux4,pi
 
-aux0 = cabp - cb0
-aux1 = aux0 / cfmax
-aux2 = 1.0d0 - aux1
-aux3 = exp(- chi * (1.0d0 - 2.0d0 * aux1))
-    
-rhs = cb0 * aux2 * aux3
-lhs = Keq * aux0 * (1.0d0 - cb0 / cbmax)
+pi=four*ATAN(one)
+aux0=one-r0/l
+aux1=l*l*((pi*pi*b0)**(-one))
+aux=f/mu0
+aux2=one+aux
+aux3=one+two*aux
+aux4=one+f*aux1+f*aux*aux1
 
-h = lhs-rhs
+rhs=one+aux-aux0*(aux2**beta)*aux3*(aux4**(-beta))
+lhs=lambda*lambda0*r0*(l**(-one))
+
+g=lhs-rhs
 
 RETURN
-END SUBROUTINE evalh
+END SUBROUTINE evalg
+SUBROUTINE factorial(fact,term)
+
+
+
+!>    FACTORIAL
+use global
+IMPLICIT NONE
+
+DOUBLE PRECISION, INTENT(OUT)            :: fact
+INTEGER, INTENT(IN)                      :: term
+
+
+
+INTEGER :: m
+
+fact = 1
+
+DO  m = 1, term
+  fact = fact * m
+END DO
+
+RETURN
+END SUBROUTINE factorial
 subroutine filpce(q0, force, dw, ddw)
 
     !!! Don't forget to apply exponential scaling to outputs !!!
@@ -393,1207 +694,68 @@ subroutine filpce(q0, force, dw, ddw)
     ! write(*,*) "lambda, Force: ", q0, force
 end subroutine filpce
 
-SUBROUTINE density(rho,ang,bb,erfi)
+SUBROUTINE fslip(f,fbar,det,ndi)
 
 
 
-!>    SINGLE FILAMENT: DENSITY FUNCTION VALUE
-use global
-IMPLICIT NONE
-
-DOUBLE PRECISION, INTENT(OUT)            :: rho
-DOUBLE PRECISION, INTENT(IN OUT)         :: ang
-DOUBLE PRECISION, INTENT(IN OUT)         :: bb
-DOUBLE PRECISION, INTENT(IN OUT)         :: erfi
-
-
-
-DOUBLE PRECISION :: pi,aux1,aux2
-
-pi=four*ATAN(one)
-aux1=SQRT(bb/(two*pi))
-aux2=DEXP(bb*(COS(two*ang)+one))
-rho=four*aux1*aux2*(erfi**(-one))
-! RHO=RHO*((FOUR*PI)**(-ONE))
-! Normalization according to Li et al. 2018 (equations 2.7-2.8)
-rho = rho*((two*pi)**(-one))
-
-RETURN
-END SUBROUTINE density
-SUBROUTINE sliding(ffc,ru,ffc0,ru0,ffcmax,fric,frac,dtime)
-
-use global
-implicit none
-
-DOUBLE PRECISION, INTENT(OUT)            :: ffc
-DOUBLE PRECISION, INTENT(OUT)            :: ru
-DOUBLE PRECISION, INTENT(IN)             :: ffc0
-DOUBLE PRECISION, INTENT(IN OUT)         :: ru0
-DOUBLE PRECISION, INTENT(IN)             :: ffcmax
-DOUBLE PRECISION, INTENT(IN)         :: fric
-DOUBLE PRECISION, INTENT(IN)             :: frac(4)
-DOUBLE PRECISION, INTENT(IN)             :: dtime
-
-
-
-
-
-DOUBLE PRECISION :: aux0,aux1,aux2, arg
-!      INTEGER STATE
-
-aux1=frac(3)
-aux0=aux1+frac(4)
-aux2=aux0
-arg=ffc0/ffcmax
-
-IF(arg < aux1) THEN
-  ffc=aux1*ffcmax
-ELSE IF (arg > aux2)THEN
-  ffc=aux2*ffcmax
-ELSE
-  ffc=ffc0
-END IF
-
-ru=ru0+dtime*(fric**(-one))*(ffc-ffc0)
-ru0=ru
-
-RETURN
-
-END SUBROUTINE sliding
-! SUBROUTINE affclnetfic_discrete(sfic,cfic,f,filprops,affprops,  &
-!           efi,noel,det,prefdir,ndi) ! (original)
-
-SUBROUTINE affclnetfic_discrete(sfic,cfic,f,filprops,affprops,  &
-  efi,noel,det,prefdir,ndi,cb,dtime,cfmax,cbmax,chi,Keq,Koff0, &
-  thetaf, cbtau_tot)
-
-
-
-!>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
-!> DISCRETE ANGULAR INTEGRATION SCHEME (icosahedron)
+!>     DISTORTION GRADIENT
 use global
 IMPLICIT NONE
 
 INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: filprops(10)
-DOUBLE PRECISION, INTENT(IN)             :: affprops(5)
-DOUBLE PRECISION, INTENT(IN OUT)         :: efi
-INTEGER, INTENT(IN OUT)                  :: noel
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
+DOUBLE PRECISION, INTENT(IN)             :: f(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: fbar(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: det
 
-DOUBLE PRECISION, INTENT(IN)             :: dtime
-DOUBLE PRECISION, INTENT(IN)             :: cfmax
-DOUBLE PRECISION, INTENT(IN)             :: cbmax
-DOUBLE PRECISION, INTENT(IN)             :: CHI
-DOUBLE PRECISION, INTENT(IN)             :: Keq
-DOUBLE PRECISION, INTENT(IN)             :: Koff0
-DOUBLE PRECISION, INTENT(IN)             :: thetaf
-DOUBLE PRECISION, INTENT(OUT)            :: cbtau_tot
-DOUBLE PRECISION, INTENT(IN OUT)         :: cb(ndir)
 
-INTEGER :: i1,j1,k1,l1,m1, im1, isub, n_sub
-INTEGER, PARAMETER :: nargs = 16
-DOUBLE PRECISION :: args(nargs)
-DOUBLE PRECISION :: sfilfic(ndi,ndi), cfilfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
-DOUBLE PRECISION :: aux,lambdai,dwi,ddwi,rwi,lambdaic
-DOUBLE PRECISION :: l,Lp,r0f,r0,mu0str,b0,beta,lambda0,lambda0f,rho,n,fi,ffi,aratio
-DOUBLE PRECISION :: r0c,etac,lambdaif
-DOUBLE PRECISION :: bdisp,ang, frac(4)
-DOUBLE PRECISION :: prefdir(nelem,4), pd(3),lambda_pref,prefdir0(3)
-DOUBLE PRECISION :: dx,kb,theta,na
-DOUBLE PRECISION :: cactin, Mactin, rhoactin
-DOUBLE PRECISION :: cbt_i, cbtau_i, thetab_i, Kon, Koff_i, R_i, dtime_sub, cb_sub
-INTEGER :: iter
-DOUBLE PRECISION :: cb_new, Res, cb_pert, dcb, r0f_p, l_p, r0_p
-DOUBLE PRECISION :: dummy_DfDcb
-
-
-! INTEGRATION SCHEME
-  integer, parameter :: nfacedir = 2
-  integer ( kind = 4 ) ifacedir
-  integer :: f3_start(nfacedir), f3_end(nfacedir), f2_start(nfacedir)
-  integer, dimension(3, nfacedir) :: off_a, off_b, off_c
-  integer ( kind = 4 ) a, b, c
-  real ( kind = 8 ) a_xyz(3), b_xyz(3), c_xyz(3)
-  real ( kind = 8 ) a2_xyz(3), b2_xyz(3), c2_xyz(3)
-  real ( kind = 8 ) area_total, ai !area of triangle i
-  integer ( kind = 4 ), allocatable, dimension ( :, : ) :: edge_point
-  integer ( kind = 4 ) f1, f2, f3
-  integer ( kind = 4 ) face, face_num, face_order_max, node_num, edge_num, point_num
-  integer ( kind = 4 ), allocatable, dimension ( : ) :: face_order
-  integer ( kind = 4 ), allocatable, dimension ( :, : ) :: face_point
-  real ( kind = 8 ) node_xyz(3)
-  real ( kind = 8 ), parameter :: pi = 3.141592653589793D+00
-  real ( kind = 8 ), allocatable, dimension ( :, : ) :: point_coord
-  real ( kind = 8 ) rr, aa, v
-
-
-
-!  Size the icosahedron.
-!
-  call icos_size ( point_num, edge_num, face_num, face_order_max )
-!
-!  Set the icosahedron.
-!
-  allocate ( point_coord(1:3,1:point_num) )
-  allocate ( edge_point(1:2,1:edge_num) )
-  allocate ( face_order(1:face_num) )
-  allocate ( face_point(1:face_order_max,1:face_num) )
-
-  call icos_shape ( point_num, edge_num, face_num, face_order_max, &
-    point_coord, edge_point, face_order, face_point )
-!
-!  Set aux variables for the integration scheme 
-!
-f3_start(1) = 1; f3_end(1) = 3 * factor - 2
-f2_start(1) = 1
-f3_start(2) = 2; f3_end(2) = 3 * factor - 4
-f2_start(2) = 2
-off_a(:,1) = [2, -1, -1];  off_b(:,1) = [-1, 2, -1];  off_c(:,1) = [-1, -1, 2]
-off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
-!
-!  Initialize the integral data.
-!
-  rr = 0.0D+00
-  area_total = 0.0D+00
-  node_num = 0
-
-!! initialize the model data
-  !     FILAMENT
-  aratio   = filprops(1)
-  r0c      = filprops(2)
-  etac     = filprops(3)
-  mu0str   = filprops(4)
-  beta     = filprops(5)
-  Lp       = filprops(6)
-  theta    = filprops(7)
-  dx       = filprops(8)
-  kb       = filprops(9)
-  NA       = filprops(10)
-  b0       = Lp * theta * kb
-  !     NETWORK
-  bdisp    = affprops(1)
-  lambda0  = affprops(2)                                                                                                                                                           
-  cactin   = affprops(3)                                                                                              
-  Mactin   = affprops(4)                                                                                            
-  rhoactin = affprops(5)  
-  
-    ! aux=n*(det**(-one))
-    cfic=zero
-    sfic=zero
-  
-    ! rho=one
-    r0=r0f+r0c
-  
-    aa = zero
-
-    cbtau_tot = zero
-!----------------------------------------------------------------------
-  
-  ! preferred direction measures (macroscale measures)
-  ! prefdir0=prefdir(noel,2:4)
-  ! Currently assuming all elements have the same preferential direction
-  prefdir0=prefdir(1,2:4)
-  !calculate preferred direction in the deformed configuration
-  CALL deffil(lambda_pref,pd,prefdir0,f,ndi)
-  !update preferential direction - deformed configuration
-  pd=pd/dsqrt(dot_product(pd,pd))
-
-!  Pick a face of the icosahedron, and identify its vertices as A, B, C.
-!
-! Integrate only one hemisphere of the icosahedron (faces 1 to 10) 
-! Remember to multiply each direction's contribution by 2 to account for the other hemisphere
-do face = 1, face_num/2
-!
-    a = face_point(1,face)
-    b = face_point(2,face)
-    c = face_point(3,face)
-!
-    a_xyz(1:3) = point_coord(1:3,a)
-    b_xyz(1:3) = point_coord(1:3,b)
-    c_xyz(1:3) = point_coord(1:3,c)
-!
-!  Some subtriangles will have the same direction as the face.
-!  Generate each in turn, by determining the barycentric coordinates
-!  of the centroid (F1,F2,F3), from which we can also work out the barycentric
-!  coordinates of the vertices of the subtriangle.
-!
-  do ifacedir = 1, nfacedir
-    do f3 = f3_start(ifacedir), f3_end(ifacedir), 3
-      do f2 = f2_start(ifacedir), 3 * factor - f3 - ifacedir, 3
-
-        f1 = 3 * factor - f3 - f2
-
-        node_num = node_num + 1
-
-        call sphere01_triangle_project ( a_xyz, b_xyz, c_xyz, f1, f2, f3, &
-          node_xyz )
-
-        call sphere01_triangle_project ( &
-          a_xyz, b_xyz, c_xyz, f1 + off_a(1,ifacedir), f2 + off_a(2,ifacedir), f3 + off_a(3,ifacedir), a2_xyz )
-        call sphere01_triangle_project ( &
-          a_xyz, b_xyz, c_xyz, f1 + off_b(1,ifacedir), f2 + off_b(2,ifacedir), f3 + off_b(3,ifacedir), b2_xyz )
-        call sphere01_triangle_project ( &
-          a_xyz, b_xyz, c_xyz, f1 + off_c(1,ifacedir), f2 + off_c(2,ifacedir), f3 + off_c(3,ifacedir), c2_xyz )
-
-        call sphere01_triangle_vertices_to_area ( a2_xyz, b2_xyz, c2_xyz, ai )
-        
-        !direction of the sphere triangle barycenter - direction i
-        mf0i=node_xyz
-        CALL deffil(lambdai,mfi,mf0i,f,ndi)
-        
-        CALL bangle(ang,f,mfi,noel,pd,ndi)
-        
-        CALL density(rho,ang,bdisp,efi)
-        
-        fi = zero
-        dummy_DfDcb = zero
-
-          ! ================= KINETICS (IMPLICIT NEWTON-RAPHSON) =================
-        cbt_i = MAX(cb(node_num), 1.0d-10)
-        cbtau_i = cbt_i  ! Initial guess is the old state
-        kon = Koff0 * Keq * exp(CHI * (1.0d0 - 2.0d0 * thetaf))
-
-        args(1)  = lambdai
-        args(2)  = lambda0
-        args(3)  = aratio
-        args(4)  = etac
-        args(5)  = mu0str
-        args(6)  = beta
-        args(7)  = b0
-        args(8)  = r0c
-        args(9)  = cbmax
-        args(10) = cfmax
-        args(11) = dx / (kb * theta)
-        args(12) = dtime
-        args(13) = kon
-        args(14) = Koff0
-        args(15) = thetaf
-        args(16) = cbt_i
-
-        CALL solveKinetics(cbtau_i, args, nargs, cbt_i)
-
-        cb(node_num) = cbtau_i
-        ! FINAL STATE UPDATE
-        r0f = 1.6 * (1.0d3 * cb(node_num))**(-two/5.0d0)
-        l = aratio * r0f
-        r0 = r0f + r0c
-        n = l**(-1) * (cactin * NA * Mactin / rhoactin)
-        aux = n * (det**(-one))
-
-        IF((etac > zero).AND.(etac .LE. one)) THEN
-          lambdaif = etac*(r0/r0f)*(lambdai-one)+one
-          lambda0f = etac*(r0/r0f)*(lambda0-one)+one
-        ELSE
-          lambdaif = lambdai 
-        END IF
-
-        fi = zero
-        IF(lambdai .GE. 1.0d0) THEN 
-          CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),dummy_DfDcb)
-          CALL sigfilfic(sfilfic,rho,lambdai,dwi,mfi,ai,ndi)
-          CALL csfilfic(cfilfic,rho,lambdai,dwi,ddwi,mfi,ai,ndi)
-
-          DO j1=1,ndi
-            DO k1=1,ndi
-                sfic(j1,k1) = sfic(j1,k1) + aux*sfilfic(j1,k1)
-                DO l1=1,ndi
-                  DO m1=1,ndi
-                    cfic(j1,k1,l1,m1) = cfic(j1,k1,l1,m1) + aux*cfilfic(j1,k1,l1,m1)
-                  END DO
-                END DO
-            END DO
-          END DO
-        END IF 
-         
-        ! Update total bound CL concentration for this integration point                                                       
-        cbtau_tot = cbtau_tot + cb(node_num) * rho * ai
-        ! ==============================================================   
-
-        !v=dwi
-        !rr = rr + ai * v
-        !area_total = area_total + ai
-
-      end do
-    end do
-  end do
-  end do
-!
-!  Discard allocated memory.
-!
-  deallocate ( edge_point )
-  deallocate ( face_order )
-  deallocate ( face_point )
-  deallocate ( point_coord )
-
-RETURN
-END SUBROUTINE affclnetfic_discrete
-!****************************************************************************
-
-
-
-!     Utility subroutines
-!****************************************************************************
-!***************************************************************************
-
-SUBROUTINE matinv3dd(a,a_inv,det_a,istat)
-!
-! Returns A_inv, the inverse and det_A, the determinant
-! Note that the det is of the original matrix, not the
-! inverse
-!
-use global
-
-real(8), INTENT(IN)                       :: a(3,3)
-real(8), INTENT(OUT)                      :: a_inv(3,3)
-real(8), INTENT(OUT)                      :: det_a
-INTEGER, INTENT(OUT)                     :: istat
-
-!
-
-!
-real(8)  det_a_inv
-!
-istat = 1
-
-det_a = a(1,1)*(a(2,2)*a(3,3) - a(3,2)*a(2,3)) -  &
-    a(2,1)*(a(1,2)*a(3,3) - a(3,2)*a(1,3)) +  &
-    a(3,1)*(a(1,2)*a(2,3) - a(2,2)*a(1,3))
-
-IF (det_a <= 0.d0) THEN
-  WRITE(*,*) 'WARNING: subroutine matInv3Dd:'
-  WRITE(*,*) 'WARNING: det of mat=',det_a
-  istat = 0
-  RETURN
-END IF
-!
-det_a_inv = 1.d0/det_a
-!
-a_inv(1,1) = det_a_inv*(a(2,2)*a(3,3)-a(3,2)*a(2,3))
-a_inv(1,2) = det_a_inv*(a(3,2)*a(1,3)-a(1,2)*a(3,3))
-a_inv(1,3) = det_a_inv*(a(1,2)*a(2,3)-a(2,2)*a(1,3))
-a_inv(2,1) = det_a_inv*(a(3,1)*a(2,3)-a(2,1)*a(3,3))
-a_inv(2,2) = det_a_inv*(a(1,1)*a(3,3)-a(3,1)*a(1,3))
-a_inv(2,3) = det_a_inv*(a(2,1)*a(1,3)-a(1,1)*a(2,3))
-a_inv(3,1) = det_a_inv*(a(2,1)*a(3,2)-a(3,1)*a(2,2))
-a_inv(3,2) = det_a_inv*(a(3,1)*a(1,2)-a(1,1)*a(3,2))
-a_inv(3,3) = det_a_inv*(a(1,1)*a(2,2)-a(2,1)*a(1,2))
-!
-RETURN
-END SUBROUTINE matinv3dd
-!!!
-
-SUBROUTINE matinv2d(a,a_inv,det_a,istat)
-!
-! Returns A_inv, the inverse, and det_A, the determinant
-! Note that the det is of the original matrix, not the
-! inverse
-!
-use global
-
-real(8), INTENT(IN)                       :: a(2,2)
-real(8), INTENT(OUT)                      :: a_inv(2,2)
-real(8), INTENT(OUT)                      :: det_a
-INTEGER, INTENT(OUT)                     :: istat
-
-!
-
-!
-real(8)  det_a_inv
-
-
-istat = 1
-
-det_a = a(1,1)*a(2,2) - a(1,2)*a(2,1)
-
-IF (det_a <= 0.d0) THEN
-  WRITE(*,*) 'WARNING: subroutine matInv2D:'
-  WRITE(*,*) 'WARNING: det of mat=',det_a
-  istat = 0
-  RETURN
-END IF
-
-det_a_inv = 1.d0/det_a
-
-a_inv(1,1) =  det_a_inv*a(2,2)
-a_inv(1,2) = -det_a_inv*a(1,2)
-a_inv(2,1) = -det_a_inv*a(2,1)
-a_inv(2,2) =  det_a_inv*a(1,1)
-
-
-RETURN
-END SUBROUTINE matinv2d
-
-!****************************************************************************
-
-SUBROUTINE mdet(a,det)
-!
-! This subroutine calculates the determinant
-! of a 3 by 3 matrix [A]
-!
-use global
-
-real(8), INTENT(IN)                       :: a(3,3)
-real(8), INTENT(OUT)                      :: det
-
-!
-
-
-
-det = a(1,1)*a(2,2)*a(3,3) + a(1,2)*a(2,3)*a(3,1)  &
-    + a(1,3)*a(2,1)*a(3,2) - a(3,1)*a(2,2)*a(1,3)  &
-    - a(3,2)*a(2,3)*a(1,1) - a(3,3)*a(2,1)*a(1,2)
-
-
-RETURN
-END SUBROUTINE mdet
-
-!****************************************************************************
-
-SUBROUTINE onem0(a)
-!
-! This subroutine stores the identity matrix in the
-! 3 by 3 matrix [A]
-!
-use global
-
-real(8), INTENT(OUT)                      :: a(3,3)
-
-!
-INTEGER :: i,j
-!
-
-
-
-DO i=1,3
-  DO j=1,3
-    IF (i == j) THEN
-      a(i,j) = 1.0
-    ELSE
-      a(i,j) = 0.0
-    END IF
-  END DO
-END DO
-
-
-RETURN
-END SUBROUTINE onem0
-!***************************************************************************
-SUBROUTINE invariants(a,inv1,inv2,ndi)
-
-
-
-!>    1ST AND 2ND INVARIANTS OF A TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(IN)             :: a(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: inv1
-DOUBLE PRECISION, INTENT(OUT)            :: inv2
-
-
-
-INTEGER :: i1
-DOUBLE PRECISION :: aa(ndi,ndi)
-DOUBLE PRECISION :: inv1aa
-
-inv1=zero
-inv1aa=zero
-aa=matmul(a,a)
-DO i1=1,ndi
-  inv1=inv1+a(i1,i1)
-  inv1aa=inv1aa+aa(i1,i1)
-END DO
-inv2=(one/two)*(inv1*inv1-inv1aa)
-
-RETURN
-END SUBROUTINE invariants
-SUBROUTINE chemicalstat(frac,frac0,k,dtime)
-
-
-use global
-IMPLICIT NONE
-
-DOUBLE PRECISION, INTENT(OUT)            :: frac(4)
-DOUBLE PRECISION, INTENT(IN)             :: frac0(4)
-DOUBLE PRECISION, INTENT(IN)             :: k(7)
-DOUBLE PRECISION, INTENT(IN)             :: dtime
-
-
-DOUBLE PRECISION :: stiff(4,4)
-
-DOUBLE PRECISION :: aux
 INTEGER :: i1,j1
 
-frac=zero
-stiff=zero
-stiff(1,1)=-k(1)
-stiff(1,2)=k(2)
-stiff(1,4)=k(7)
-stiff(2,1)=k(1)
-stiff(2,2)=-k(2)-k(3)
-stiff(2,3)=k(4)
-stiff(3,2)=k(3)
-stiff(3,3)=-k(4)-k(5)
-stiff(3,4)=k(6)
-stiff(4,3)=k(5)
-stiff(4,4)=-k(6)-k(7)
+DOUBLE PRECISION :: scale1
 
-DO i1=1,4
-  aux=zero
-  DO j1=1,4
-    aux=aux+stiff(i1,j1)*frac0(j1)
-  END DO
-  frac(i1)=aux*dtime+frac0(i1)
-END DO
+!     JACOBIAN DETERMINANT/VOLUME RATIO (J = det(F))
+det = f(1,1) * f(2,2) * f(3,3) - f(1,2) * f(2,1) * f(3,3)
 
-!      FRAC0=FRAC
+IF (ndi == 3) THEN
+  det = det + f(1,2) * f(2,3) * f(3,1) + f(1,3) * f(3,2) * f(2,1)  &
+      - f(1,3) * f(3,1) * f(2,2) - f(2,3) * f(3,2) * f(1,1)
+END IF
 
-RETURN
-END SUBROUTINE chemicalstat
-SUBROUTINE initialize(statev, thetaf_t, Vmol, cb0)
-use global
-IMPLICIT NONE
+scale1=det**(-one /three)
 
-!      DOUBLE PRECISION TIME(2),KSTEP
-INTEGER :: pos1, i
-DOUBLE PRECISION, INTENT(IN)             :: thetaf_t, Vmol, cb0
-DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
-
-
-pos1=1
-!     VOLUME FRACTION
-statev(pos1)=thetaf_t
-!       DETERMINANT
-statev(pos1+1)=one
-!      CL CONTENT
-statev(pos1+2) = (1.0d0 - thetaf_t) / (Vmol * thetaf_t)
-!      TOTAL CB
-statev(pos1+3) = cb0
-!       STRESSES and CL FLUX
-DO i = pos1+4, nsdv - ndir
-    statev(i)=zero
-END DO
-
-DO i = 1, ndir
-    statev(nsdv - ndir + i) = cb0 ! INITIAL CL CONCENTRATION
-END DO
-!        CONTRACTION VARIANCE
-!statev(pos1+2)=zero
-
-RETURN
-
-END SUBROUTINE initialize
-SUBROUTINE setvol(cvol,pv,ppv,unit2,unit4s,ndi)
-
-
-
-!>    VOLUMETRIC SPATIAL ELASTICITY TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: cvol(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: pv
-DOUBLE PRECISION, INTENT(IN OUT)         :: ppv
-DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: unit4s(ndi,ndi,ndi,ndi)
-
-
-INTEGER :: i1,j1,k1,l1
-
-
-
-DO i1 = 1, ndi
-  DO j1 = 1, ndi
-    DO k1 = 1, ndi
-      DO l1 = 1, ndi
-        cvol(i1,j1,k1,l1)= ppv*unit2(i1,j1)*unit2(k1,l1)  &
-            -two*pv*unit4s(i1,j1,k1,l1)
-      END DO
-    END DO
+DO i1=1,ndi
+  DO j1=1,ndi
+    fbar(i1,j1)=scale1*f(i1,j1)
   END DO
 END DO
 
 RETURN
-END SUBROUTINE setvol
-!>********************************************************************
-!> Record of revisions:                                              |
-!>        Date        Programmer        Description of change        |
-!>        ====        ==========        =====================        |
-!>                                                                   |
-!>--------------------------------------------------------------------
-!>     Description:
-!C>     UMAT: USER MATERIAL FOR THE FULL NETWORK MODEL.
-!C>                 AFFINE DEFORMATIONS
-!C>     UEXTERNALDB: READ FILAMENTS ORIENTATION AND PREFERED DIRECTION
-!>--------------------------------------------------------------------
-!>---------------------------------------------------------------------
+END SUBROUTINE fslip
+SUBROUTINE getprops_gp(noel, npt, etadir, etadir_array)
 
-! SUBROUTINE material(stress,statev,ddsdde,sse,spd,scd, rpl,ddsddt,drplde,drpldt,  &
-!     stran,dstran,time,dtime,temp,dtemp,predef,dpred,cmname,  &
-!     ndi,nshr,ntens,nstatev,props,nprops,coords,drot,pnewdt,  &
-!     celent,dfgrd0,dfgrd1,noel,npt,layer,kspt,kstep,kinc)
-
-    SUBROUTINE MATERIAL(SIGMA,STATEV,DDSIGDDE,DFGRD0,DFGRD1,DET, &
-    TIME,DTIME,PREDEF,NDI,NSHR,NTENS,NSTATEV,PROPS,NPROPS,COORDS, &
-    PNEWDT,NOEL,NPT,KSTEP,KINC,MU_TAU,THETAF_TAU,DTHETAFDT, &
-      DTHETAFDMU,RMACRO,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,CFMAX,DSIGDMU,SPCUMODFAC)
-!
-use global  
+use global
 IMPLICIT NONE
-!----------------------------------------------------------------------
-!--------------------------- DECLARATIONS -----------------------------
-!----------------------------------------------------------------------
-INTEGER :: NDI, NSHR, NTENS, NSTATEV, NPROPS, NOEL, NPT, &
-            LAYER, KSPT, KSTEP, KINC
 
-INTEGER, PARAMETER :: nargs = 10
+INTEGER, INTENT(IN)              :: noel, npt
+DOUBLE PRECISION, INTENT(IN)     :: etadir(nelem*ngp, ndir+2)
+DOUBLE PRECISION, INTENT(OUT)    :: etadir_array(ndir)
+INTEGER                          :: i, l, idx
 
-REAL(KIND=8) :: STRESS(NTENS), STATEV(NSTATEV), &
-                DDSDDE(NTENS,NTENS), DDSDDT(NTENS), DRPLDE(NTENS), &
-                STRAN(NTENS), DSTRAN(NTENS), TIME(2), PREDEF(1), DPRED(1), &
-                PROPS(NPROPS), COORDS(3), DROT(3,3), DFGRD0(3,3), DFGRD1(3,3), &
-                FIBORI(NELEM,4), ARGS(NARGS)
-
-REAL(8), INTENT(IN)      :: MU_TAU, DMUDX(3,1)
-! REAL(8), INTENT(OUT)     :: SPUCMOD(NDI,NDI), SPCUMODFAC(NDI,NDI)
-REAL(8), INTENT(OUT)     :: DSIGDMU(NDI,NDI), SPCUMODFAC(NDI,NDI)
-REAL(8), INTENT(OUT)     :: THETAF_TAU, DTHETAFDT, DTHETAFDMU, RMACRO! DPHIDMU, DPHIDOTDMU
-REAL(8), INTENT(OUT)     :: MFLUID, DMDMU, DMDJ, VMOL, CFMAX
-
-! cfmax can probably be defined at the element level
-REAL(8) :: THETAF_T
-! DIFFUSION VARIABLES
-REAL(8) :: CHI, D, MU0, RGAS
-REAL(8) :: PHI_PER, PHI_M, dPdt_per, dPdt_m, DELTAMU, JFLUID(3,1)
-REAL(8) :: DphiDJ, DmDphi
-
-REAL(KIND=8) :: SSE, SPD, SCD, RPL, DRPLDT, DTIME, TEMP, &
-                DTEMP, PNEWDT, CELENT
-
-COMMON /kfilp/prefdir
-COMMON /kfile/etadir
-DOUBLE PRECISION :: prefdir(nelem,4)
-DOUBLE PRECISION :: etadir(nelem*ngp, ndir+2)
-DOUBLE PRECISION :: etadir_array(ndir)
-
-!
-!     FLAGS
-!      INTEGER FLAG1
-!     UTILITY TENSORS
-DOUBLE PRECISION :: unit2(ndi,ndi),unit4(ndi,ndi,ndi,ndi),  &
-    unit4s(ndi,ndi,ndi,ndi), proje(ndi,ndi,ndi,ndi),projl(ndi,ndi,ndi,ndi)
-!     KINEMATICS
-DOUBLE PRECISION :: distgr(ndi,ndi),c(ndi,ndi),b(ndi,ndi),  &
-    cbar(ndi,ndi),bbar(ndi,ndi),distgrinv(ndi,ndi),  &
-    ubar(ndi,ndi),vbar(ndi,ndi),rot(ndi,ndi), dfgrd1inv(ndi,ndi)
-DOUBLE PRECISION :: det,detfe, detfs,cbari1,cbari2
-!     VOLUMETRIC CONTRIBUTION
-DOUBLE PRECISION :: pkvol(ndi,ndi),svol(ndi,ndi),  &
-    cvol(ndi,ndi,ndi,ndi),cmvol(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: k,pv,ppv,ssev
-!     ISOCHORIC CONTRIBUTION
-DOUBLE PRECISION :: siso(ndi,ndi),pkiso(ndi,ndi),pk2(ndi,ndi),  &
-    ciso(ndi,ndi,ndi,ndi),cmiso(ndi,ndi,ndi,ndi),  &
-    sfic(ndi,ndi),cfic(ndi,ndi,ndi,ndi), pkfic(ndi,ndi),cmfic(ndi,ndi,ndi,ndi)
-!     ISOCHORIC ISOTROPIC CONTRIBUTION
-DOUBLE PRECISION :: c10,c01,sseiso,diso(5),pkmatfic(ndi,ndi),  &
-    smatfic(ndi,ndi),sisomatfic(ndi,ndi), cmisomatfic(ndi,ndi,ndi,ndi),  &
-    cisomatfic(ndi,ndi,ndi,ndi)
-!     FILAMENTS NETWORK CONTRIBUTION
-DOUBLE PRECISION :: filprops(10), affprops(5) ! affprops(6)
-DOUBLE PRECISION :: cactin,cabp,ll,lambda0,mu0str,beta,nn,b0,bb
-DOUBLE PRECISION :: phinet,r0,r0c,r0f,a,p,etac,na,mactin,rhoactin
-DOUBLE PRECISION :: pknetfic(ndi,ndi),cmnetfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: snetfic(ndi,ndi),cnetfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: pknetficaf(ndi,ndi),pknetficnaf(ndi,ndi)
-DOUBLE PRECISION :: snetficaf(ndi,ndi),snetficnaf(ndi,ndi)
-DOUBLE PRECISION :: cmnetficaf(ndi,ndi,ndi,ndi), cmnetficnaf(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: cnetficaf(ndi,ndi,ndi,ndi), cnetficnaf(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: efi, kb, dx, Lp, theta
-DOUBLE PRECISION :: R, Rfmax, Rbmax, Keq, Koff0, Kon0
-DOUBLE PRECISION :: cb(ndir), cb0, cbmax, thetab, thetaf0 !, cfmax
-DOUBLE PRECISION :: cb_tot, cb_tot_new, cf
-DOUBLE PRECISION :: cb_upper, machep, tol
-DOUBLE PRECISION :: Jc, f, df
-
-! INTEGER :: nterm,factor 
-!
-!     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)
-DOUBLE PRECISION :: cjr(ndi,ndi,ndi,ndi)
-!     CAUCHY STRESS AND ELASTICITY TENSOR
-DOUBLE PRECISION :: sigma(ndi,ndi),ddsigdde(ndi,ndi,ndi,ndi),  &
-    ddpkdde(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: stest(ndi,ndi), ctest(ndi,ndi,ndi,ndi)
-
-! DECLARATIONS FOR RANDOM GENERATION
-INTEGER (kind=4) :: seed1, seed2
-INTEGER (kind=4) :: test, test_num
-INTEGER (kind=4) :: l, i, idx
-CHARACTER(len=100) :: phrase
-!REAL(kind=4) , allocatable :: etac_array(:), array(:)
-DOUBLE PRECISION :: etac_sdv(nsdv-1)
-!REAL(kind=4) :: l_bound, h_bound
-REAL(kind=4) :: mean, sd
-
-INTEGER :: I1, J1, K1, L1
-
-
-!----------------------------------------------------------------------
-!-------------------------- INITIALIZATIONS ---------------------------
-!----------------------------------------------------------------------
-!     IDENTITY AND PROJECTION TENSORS
-unit2=zero
-unit4=zero
-unit4s=zero
-proje=zero
-projl=zero
-!     KINEMATICS
-distgr=zero
-c=zero
-b=zero
-cbar=zero
-bbar=zero
-ubar=zero
-vbar=zero
-rot=zero
-det=zero
-cbari1=zero
-cbari2=zero
-!     VOLUMETRIC
-pkvol=zero
-svol=zero
-cvol=zero
-k=zero
-pv=zero
-ppv=zero
-ssev=zero
-!     ISOCHORIC
-siso=zero
-pkiso=zero
-pk2=zero
-ciso=zero
-cfic=zero
-sfic=zero
-pkfic=zero
-!     ISOTROPIC
-c10=zero
-c01=zero
-sseiso=zero
-diso=zero
-pkmatfic=zero
-smatfic=zero
-sisomatfic=zero
-cmisomatfic=zero
-cisomatfic=zero
-!     FILAMENTS NETWORK
-snetfic=zero
-cnetfic=zero
-pknetfic=zero
-pknetficaf=zero
-pknetficnaf=zero
-snetficaf=zero
-snetficnaf=zero
-cmnetfic=zero
-cmnetficaf=zero
-cmnetficnaf=zero
-cnetficaf=zero
-cnetficnaf=zero
-!     JAUMANN RATE
-cjr=zero
-!     TOTAL CAUCHY STRESS AND ELASTICITY TENSORS
-sigma=zero
-ddsigdde=zero
-!     FLUID FLUX
-jfluid=zero
-!----------------------------------------------------------------------
-!------------------------ IDENTITY TENSORS ----------------------------
-!----------------------------------------------------------------------
-CALL onem(unit2,unit4,unit4s,ndi)
-!----------------------------------------------------------------------
-!------------------------ RANDOM GENERATION ---------------------------
-!----------------------------------------------------------------------
-
-!----------------------------------------------------------------------
-!------------------- MATERIAL CONSTANTS AND DATA ----------------------
-!----------------------------------------------------------------------
-!     VOLUMETRIC
-k        = props(1)
-!     ISOCHORIC ISOTROPIC
-c10      = props(2)
-c01      = props(3)
-phinet   = props(4)
-!     ACTIN/CROSSLINKERS
-a        = props(5)  ! Ratio between contour length and end-to-end distance
-r0c      = props(6)
-etac     = props(7)
-mu0str   = props(8)
-beta     = props(9)
-Lp       = props(10) ! Persistence length
-theta    = props(11) ! Absolute temperature
-dx       = props(12) ! CL reactive distance / bond length
-!     AFFINE NETWORK
-bb       = props(13)
-lambda0  = props(14)
-cactin   = props(15)
-R        = props(16) ! CL to actin ratio
-Rfmax    = props(17) ! Maximum free CL to actin ratio
-Rbmax   = props(18) ! Maximum bound CL to actin ratio
-!     SOLVENT
-CHI    = PROPS(19)
-D      = PROPS(20)
-MU0    = PROPS(21)
-VMOL   = PROPS(22)
-Koff0  = PROPS(23)
-Keq    = PROPS(24)
-
-!Other parameters (Check which of these will be actually needed in the UMAT and not only in the AFFCL subroutine)
-kb = 1.380649e-5      
-b0 = Lp * theta * kb
-rgas = 8.314462618
-Mactin = 42.0e-3       ! [MDa]
-rhoactin = 16.0        ! [MDa/microm]
-NA = 6.022e5           ! [1/amol]
-Kon0 = Koff0 * Keq
-
-filprops = (/a, r0c, etac, mu0str, beta, Lp, theta, dx, kb, NA/)
-affprops = (/bb, lambda0, cactin, Mactin, rhoactin/)
-
-! write(*,*) 'Inside the material routine!'
-! write(*,*) 'ELEM/GP: ', noel, npt
-
-!     CL CONCENTRATION
-!!! THIS NEEDS TO BE CHANGED AFTER DIFFUSION IS IMPLEMENTED IN UEL
-cabp = cactin*R  ! <-- Placeholder: Replace with true UEL cR later!
-! Maximum allowable CL concentration
-cfmax = Rfmax * cactin
-cbmax = Rbmax * cactin
-
-!        STATE VARIABLES AND CHEMICAL PARAMETERS
-! IF ((kinc <= 1).AND.(kstep == 1)) THEN
-IF (STATEV(1) == 0.0d0) THEN
-! Initial bound and free CL concentrations
-  cb_upper = MIN(cabp, cbmax)
-  machep = 2.22d-16
-  tol = 1.0d-12
-  write(*,*) 'Calling pullchem at t=0'
-  CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq)
-  thetaf0 = (cabp - cb0) / cfmax
-  CALL initialize(statev,thetaf0,vmol,cb0)
-END IF
-!        READ STATEV
-CALL sdvread(statev, thetaf_t, cb, cb_tot)
-!----------------------------------------------------------------------
-!---------------------------- KINEMATICS ------------------------------
-!----------------------------------------------------------------------
-!     DISTORTION GRADIENT
-CALL fslip(dfgrd1,distgr,det,ndi)
-!     INVERSE OF DEFORMATION GRADIENT
-CALL matinv3d(dfgrd1,dfgrd1inv,ndi)
-!     INVERSE OF DISTORTION GRADIENT
-CALL matinv3d(distgr,distgrinv,ndi)
-!     CAUCHY-GREEN DEFORMATION TENSORS
-CALL deformation(dfgrd1,c,b,ndi)
-CALL deformation(distgr,cbar,bbar,ndi)
-!     INVARIANTS OF DEVIATORIC DEFORMATION TENSORS
-CALL invariants(cbar,cbari1,cbari2,ndi)
-!     STRETCH TENSORS
-CALL stretch(cbar,bbar,ubar,vbar,ndi)
-!     ROTATION TENSORS
-CALL rotation(distgr,rot,ubar,ndi)
-!     DEVIATORIC PROJECTION TENSORS
-CALL projeul(unit2,unit4s,proje,ndi)
-
-CALL projlag(c,unit4,projl,ndi)
-!----------------------------------------------------------------------
-!---------------------- COUPLED DIFFUSION -----------------------------
-!----------------------------------------------------------------------
-
-!     1. Solve for current free crosslinker fraction (THETAF_TAU)
-      ARGS(1) = MU_TAU
-      ARGS(2) = MU0
-      ARGS(3) = RGAS
-      ARGS(4) = THETA
-      ARGS(5) = CHI
-      ARGS(6) = VMOL
-      ARGS(7) = K
-      ARGS(8) = DET
-      ARGS(9) = CB_TOT
-      ARGS(10) = CFMAX
-      ! write(*,*) 'ARGS = ', ARGS
-      CALL SOLVETHETAF(THETAF_TAU, ARGS, NARGS, THETAF_T)
-
-      cf = THETAF_TAU * cfmax
-      Jc = 1.0d0 + VMOL * (cb_tot + cf)
-
-      ! Evaluate tangent at converged root
-      CALL thetafFunc(THETAF_TAU, f, df, ARGS, NARGS)
-      DTHETAFDMU = one / (RGAS * THETA * df)
-
-      ! write(*,*) 'kinc = ', kinc
-      ! write(*,*) 'kstep = ', kstep
-      ! write(*,*) 'DTIME = ', DTIME
-
-      IF (DTIME > 1.0d-12) THEN
-        DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME            
-      ELSE
-        DTHETAFDT = 0.0d0
-      END IF
-
-
-      ! Fluid mobility and permeability
-      MFLUID = D * cf * (1.0d0 - THETAF_TAU)
-
-      ! Mobility tangents
-      DMDMU = D * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) * DTHETAFDMU
-      ! dm/dJ via Implicit Function Theorem on H(THETAF_TAU, mu, J) = 0:
-      !   dthetaf/dJ = (k*Vmol) / (RT * Jc * det * df)
-      !   dm/dJ = dm/dthetaf * dthetaf/dJ
-      DMDJ  = D * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) &
-            * (k * VMOL) / (RGAS * THETA * Jc * det * df)
-
-      ! Fluid flux vector (for visualization/SVARS)
-      jfluid = -MFLUID * DMUDX
-
-      
-!       DETFE = DET * PHI_TAU
-!       !     2. Time rate of swelling
-!       DPDT = (PHI_TAU - PHI_T) / DTIME
-      
-!       !     3. Analytical derivatives of PHI
-!       DPHIDMU = (ONE / (RGAS * THETA)) / &
-!       ( (ONE / (PHI_TAU - ONE)) + ONE + TWO * CHI * PHI_TAU &
-!       - ((VMOL * K) / (RGAS * THETA * PHI_TAU)) &
-!       + ((VMOL * K) / (RGAS * THETA * PHI_TAU)) * DLOG(DETFE) )
-      
-!       DPHIDJ  = ( ((VMOL * K) / (RGAS * THETA * DET)) &
-!       - ((VMOL * K) / (RGAS * THETA * DET)) * DLOG(DETFE) ) / &
-!       ( (ONE / (PHI_TAU - ONE)) + ONE + TWO * CHI * PHI_TAU &
-!       - ((VMOL * K) / (RGAS * THETA * PHI_TAU)) &
-!       + ((VMOL * K) / (RGAS * THETA * PHI_TAU)) * DLOG(DETFE) )
-      
-!       !     4. Numerical Perturbation for D(PHIDOT)/DMU
-!       IF (DABS(MU_TAU) > ONE) THEN
-!         DELTAMU = DABS(MU_TAU) * 1.D-8
-!       ELSE
-!         DELTAMU = 1.D-8
-!       END IF
-      
-!       ARGS(1) = MU_TAU + DELTAMU
-!       CALL SOLVEPHI(PHI_PER, ARGS, NARGS, PHI_T)
-!       DPDT_PER = (PHI_PER - PHI_T) / DTIME
-      
-!       ARGS(1) = MU_TAU - DELTAMU
-!       CALL SOLVEPHI(PHI_M, ARGS, NARGS, PHI_T)
-!       DPDT_M = (PHI_M - PHI_T) / DTIME
-      
-!       DPHIDOTDMU = (DPDT_PER - DPDT_M) / (TWO * DELTAMU)
-      
-!       !     5. Fluid mobility and permeability
-!       MFLUID = (D * (ONE / PHI_TAU - ONE)) / (DET * VMOL * RGAS * THETA)
-!       DMDPHI = -(D / (DET * VMOL * PHI_TAU * PHI_TAU * RGAS * THETA))
-!       DMDMU  = DMDPHI * DPHIDMU
-!       DMDJ   = DMDPHI * DPHIDJ
-
-!       !    6. Fluid flux vector (just for plotting)
-!       JFLUID = -MFLUID * DMUDX
-      
-!----------------------------------------------------------------------
-!--------------------- CONSTITUTIVE RELATIONS  ------------------------
-!----------------------------------------------------------------------
-!---- VOLUMETRIC ------------------------------------------------------
-!     STRAIN-ENERGY
-CALL vol(ssev,pv,ppv,k,det,Jc)
-
-!---- ISOCHORIC ISOTROPIC ---------------------------------------------
-IF (phinet < one) THEN
-!     STRAIN-ENERGY
-  CALL isomat(sseiso,diso,c10,c01,cbari1,cbari2)
-!     PK2 'FICTICIOUS' STRESS TENSOR
-  CALL pk2isomatfic(pkmatfic,diso,cbar,cbari1,unit2,ndi)
-!     CAUCHY 'FICTICIOUS' STRESS TENSOR
-  CALL sigisomatfic(sisomatfic,pkmatfic,distgr,det,ndi)
-!     'FICTICIOUS' MATERIAL ELASTICITY TENSOR
-  CALL cmatisomatfic(cmisomatfic,cbar,cbari1,cbari2, diso,unit2,unit4,det,ndi)
-!     'FICTICIOUS' SPATIAL ELASTICITY TENSOR
-  CALL csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
-  
-END IF
-!---- FILAMENTS NETWORK -----------------------------------------------
-!     IMAGINARY ERROR FUNCTION BASED ON DISPERSION PARAMETER
-CALL erfi(efi,bb)
-!     'FICTICIOUS' PK2 STRESS AND MATERIAL ELASTICITY TENSORS
-!------------ AFFINE NETWORK --------------
-IF (phinet > zero) THEN
-  write(*,*) 'Calling affclnetfic_discrete at t = ', time(1)
-  CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,filprops,  &
-      affprops,efi,noel,det,prefdir,ndi,cb,dtime,cfmax,cbmax,chi,Keq,Koff0, &
-      thetaf_tau, cb_tot_new)
-END IF
-
-! Macroscopic reaction source (homogenized binding rate)
-IF (DTIME > 1.0d-12) THEN
-  RMACRO = (cb_tot_new - cb_tot) / DTIME
+l = (noel-1)*NGP + npt
+IF ((etadir(l,1)==noel).AND.(etadir(l,2)==npt)) THEN
+  DO i = 1, ndir
+    etadir_array(i) = etadir(l,i+2)
+  END DO
 ELSE
-  RMACRO = 0.0d0
-END IF
-write(*,*) 'cb_tot = ', cb_tot
-write(*,*) 'cb_tot_new = ', cb_tot_new
-
-!      PKNETFIC=PKNETFICNAF+PKNETFICAF
-snetfic=snetficnaf+snetficaf
-!      CMNETFIC=CMNETFICNAF+CMNETFICAF
-cnetfic=cnetficnaf+cnetficaf
-!----------------------------------------------------------------------
-!     STRAIN-ENERGY
-SSE=SSEV+SSEISO
-!     PK2 'FICTICIOUS' STRESS
-pkfic=(one-phinet)*pkmatfic+pknetfic
-!     CAUCHY 'FICTICIOUS' STRESS
-sfic=(one-phinet)*sisomatfic+snetfic
-!     MATERIAL 'FICTICIOUS' ELASTICITY TENSOR
-cmfic=(one-phinet)*cmisomatfic+cmnetfic
-!     SPATIAL 'FICTICIOUS' ELASTICITY TENSOR
-cfic=(one-phinet)*cisomatfic+cnetfic
-!----------------------------------------------------------------------
-!-------------------------- STRESS MEASURES ---------------------------
-!----------------------------------------------------------------------
-!---- VOLUMETRIC ------------------------------------------------------
-!      PK2 STRESS
-! CALL pk2vol(pkvol,pv,c,ndi)
-CALL pk2vol(pkvol,pv,c,ndi,det)
-!      CAUCHY STRESS
-CALL sigvol(svol,pv,unit2,ndi)
-!---- ISOCHORIC -------------------------------------------------------
-!      PK2 STRESS
-CALL pk2iso(pkiso,pkfic,projl,det,ndi)
-!      CAUCHY STRESS
-CALL sigiso(siso,sfic,proje,ndi)
-!      ACTIVE CAUCHY STRESS
-!      CALL SIGISO(SACTISO,SNETFICAF,PROJE,NDI)
-
-!      CALL SPECTRAL(SACTISO,SACTVL,SACTVC)
-!---- VOLUMETRIC + ISOCHORIC ------------------------------------------
-!      PK2 STRESS
-pk2 = pkvol + pkiso
-!      CAUCHY STRESS
-sigma = svol + siso
-
-!----------------------------------------------------------------------
-!-------------------- MATERIAL ELASTICITY TENSOR ----------------------
-!----------------------------------------------------------------------
-
-!---- VOLUMETRIC ------------------------------------------------------
-
-!      CALL METVOL(CMVOL,C,PV,PPV,DET,NDI)
-
-!---- ISOCHORIC -------------------------------------------------------
-
-!      CALL METISO(CMISO,CMFIC,PROJL,PKISO,PKFIC,C,UNIT2,DET,NDI)
-
-!----------------------------------------------------------------------
-
-!      DDPKDDE=CMVOL+CMISO
-
-!----------------------------------------------------------------------
-!--------------------- SPATIAL ELASTICITY TENSOR ----------------------
-!----------------------------------------------------------------------
-
-!---- VOLUMETRIC ------------------------------------------------------
-
-CALL setvol(cvol,pv,ppv,unit2,unit4s,ndi)
-
-!---- ISOCHORIC -------------------------------------------------------
-
-CALL setiso(ciso,cfic,proje,siso,sfic,unit2,ndi)
-
-!-----JAUMMAN RATE ----------------------------------------------------
-
-CALL setjr(cjr,sigma,unit2,ndi)
-
-!----------------------------------------------------------------------
-
-!     ELASTICITY TENSOR
-ddsigdde=cvol+ciso ! +cjr
-
-!----------------------------------------------------------------------
-!------------------------- CROSS-COUPLINGS ----------------------------
-!----------------------------------------------------------------------
-!     DISPLACEMENT - CHEMICAL POTENTIAL MODULUS
-! DO I1 = 1, NDI
-!     DO J1 = 1, NDI
-!       ! Derivative of Cauchy stress with respect to phi
-!       SPUCMOD(I1,J1) = (K / (DETFE * PHI_TAU)) * UNIT2(I1,J1) * DPHIDMU
-!     END DO
-! END DO
-
-!     CHEMICAL POTENTIAL - DISPLACEMENT MODULUS
-DO I1 = 1, NDI
-    DO J1 = 1, NDI
-      ! Existing mobility term + dm/dJ contribution (via J * delta_il)
-      SPCUMODFAC(I1,J1) = (MFLUID + DMDJ * det) * UNIT2(I1,J1)
-    END DO
+  DO i = 1, NELEM*NGP
+    IF ((etadir(i,1)==noel).AND.(etadir(i,2)==npt)) THEN
+      idx = i
+      exit
+  END IF
 END DO
+END IF
 
-
-!     CAUCHY STRESS - CHEMICAL POTENTIAL MODULUS (dS / dMu)
-  DO I1 = 1, NDI
-      DO J1 = 1, NDI
-        DSIGDMU(I1,J1) = -((K * VMOL * CFMAX) / (DET * Jc)) * UNIT2(I1,J1) * DTHETAFDMU
-      END DO
-  END DO
-
-
-!----------------------------------------------------------------------
-!------------------------- INDEX ALLOCATION ---------------------------
-!----------------------------------------------------------------------
-!     VOIGT NOTATION  - FULLY SIMMETRY IMPOSED
-CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
-
-!----------------------------------------------------------------------
-!--------------------------- STATE VARIABLES --------------------------
-!----------------------------------------------------------------------
-!     DO K1 = 1, NTENS
-!      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(det,statev,stress,thetaf_tau,dmudx,Vmol,jfluid,cb,cb_tot_new)
-! CALL sdvwrite(det,etac_sdv,statev)
-!     END DO
-!----------------------------------------------------------------------
 RETURN
-END SUBROUTINE material
-!----------------------------------------------------------------------
-!--------------------------- END OF UMAT ------------------------------
-!----------------------------------------------------------------------
-
-!----------------------------------------------------------------------
-!----------------------- AUXILIAR SUBROUTINES -------------------------
-!----------------------------------------------------------------------
-!                         INPUT FILES
-!----------------------------------------------------------------------
-
-!----------------------------------------------------------------------
-!                         KINEMATIC QUANTITIES
-!----------------------------------------------------------------------
-!----------------------------------------------------------------------
-!                         STRESS TENSORS
-!----------------------------------------------------------------------
-!----------------------------------------------------------------------
-!                   LINEARISED ELASTICITY TENSORS
-!----------------------------------------------------------------------
-
-
-!----------------------------------------------------------------------
-!----------------------------------------------------------------------
-!----------------------------------------------------------------------
-!----------------------- UTILITY SUBROUTINES --------------------------
-!----------------------------------------------------------------------
-
+END SUBROUTINE getprops_gp
 SUBROUTINE hfilfic(h,hh,pp,lambda,m,rw,ndi)
 
 
@@ -1635,6 +797,221 @@ END DO
 RETURN
 
 END SUBROUTINE hfilfic
+SUBROUTINE hvread(hv,statev,v1,ndi)
+
+
+
+!>    VISCOUS DISSIPATION: READ STATE VARS
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN OUT)                  :: ndi
+
+DOUBLE PRECISION, INTENT(OUT)            :: hv(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: statev(nsdv)
+INTEGER, INTENT(IN)                      :: v1
+
+
+
+INTEGER :: pos
+
+
+pos=9*v1-9
+hv(1,1)=statev(1+pos)
+hv(1,2)=statev(2+pos)
+hv(1,3)=statev(3+pos)
+hv(2,1)=statev(4+pos)
+hv(2,2)=statev(5+pos)
+hv(2,3)=statev(6+pos)
+hv(3,1)=statev(7+pos)
+hv(3,2)=statev(8+pos)
+hv(3,3)=statev(9+pos)
+
+RETURN
+
+END SUBROUTINE hvread
+SUBROUTINE hvwrite(statev,hv,v1,ndi)
+
+
+
+!>    VISCOUS DISSIPATION: WRITE STATE VARS
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN OUT)                  :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
+DOUBLE PRECISION, INTENT(IN)             :: hv(ndi,ndi)
+INTEGER, INTENT(IN)                      :: v1
+
+
+
+INTEGER :: pos
+
+
+pos=9*v1-9
+statev(1+pos)=hv(1,1)
+statev(2+pos)=hv(1,2)
+statev(3+pos)=hv(1,3)
+statev(4+pos)=hv(2,1)
+statev(5+pos)=hv(2,2)
+statev(6+pos)=hv(2,3)
+statev(7+pos)=hv(3,1)
+statev(8+pos)=hv(3,2)
+statev(9+pos)=hv(3,3)
+
+RETURN
+
+END SUBROUTINE hvwrite
+SUBROUTINE onem(a,aa,aas,ndi)
+
+
+
+!>      THIS SUBROUTINE GIVES:
+!>          2ND ORDER IDENTITY TENSORS - A
+!>          4TH ORDER IDENTITY TENSOR - AA
+!>          4TH ORDER SYMMETRIC IDENTITY TENSOR - AAS
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: a(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: aa(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: aas(ndi,ndi,ndi,ndi)
+
+
+
+INTEGER :: i,j,k,l
+
+a = zero
+aa = zero
+aas = zero
+
+DO i = 1, ndi
+  a(i,i) = one
+END DO
+
+DO i=1,ndi
+  DO j=1,ndi
+    DO k=1,ndi
+      DO l=1,ndi
+        IF (i == k .and. j == l) then
+          aa(i,j,k,l) = one
+        END IF
+        aas(i,j,k,l) = (one/two)*(a(i,k)*a(j,l)+a(i,l)*a(j,k))
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE onem
+SUBROUTINE indexx(stress,ddsdde,sig,tng,ntens,ndi)
+
+
+
+!>    INDEXATION: FULL SIMMETRY  IN STRESSES AND ELASTICITY TENSORS
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN OUT)                  :: ndi
+INTEGER, INTENT(IN)                      :: ntens
+DOUBLE PRECISION, INTENT(OUT)            :: stress(ntens)
+DOUBLE PRECISION, INTENT(OUT)            :: ddsdde(ntens,ntens)
+DOUBLE PRECISION, INTENT(IN)             :: sig(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: tng(ndi,ndi,ndi,ndi)
+
+
+
+INTEGER :: ii1(6),ii2(6), i1,j1
+
+
+DOUBLE PRECISION :: pp1,pp2
+
+ii1(1)=1
+ii1(2)=2
+ii1(3)=3
+ii1(4)=1
+ii1(5)=1
+ii1(6)=2
+
+ii2(1)=1
+ii2(2)=2
+ii2(3)=3
+ii2(4)=2
+ii2(5)=3
+ii2(6)=3
+
+DO i1=1,ntens
+!       STRESS VECTOR
+  stress(i1)=sig(ii1(i1),ii2(i1))
+  DO j1=1,ntens
+!       DDSDDE - FULLY SIMMETRY IMPOSED
+    pp1=tng(ii1(i1),ii2(i1),ii1(j1),ii2(j1))
+    pp2=tng(ii1(i1),ii2(i1),ii2(j1),ii1(j1))
+    ddsdde(i1,j1)=(one/two)*(pp1+pp2)
+  END DO
+END DO
+
+RETURN
+
+END SUBROUTINE indexx
+SUBROUTINE invariants(a,inv1,inv2,ndi)
+
+
+
+!>    1ST AND 2ND INVARIANTS OF A TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(IN)             :: a(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: inv1
+DOUBLE PRECISION, INTENT(OUT)            :: inv2
+
+
+
+INTEGER :: i1
+DOUBLE PRECISION :: aa(ndi,ndi)
+DOUBLE PRECISION :: inv1aa
+
+inv1=zero
+inv1aa=zero
+aa=matmul(a,a)
+DO i1=1,ndi
+  inv1=inv1+a(i1,i1)
+  inv1aa=inv1aa+aa(i1,i1)
+END DO
+inv2=(one/two)*(inv1*inv1-inv1aa)
+
+RETURN
+END SUBROUTINE invariants
+SUBROUTINE isomat(sseiso,diso,c10,c01,cbari1,cbari2)
+
+
+
+!>     ISOTROPIC MATRIX : ISOCHORIC SEF AND DERIVATIVES
+use global
+IMPLICIT NONE
+
+
+DOUBLE PRECISION, INTENT(OUT)            :: sseiso
+DOUBLE PRECISION, INTENT(OUT)            :: diso(5)
+DOUBLE PRECISION, INTENT(IN)             :: c10
+DOUBLE PRECISION, INTENT(IN)             :: c01
+DOUBLE PRECISION, INTENT(IN OUT)         :: cbari1
+DOUBLE PRECISION, INTENT(IN OUT)         :: cbari2
+
+
+sseiso=c10*(cbari1-three)+c01*(cbari2-three)
+
+diso(1)=c10
+diso(2)=c01
+diso(3)=zero
+diso(4)=zero
+diso(5)=zero
+
+RETURN
+END SUBROUTINE isomat
 SUBROUTINE linear_interpolate(xval, y1val, y2val, y3val)
     IMPLICIT NONE
 
@@ -1778,1309 +1155,70 @@ REAL(8), DIMENSION(120) :: y2 = (/ &
     ! If we get here, something went wrong
     y1val = 0.0D0
 END SUBROUTINE linear_interpolate
+SUBROUTINE metiso(cmiso,cmfic,pl,pkiso,pkfic,c,unit2,det,ndi)
 
-subroutine icos_shape ( point_num, edge_num, face_num, face_order_max, &
-  point_coord, edge_point, face_order, face_point )
 
-!*****************************************************************************80
-!
-!! ICOS_SHAPE describes an icosahedron.
-!
-!  Discussion:
-!
-!    The input data required for this routine can be retrieved from ICOS_SIZE.
-!
-!    The vertices lie on the unit sphere.
-!
-!    The dual of an icosahedron is a dodecahedron.
-!
-!    The data has been rearranged from a previous assignment.  
-!    The STRIPACK program refuses to triangulate data if the first
-!    three nodes are "collinear" on the sphere.
-!
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license. 
-!
-!  Modified:
-!
-!    22 July 2007
-!
-!  Author:
-!
-!    John Burkardt
-!
-!  Parameters:
-!
-!    Input, integer ( kind = 4 ) POINT_NUM, the number of points (12).
-!
-!    Input, integer ( kind = 4 ) EDGE_NUM, the number of edges (30).
-!
-!    Input, integer ( kind = 4 ) FACE_NUM, the number of faces (20).
-!
-!    Input, integer ( kind = 4 ) FACE_ORDER_MAX, the maximum number of 
-!    vertices per face (3).
-!
-!    Output, real ( kind = 8 ) POINT_COORD(3,POINT_NUM), the points.
-!
-!    Output, integer ( kind = 4 ) EDGE_POINT(2,EDGE_NUM), the points that 
-!    make up each edge, listed in ascending order of their indexes.
-!
-!    Output, integer ( kind = 4 ) FACE_ORDER(FACE_NUM), the number of vertices
-!    per face.
-!
-!    Output, integer ( kind = 4 ) FACE_POINT(FACE_ORDER_MAX,FACE_NUM); 
-!    FACE_POINT(I,J) is the index of the I-th point in the J-th face.  The
-!    points are listed in the counter clockwise direction defined
-!    by the outward normal at the face.  The nodes of each face are ordered 
-!    so that the lowest index occurs first.  The faces are then sorted by
-!    nodes.
-!
-  use global
 
-  integer ( kind = 4 ) edge_num
-  integer ( kind = 4 ), parameter :: edge_order = 2
-  integer ( kind = 4 ) face_num
-  integer ( kind = 4 ) face_order_max
-  integer ( kind = 4 ) point_num
-
-  real ( kind = 8 ) a
-  real ( kind = 8 ) b
-  integer ( kind = 4 ) edge_point(edge_order,edge_num)
-  integer ( kind = 4 ) face_order(face_num)
-  integer ( kind = 4 ) face_point(face_order_max,face_num)
-  real ( kind = 8 ) phi
-  real ( kind = 8 ) point_coord(3,point_num)
-  real ( kind = 8 ) z
-!
-!  Set the point coordinates.
-!
-  phi = 0.5D+00 * ( sqrt ( 5.0D+00 ) + 1.0D+00 )
-
-  a = phi / sqrt ( 1.0D+00 + phi * phi )
-  b = 1.0D+00 / sqrt ( 1.0D+00 + phi * phi )
-  z = 0.0D+00
-!
-!  A*A + B*B + Z*Z = 1.
-!
-  point_coord(1:3,1:point_num) = reshape ( (/ &
-      a,  b,  z, &
-      a, -b,  z, &
-      b,  z,  a, &
-      b,  z, -a, &
-      z,  a,  b, &
-      z,  a, -b, &
-      z, -a,  b, &
-      z, -a, -b, &
-     -b,  z,  a, &
-     -b,  z, -a, &
-     -a,  b,  z, &
-     -a, -b,  z /), (/ 3, point_num /) )
-!
-!  Set the edges.
-!
-  edge_point(1:edge_order,1:edge_num) = reshape ( (/ &
-     1,  2, &
-     1,  3, &
-     1,  4, &
-     1,  5, &
-     1,  6, &
-     2,  3, &
-     2,  4, &
-     2,  7, &
-     2,  8, &
-     3,  5, &
-     3,  7, &
-     3,  9, &
-     4,  6, &
-     4,  8, &
-     4, 10, &
-     5,  6, &
-     5,  9, &
-     5, 11, &
-     6, 10, &
-     6, 11, &
-     7,  8, &
-     7,  9, &
-     7, 12, &
-     8, 10, &
-     8, 12, &
-     9, 11, &
-     9, 12, &
-    10, 11, &
-    10, 12, &
-    11, 12 /), (/ edge_order, edge_num /) )
-!
-!  Set the face orders.
-!
-  face_order(1:face_num) = (/ &
-    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, &
-    3, 3, 3, 3, 3, 3, 3, 3, 3, 3 /)
-!
-!  Set the faces.
-!
-  face_point(1:face_order_max,1:face_num) = reshape ( (/ &
-     1,  2,  4, &
-     1,  3,  2, &
-     1,  4,  6, &
-     1,  5,  3, &
-     1,  6,  5, &
-     2,  3,  7, &
-     2,  7,  8, &
-     2,  8,  4, &
-     3,  5,  9, &
-     3,  9,  7, &
-     4,  8, 10, &
-     4, 10,  6, &
-     5,  6, 11, &
-     5, 11,  9, &
-     6, 10, 11, &
-     7,  9, 12, &
-     7, 12,  8, &
-     8, 12, 10, &
-     9, 11, 12, &
-    10, 12, 11 /), (/ face_order_max, face_num /) )
-
-  return
-end
-subroutine icos_size ( point_num, edge_num, face_num, face_order_max )
-!*****************************************************************************80
-!
-!! ICOS_SIZE gives "sizes" for an icosahedron in 3D.
-!
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license. 
-!
-!  Modified:
-!
-!    19 July 2007
-!
-!  Author:
-!
-!    John Burkardt
-!
-!  Parameters:
-!
-!    Output, integer ( kind = 4 ) POINT_NUM, the number of points.
-!
-!    Output, integer ( kind = 4 ) EDGE_NUM, the number of edges.
-!
-!    Output, integer ( kind = 4 ) FACE_NUM, the number of faces.
-!
-!    Output, integer ( kind = 4 ) FACE_ORDER_MAX, the maximum order of any face.
-!
-  use global
-
-  integer ( kind = 4 ) edge_num
-  integer ( kind = 4 ) face_num
-  integer ( kind = 4 ) face_order_max
-  integer ( kind = 4 ) point_num
-
-  point_num = 12
-  edge_num = 30
-  face_num = 20
-  face_order_max = 3
-
-  return
-end
-
-subroutine sphere01_triangle_project ( a_xyz, b_xyz, c_xyz, f1, f2, f3, &
-  node_xyz )
-
-!*****************************************************************************80
-!
-!! SPHERE01_TRIANGLE_PROJECT projects from plane to spherical triangle.
-!
-!  Discussion:
-!
-!    We assume that points A, B and C lie on the unit sphere, and they
-!    thus define a spherical triangle.
-!
-!    They also, of course, define a planar triangle.
-!
-!    Let (F1,F2,F3) be the barycentric coordinates of a point in this 
-!    planar triangle.
-!
-!    This function determines the coordinates of the point in the planar
-!    triangle identified by the barycentric coordinates, and returns the
-!    coordinates of the projection of that point onto the unit sphere.
-!
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license. 
-!
-!  Modified:
-!
-!    21 September 2010
-!
-!  Author:
-!
-!    John Burkardt
-!
-!  Parameters:
-!
-!    Input, real ( kind = 8 ) A_XYZ(3), B_XYZ(3), C_XYZ(3), the coordinates
-!    of the points A, B, and C.
-!
-!    Input, integer ( kind = 4 ) F1, F2, F3, the barycentric coordinates
-!    of a point in the triangle ABC.  Normally, these coordinates would
-!    be real numbers, and would sum to 1.  For convenience, we allow these
-!    to be integers which must be divided by F1+F2+F3.
-!
-!    Output, real ( kind = 8 ) NODE_XYZ(3), the coordinates of the 
-!    point on the unit sphere which is the projection of the point on the plane
-!    whose barycentric coordinates with respect to A, B, and C is
-!    (F1,F2,F3)/(F1+F2+F3).
-!
-  use global
-
-  real ( kind = 8 ) a_xyz(3)
-  real ( kind = 8 ) b_xyz(3)
-  real ( kind = 8 ) c_xyz(3)
-  integer ( kind = 4 ) f1
-  integer ( kind = 4 ) f2
-  integer ( kind = 4 ) f3
-  real ( kind = 8 ) node_norm
-  real ( kind = 8 ) node_xyz(3)
-  real ( kind = 8 ) r8vec_norm
-
-  node_xyz(1:3) = &
-    ( real ( f1,           kind = 8 ) * a_xyz(1:3)   &
-    + real (      f2,      kind = 8 ) * b_xyz(1:3)   &
-    + real (           f3, kind = 8 ) * c_xyz(1:3) ) &
-    / real ( f1 + f2 + f3, kind = 8 )
-
-  node_norm = r8vec_norm ( 3, node_xyz(1:3) )
-
-  node_xyz(1:3) = node_xyz(1:3) / node_norm
-
-  return
-end
-
-subroutine sphere01_triangle_vertices_to_sides ( v1, v2, v3, as, bs, cs )
-
-!*****************************************************************************80
-!
-!! SPHERE01_TRIANGLE_VERTICES_TO_SIDES computes spherical triangle sides.
-!
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license. 
-!
-!  Modified:
-!
-!    09 June 2002
-!
-!  Author:
-!
-!    John Burkardt
-!
-!  Parameters:
-!
-!    Input, real ( kind = 8 ) V1(3), V2(3), V3(3), the vertices of the spherical
-!    triangle.
-!
-!    Output, real ( kind = 8 ) AS, BS, CS, the (geodesic) length of the 
-!    sides of the triangle.
-!
-  use global
-
-  real ( kind = 8 ) as
-  real ( kind = 8 ) bs
-  real ( kind = 8 ) cs
-  real ( kind = 8 ) v1(3)
-  real ( kind = 8 ) v2(3)
-  real ( kind = 8 ) v3(3)
-
-  as = acos ( dot_product ( v2(1:3), v3(1:3) ) )
-  bs = acos ( dot_product ( v3(1:3), v1(1:3) ) )
-  cs = acos ( dot_product ( v1(1:3), v2(1:3) ) )
-
-  return
-end
-
-
-
-
-subroutine sphere01_triangle_sides_to_angles ( as, bs, cs, a, b, c )
-
-!*****************************************************************************80
-!
-!! SPHERE01_TRIANGLE_SIDES_TO_ANGLES computes spherical triangle angles.
-!
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license. 
-!
-!  Modified:
-!
-!    09 June 2002
-!
-!  Author:
-!
-!    John Burkardt
-!
-!  Parameters:
-!
-!    Input, real ( kind = 8 ) AS, BS, CS, the (geodesic) length of the 
-!    sides of the triangle.
-!
-!    Output, real ( kind = 8 ) A, B, C, the spherical angles of the triangle.
-!    Angle A is opposite the side of length AS, and so on.
-!
-  use global
-
-  real ( kind = 8 ) a
-  real ( kind = 8 ) as
-  real ( kind = 8 ) asu
-  real ( kind = 8 ) b
-  real ( kind = 8 ) bs
-  real ( kind = 8 ) bsu
-  real ( kind = 8 ) c
-  real ( kind = 8 ) cs
-  real ( kind = 8 ) csu
-  real ( kind = 8 ) ssu
-  real ( kind = 8 ) tan_a2
-  real ( kind = 8 ) tan_b2
-  real ( kind = 8 ) tan_c2
-
-  asu = as
-  bsu = bs
-  csu = cs
-  ssu = ( asu + bsu + csu ) / 2.0D+00
-
-  tan_a2 = sqrt ( ( sin ( ssu - bsu ) * sin ( ssu - csu ) ) / &
-                  ( sin ( ssu ) * sin ( ssu - asu )     ) )
-
-  a = 2.0D+00 * atan ( tan_a2 )
-
-  tan_b2 = sqrt ( ( sin ( ssu - asu ) * sin ( ssu - csu ) ) / &
-                  ( sin ( ssu ) * sin ( ssu - bsu )     ) )
-
-  b = 2.0D+00 * atan ( tan_b2 )
-
-  tan_c2 = sqrt ( ( sin ( ssu - asu ) * sin ( ssu - bsu ) ) / &
-                  ( sin ( ssu ) * sin ( ssu - csu )     ) )
-
-  c = 2.0D+00 * atan ( tan_c2 )
-
-  return
-end
-subroutine sphere01_triangle_vertices_to_area ( v1, v2, v3, area )
-
-!*****************************************************************************80
-!
-!! SPHERE01_TRIANGLE_VERTICES_TO_AREA computes the area of a spherical triangle.
-!
-!  Discussion:
-!
-!    A sphere in 3D satisfies the equation:
-!
-!      X^2 + Y^2 + Z^2 = 1
-!
-!    A spherical triangle is specified by three points on the surface
-!    of the sphere.
-!
-!    The area formula is known as Girard's formula.
-!
-!    The area of a spherical triangle is:
-!
-!      AREA = ( A + B + C - PI )
-!
-!    where A, B and C are the (surface) angles of the triangle.
-!
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license. 
-!
-!  Modified:
-!
-!    09 June 2002
-!
-!  Author:
-!
-!    John Burkardt
-!
-!  Parameters:
-!
-!    Input, real ( kind = 8 ) V1(3), V2(3), V3(3), the vertices of the triangle.
-!
-!    Output, real ( kind = 8 ) AREA, the area of the sphere.
-!
-  use global
-
-  real ( kind = 8 ) area
-  real ( kind = 8 ) a
-  real ( kind = 8 ) as
-  real ( kind = 8 ) b
-  real ( kind = 8 ) bs
-  real ( kind = 8 ) c
-  real ( kind = 8 ) cs
-  real ( kind = 8 ) v1(3)
-  real ( kind = 8 ) v2(3)
-  real ( kind = 8 ) v3(3)
-!
-!  Compute the lengths of the sides of the spherical triangle.
-!
-  call sphere01_triangle_vertices_to_sides ( v1, v2, v3, as, bs, cs )
-!
-!  Get the spherical angles.
-!
-  call sphere01_triangle_sides_to_angles ( as, bs, cs, a, b, c )
-!
-!  Get the area.
-!
-  call sphere01_triangle_angles_to_area ( a, b, c, area )
-
-  return
-end
-
-
-subroutine sphere01_triangle_angles_to_area ( a, b, c, area )
-
-!*****************************************************************************80
-!
-!! SPHERE01_TRIANGLE_ANGLES_TO_AREA computes the area of a spherical triangle.
-!
-!  Discussion:
-!
-!    A unit sphere in 3D satisfies the equation:
-!
-!      X^2 + Y^2 + Z^2 = 1
-!
-!    A spherical triangle is specified by three points on the surface
-!    of the sphere.
-!
-!    The area formula is known as Girard's formula.
-!
-!    The area of a spherical triangle is:
-!
-!      AREA = ( A + B + C - PI )
-!
-!    where A, B and C are the (surface) angles of the triangle.
-!
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license. 
-!
-!  Modified:
-!
-!    09 June 2002
-!
-!  Author:
-!
-!    John Burkardt
-!
-!  Parameters:
-!
-!    Input, real ( kind = 8 ) A, B, C, the angles of the triangle.
-!
-!    Output, real ( kind = 8 ) AREA, the area of the sphere.
-!
-  use global
-
-  real ( kind = 8 ) area
-  real ( kind = 8 ) a
-  real ( kind = 8 ) b
-  real ( kind = 8 ) c
-  real ( kind = 8 ), parameter :: pi = 3.141592653589793D+00
-!
-!  Apply Girard's formula.
-!
-  area = a + b + c - pi
-
-  return
-end
-
-subroutine polyterm_exponent ( action, e )
-
-!*****************************************************************************80
-!
-!! POLYTERM_EXPONENT gets or sets the exponents for the polynomial term.
-!
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license. 
-!
-!  Modified:
-!
-!    08 June 2002
-!
-!  Author:
-!
-!    John Burkardt
-!
-!  Parameters:
-!
-!    Input, character ( len = 3 ) ACTION.
-!    'GET' asks the routine to return the current values in E.
-!    'SET' asks the routine to set the current values to E.
-!
-!    Input/output, integer ( kind = 4 ) E(3), storage used to set or get values.
-!
-  use global
-
-  character ( len = * )  action
-  integer   ( kind = 4 ) e(3)
-  integer   ( kind = 4 ), save, dimension ( 3 ) :: e_save = (/ 0, 0, 0 /)
-  character ( len = 80 ) text
-  character ( len = 80 ) text2
-
-  if ( action(1:1) == 'G' ) then
-
-    e(1:3) = e_save(1:3)
-
-  else if ( action(1:1) == 'P' ) then
-
-    write ( *, '(a)' ) ' '
-
-    if ( all ( e_save(1:3) == 0 ) ) then
-
-      text = 'P(X,Y,Z) = 1'
-
-    else
-
-      text = 'P(X,Y,Z) = '
-
-      if ( e_save(1) == 0 ) then
-
-      else if ( e_save(1) == 1 ) then
-
-        call s_cat ( text, ' X', text )
-
-      else
-
-        call s_cat ( text, ' X^', text )
-
-        write ( text2, '(i2)' ) e_save(1)
-        text2 = adjustl ( text2 )
-        call s_cat ( text, text2, text )
-
-      end if
-
-      if ( e_save(2) == 0 ) then
-
-      else if ( e_save(2) == 1 ) then
-
-        call s_cat ( text, ' Y', text )
-
-      else
-
-        call s_cat ( text, ' Y^', text )
-
-        write ( text2, '(i2)' ) e_save(2)
-        text2 = adjustl ( text2 )
-        call s_cat ( text, text2, text )
-
-      end if
-       
-      if ( e_save(3) == 0 ) then
-
-      else if ( e_save(3) == 1 ) then
-
-        call s_cat ( text, ' Z', text )
-
-      else
-
-        call s_cat ( text, ' Z^', text )
-
-        write ( text2, '(i2)' ) e_save(3)
-        text2 = adjustl ( text2 )
-        call s_cat ( text, text2, text )
-
-      end if
- 
-    end if
-
-    write ( *, '(a)' ) trim ( text )
-    
-  else if ( action(1:1) == 'S' ) then
-
-    e_save(1:3) = e(1:3)
-
-  end if
-
-  return
-end
-subroutine polyterm_value_3d ( n, x, f )
-
-!*****************************************************************************80
-!
-!! POLYTERM_VALUE_3D evaluates a single polynomial term in 3D.
-!
-!  Discussion:
-!
-!    The polynomial term has the form:
-!
-!      F(X) = X(1)^E(1) * X(2)^E(2) * X(3)^E(3)
-!
-!    The exponents E(1:3) are set by calling POLYTERM_EXPONENT.
-!
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license. 
-!
-!  Modified:
-!
-!    13 September 2010
-!
-!  Author:
-!
-!    John Burkardt
-!
-!  Parameters:
-!
-!    Input, integer ( kind = 4 ) N, the number of points.
-!
-!    Input, real ( kind = 8 ) X(3,N), the points where the polynomial term 
-!    is to be evaluated.
-!
-!    Output, real ( kind = 8 ) F(N), the value of the polynomial term.
-!
-  use global
-
-  integer ( kind = 4 ) n
-
-  integer ( kind = 4 ) e(3)
-  real ( kind = 8 ) f(n)
-  integer ( kind = 4 ) i
-  real ( kind = 8 ) x(3,n)
-
-  call polyterm_exponent ( 'GET', e )
-
-  f(1:n) = 1.0D+00
-
-  do i = 1, 3
-
-    if ( e(i) /= 0 ) then
-      f(1:n) = f(1:n) * x(i,1:n)**e(i)
-    end if
-
-  end do
-  
-  return
-end
-
-function r8_gamma ( x )
-
-!*****************************************************************************80
-!
-!! R8_GAMMA evaluates Gamma(X) for a real argument.
-!
-!  Discussion:
-!
-!    This routine calculates the gamma function for a real argument X.
-!
-!    Computation is based on an algorithm outlined in reference 1.
-!    The program uses rational functions that approximate the gamma
-!    function to at least 20 significant decimal digits.  Coefficients
-!    for the approximation over the interval (1,2) are unpublished.
-!    Those for the approximation for 12 <= X are from reference 2.
-!
-!  Modified:
-!
-!    11 February 2008
-!
-!  Author:
-!
-!    Original FORTRAN77 version by William Cody, Laura Stoltz.
-!    FORTRAN90 version by John Burkardt.
-!
-!  Reference:
-!
-!    William Cody,
-!    An Overview of Software Development for Special Functions,
-!    in Numerical Analysis Dundee, 1975,
-!    edited by GA Watson,
-!    Lecture Notes in Mathematics 506,
-!    Springer, 1976.
-!
-!    John Hart, Ward Cheney, Charles Lawson, Hans Maehly,
-!    Charles Mesztenyi, John Rice, Henry Thatcher,
-!    Christoph Witzgall,
-!    Computer Approximations,
-!    Wiley, 1968,
-!    LC: QA297.C64.
-!
-!  Parameters:
-!
-!    Input, real ( kind = 8 ) X, the argument of the function.
-!
-!    Output, real ( kind = 8 ) R8_GAMMA, the value of the function.
-!
-  use global
-
-  real ( kind = 8 ), dimension ( 7 ) :: c = (/ &
-   -1.910444077728D-03, &
-    8.4171387781295D-04, &
-   -5.952379913043012D-04, &
-    7.93650793500350248D-04, &
-   -2.777777777777681622553D-03, &
-    8.333333333333333331554247D-02, &
-    5.7083835261D-03 /)
-  real ( kind = 8 ), parameter :: eps = 2.22D-16
-  real ( kind = 8 ) fact
-  integer ( kind = 4 ) i
-  integer ( kind = 4 ) n
-  real ( kind = 8 ), dimension ( 8 ) :: p = (/ &
-    -1.71618513886549492533811D+00, &
-     2.47656508055759199108314D+01, &
-    -3.79804256470945635097577D+02, &
-     6.29331155312818442661052D+02, &
-     8.66966202790413211295064D+02, &
-    -3.14512729688483675254357D+04, &
-    -3.61444134186911729807069D+04, &
-     6.64561438202405440627855D+04 /)
-  logical parity
-  real ( kind = 8 ), parameter :: pi = 3.1415926535897932384626434D+00
-  real ( kind = 8 ), dimension ( 8 ) :: q = (/ &
-    -3.08402300119738975254353D+01, &
-     3.15350626979604161529144D+02, &
-    -1.01515636749021914166146D+03, &
-    -3.10777167157231109440444D+03, &
-     2.25381184209801510330112D+04, &
-     4.75584627752788110767815D+03, &
-    -1.34659959864969306392456D+05, &
-    -1.15132259675553483497211D+05 /)
-  real ( kind = 8 ) r8_gamma
-  real ( kind = 8 ) res
-  real ( kind = 8 ), parameter :: sqrtpi = 0.9189385332046727417803297D+00
-  real ( kind = 8 ) sum
-  real ( kind = 8 ) x
-  real ( kind = 8 ), parameter :: xbig = 171.624D+00
-  real ( kind = 8 ) xden
-  real ( kind = 8 ), parameter :: xinf = 1.0D+30
-  real ( kind = 8 ), parameter :: xminin = 2.23D-308
-  real ( kind = 8 ) xnum
-  real ( kind = 8 ) y
-  real ( kind = 8 ) y1
-  real ( kind = 8 ) ysq
-  real ( kind = 8 ) z
-
-  parity = .false.
-  fact = 1.0D+00
-  n = 0
-  y = x
-!
-!  Argument is negative.
-!
-  if ( y <= 0.0D+00 ) then
-
-    y = - x
-    y1 = aint ( y )
-    res = y - y1
-
-    if ( res /= 0.0D+00 ) then
-
-      if ( y1 /= aint ( y1 * 0.5D+00 ) * 2.0D+00 ) then
-        parity = .true.
-      end if
-
-      fact = - pi / sin ( pi * res )
-      y = y + 1.0D+00
-
-    else
-
-      res = xinf
-      r8_gamma = res
-      return
-
-    end if
-
-  end if
-!
-!  Argument is positive.
-!
-  if ( y < eps ) then
-!
-!  Argument < EPS.
-!
-    if ( xminin <= y ) then
-      res = 1.0D+00 / y
-    else
-      res = xinf
-      r8_gamma = res
-      return
-    end if
-
-  else if ( y < 12.0D+00 ) then
-
-    y1 = y
-!
-!  0.0 < argument < 1.0.
-!
-    if ( y < 1.0D+00 ) then
-
-      z = y
-      y = y + 1.0D+00
-!
-!  1.0 < argument < 12.0.
-!  Reduce argument if necessary.
-!
-    else
-
-      n = int ( y ) - 1
-      y = y - real ( n, kind = 8 )
-      z = y - 1.0D+00
-
-    end if
-!
-!  Evaluate approximation for 1.0 < argument < 2.0.
-!
-    xnum = 0.0D+00
-    xden = 1.0D+00
-    do i = 1, 8
-      xnum = ( xnum + p(i) ) * z
-      xden = xden * z + q(i)
-    end do
-
-    res = xnum / xden + 1.0D+00
-!
-!  Adjust result for case  0.0 < argument < 1.0.
-!
-    if ( y1 < y ) then
-
-      res = res / y1
-!
-!  Adjust result for case 2.0 < argument < 12.0.
-!
-    else if ( y < y1 ) then
-
-      do i = 1, n
-        res = res * y
-        y = y + 1.0D+00
-      end do
-
-    end if
-
-  else
-!
-!  Evaluate for 12.0 <= argument.
-!
-    if ( y <= xbig ) then
-
-      ysq = y * y
-      sum = c(7)
-      do i = 1, 6
-        sum = sum / ysq + c(i)
-      end do
-      sum = sum / y - y + sqrtpi
-      sum = sum + ( y - 0.5D+00 ) * log ( y )
-      res = exp ( sum )
-
-    else
-
-      res = xinf
-      r8_gamma = res
-      return
-
-    end if
-
-  end if
-!
-!  Final adjustments and return.
-!
-  if ( parity ) then
-    res = - res
-  end if
-
-  if ( fact /= 1.0D+00 ) then
-    res = fact / res
-  end if
-
-  r8_gamma = res
-
-  return
-end
-function r8_uniform_01 ( seed )
-
-!*****************************************************************************80
-!
-!! R8_UNIFORM_01 returns a unit pseudorandom R8.
-!
-!  Discussion:
-!
-!    An R8 is a real ( kind = 8 ) value.
-!
-!    For now, the input quantity SEED is an integer variable.
-!
-!    This routine implements the recursion
-!
-!      seed = 16807 * seed mod ( 2^31 - 1 )
-!      r8_uniform_01 = seed / ( 2^31 - 1 )
-!
-!    The integer arithmetic never requires more than 32 bits,
-!    including a sign bit.
-!
-!    If the initial seed is 12345, then the first three computations are
-!
-!      Input     Output      R8_UNIFORM_01
-!      SEED      SEED
-!
-!         12345   207482415  0.096616
-!     207482415  1790989824  0.833995
-!    1790989824  2035175616  0.947702
-!
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license. 
-!
-!  Modified:
-!
-!    05 July 2006
-!
-!  Author:
-!
-!    John Burkardt
-!
-!  Reference:
-!
-!    Paul Bratley, Bennett Fox, Linus Schrage,
-!    A Guide to Simulation,
-!    Springer Verlag, pages 201-202, 1983.
-!
-!    Pierre L'Ecuyer,
-!    Random Number Generation,
-!    in Handbook of Simulation,
-!    edited by Jerry Banks,
-!    Wiley Interscience, page 95, 1998.
-!
-!    Bennett Fox,
-!    Algorithm 647:
-!    Implementation and Relative Efficiency of Quasirandom
-!    Sequence Generators,
-!    ACM Transactions on Mathematical Software,
-!    Volume 12, Number 4, pages 362-376, 1986.
-!
-!    Peter Lewis, Allen Goodman, James Miller
-!    A Pseudo-Random Number Generator for the System/360,
-!    IBM Systems Journal,
-!    Volume 8, pages 136-143, 1969.
-!
-!  Parameters:
-!
-!    Input/output, integer ( kind = 4 ) SEED, the "seed" value, which should
-!    NOT be 0. On output, SEED has been updated.
-!
-!    Output, real ( kind = 8 ) R8_UNIFORM_01, a new pseudorandom variate,
-!    strictly between 0 and 1.
-!
-  use global
-
-  integer ( kind = 4 ), parameter :: i4_huge = 2147483647
-  integer ( kind = 4 ) k
-  real ( kind = 8 ) r8_uniform_01
-  integer ( kind = 4 ) seed
-
-  if ( seed == 0 ) then
-    write ( *, '(a)' ) ' '
-    write ( *, '(a)' ) 'R8_UNIFORM_01 - Fatal error!'
-    write ( *, '(a)' ) '  Input value of SEED = 0.'
-    stop
-  end if
-
-  k = seed / 127773
-
-  seed = 16807 * ( seed - k * 127773 ) - k * 2836
-
-  if ( seed < 0 ) then
-    seed = seed + i4_huge
-  end if
-!
-!  Although SEED can be represented exactly as a 32 bit integer,
-!  it generally cannot be represented exactly as a 32 bit real number!
-!
-  r8_uniform_01 = real ( seed, kind = 8 ) * 4.656612875D-10
-
-  return
-end
-function r8vec_norm ( n, a )
-
-!*****************************************************************************80
-!
-!! R8VEC_NORM returns the L2 norm of an R8VEC.
-!
-!  Discussion:
-!
-!    An R8VEC is a vector of R8's.
-!
-!    The vector L2 norm is defined as:
-!
-!      R8VEC_NORM = sqrt ( sum ( 1 <= I <= N ) A(I)^2 ).
-!
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license. 
-!
-!  Modified:
-!
-!    21 August 2010
-!
-!  Author:
-!
-!    John Burkardt
-!
-!  Parameters:
-!
-!    Input, integer ( kind = 4 ) N, the number of entries in A.
-!
-!    Input, real ( kind = 8 ) A(N), the vector whose L2 norm is desired.
-!
-!    Output, real ( kind = 8 ) R8VEC_NORM, the L2 norm of A.
-!
-  use global
-
-  integer ( kind = 4 ) n
-
-  real ( kind = 8 ) a(n)
-  real ( kind = 8 ) r8vec_norm
-
-  r8vec_norm = sqrt ( sum ( a(1:n)**2 ) )
-
-  return
-end
-subroutine r8vec_polarize ( n, a, p, a_normal, a_parallel )
-
-!*****************************************************************************80
-!
-!! R8VEC_POLARIZE decomposes an R8VEC into normal and parallel components.
-!
-!  Discussion:
-!
-!    An R8VEC is a vector of R8's.
-!
-!    The (nonzero) vector P defines a direction.
-!
-!    The vector A can be written as the sum
-!
-!      A = A_normal + A_parallel
-!
-!    where A_parallel is a linear multiple of P, and A_normal
-!    is perpendicular to P.
-!
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license. 
-!
-!  Modified:
-!
-!    08 November 2000
-!
-!  Author:
-!
-!    John Burkardt
-!
-!  Parameters:
-!
-!    Input, integer ( kind = 4 ) N, the number of entries in the array.
-!
-!    Input, real ( kind = 8 ) A(N), the vector to be polarized.
-!
-!    Input, real ( kind = 8 ) P(N), the polarizing direction.
-!
-!    Output, real ( kind = 8 ) A_NORMAL(N), A_PARALLEL(N), the normal
-!    and parallel components of A.
-!
-  use global
-
-  integer ( kind = 4 ) n
-
-  real ( kind = 8 ) a(n)
-  real ( kind = 8 ) a_dot_p
-  real ( kind = 8 ) a_normal(n)
-  real ( kind = 8 ) a_parallel(n)
-  real ( kind = 8 ) p(n)
-  real ( kind = 8 ) p_norm
-
-  p_norm = sqrt ( sum ( p(1:n)**2 ) )
-
-  if ( p_norm == 0.0D+00 ) then
-    a_normal(1:n) = a(1:n)
-    a_parallel(1:n) = 0.0D+00
-    return
-  end if
-
-  a_dot_p = dot_product ( a(1:n), p(1:n) ) / p_norm
-
-  a_parallel(1:n) = a_dot_p * p(1:n) / p_norm
-
-  a_normal(1:n) = a(1:n) - a_parallel(1:n)
-
-  return
-end
-subroutine s_cat ( s1, s2, s3 )
-
-!*****************************************************************************80
-!
-!! S_CAT concatenates two strings to make a third string.
-!
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license. 
-!
-!  Modified:
-!
-!    18 September 2000
-!
-!  Author:
-!
-!    John Burkardt
-!
-!  Parameters:
-!
-!    Input, character ( len = * ) S1, the "prefix" string.
-!
-!    Input, character ( len = * ) S2, the "postfix" string.
-!
-!    Output, character ( len = * ) S3, the string made by
-!    concatenating S1 and S2, ignoring any trailing blanks.
-!
-  use global
-
-  character ( len = * ) s1
-  character ( len = * ) s2
-  character ( len = * ) s3
-
-  if ( s1 == ' ' .and. s2 == ' ' ) then
-    s3 = ' '
-  else if ( s1 == ' ' ) then
-    s3 = s2
-  else if ( s2 == ' ' ) then
-    s3 = s1
-  else
-    s3 = trim ( s1 ) // trim ( s2 )
-  end if
-
-  return
-end
-subroutine sphere01_monomial_integral ( e, integral )
-
-!*****************************************************************************80
-!
-!! SPHERE01_MONOMIAL_INTEGRAL returns monomial integrals on the unit sphere.
-!
-!  Discussion:
-!
-!    The integration region is 
-!
-!      X^2 + Y^2 + Z^2 = 1.
-!
-!    The monomial is F(X,Y,Z) = X^E(1) * Y^E(2) * Z^E(3).
-!
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license. 
-!
-!  Modified:
-!
-!    24 June 2002
-!
-!  Author:
-!
-!    John Burkardt
-!
-!  Reference:
-!
-!    Philip Davis, Philip Rabinowitz,
-!    Methods of Numerical Integration,
-!    Second Edition,
-!    Academic Press, 1984, page 263.
-!
-!  Parameters:
-!
-!    Input, integer ( kind = 4 ) E(3), the exponents of X, Y and Z in the 
-!    monomial.  Each exponent must be nonnegative.
-!
-!    Output, real ( kind = 8 ) INTEGRAL, the integral.
-!
-  use global
-
-  integer ( kind = 4 ) e(3)
-  integer ( kind = 4 ) i
-  real ( kind = 8 ) integral
-  real ( kind = 8 ), parameter :: pi = 3.141592653589793D+00
-  real ( kind = 8 ) r8_gamma
-
-  if ( any ( e(1:3) < 0 ) ) then
-    integral = - huge ( integral )
-    write ( *, '(a)' ) ' '
-    write ( *, '(a)' ) 'SPHERE01_MONOMIAL_INTEGRAL - Fatal error!'
-    write ( *, '(a)' ) '  All exponents must be nonnegative.'
-    write ( *, '(a,i8)' ) '  E(1) = ', e(1)
-    write ( *, '(a,i8)' ) '  E(2) = ', e(2)
-    write ( *, '(a,i8)' ) '  E(3) = ', e(3)
-    stop
-  end if
-
-  if ( all ( e(1:3) == 0 ) ) then
-
-    integral = 2.0D+00 * sqrt ( pi**3 ) / r8_gamma ( 1.5D+00 )
-
-  else if ( any ( mod ( e(1:3), 2 ) == 1 ) ) then
-
-    integral = 0.0D+00
-
-  else
-
-    integral = 2.0D+00
-
-    do i = 1, 3
-      integral = integral * r8_gamma ( 0.5D+00 * real ( e(i) + 1, kind = 8 ) )
-    end do
-
-    integral = integral &
-      / r8_gamma ( 0.5D+00 * ( real ( sum ( e(1:3) + 1 ), kind = 8 ) ) )
-
-  end if
-
-  return
-end
-SUBROUTINE contraction44(s,LT,rt,ndi)
-
-
-
-!>       DOUBLE CONTRACTION BETWEEN 4TH ORDER TENSORS
-!>      INPUT:
-!>       LT - RIGHT 4TH ORDER TENSOR
-!>       RT - LEFT  4TH ORDER TENSOR
-!>      OUTPUT:
-!>       S - DOUBLE CONTRACTED TENSOR (4TH ORDER)
+!>    ISOCHORIC MATERIAL ELASTICITY TENSOR
 use global
 IMPLICIT NONE
 
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: s(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: LT(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rt(ndi,ndi,ndi,ndi)
+INTEGER, INTENT(IN OUT)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: cmiso(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: cmfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: pl(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: pkiso(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: pkfic(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: c(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: det
 
 
 
-INTEGER :: i1,j1,k1,l1,m1,n1
+INTEGER :: i1,j1,k1,l1
+DOUBLE PRECISION :: cisoaux(ndi,ndi,ndi,ndi), cisoaux1(ndi,ndi,ndi,ndi),  &
+    plt(ndi,ndi,ndi,ndi),cinv(ndi,ndi), pll(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: trfic,xx,yy,zz, aux,aux1
 
+CALL matinv3d(c,cinv,ndi)
+cisoaux1=zero
+cisoaux=zero
+CALL contraction44(cisoaux1,pl,cmfic,ndi)
+DO i1=1,ndi
+  DO j1=1,ndi
+    DO k1=1,ndi
+      DO l1=1,ndi
+        plt(i1,j1,k1,l1)=pl(k1,l1,i1,j1)
+      END DO
+    END DO
+  END DO
+END DO
 
-DOUBLE PRECISION :: aux
+CALL contraction44(cisoaux,cisoaux1,plt,ndi)
 
-
+trfic=zero
+aux=det**(-two/three)
+aux1=aux**two
+CALL contraction22(trfic,aux*pkfic,c,ndi)
 
 DO i1=1,ndi
   DO j1=1,ndi
     DO k1=1,ndi
       DO l1=1,ndi
-        aux=zero
-        DO m1=1,ndi
-          DO n1=1,ndi
-            aux=aux+LT(i1,j1,m1,n1)*rt(m1,n1,k1,l1)
-          END DO
-        END DO
-        s(i1,j1,k1,l1)=aux
+        xx=aux1*cisoaux(i1,j1,k1,l1)
+        pll(i1,j1,k1,l1)=(one/two)*(cinv(i1,k1)*cinv(j1,l1)+  &
+            cinv(i1,l1)*cinv(j1,k1))- (one/three)*cinv(i1,j1)*cinv(k1,l1)
+        yy=trfic*pll(i1,j1,k1,l1)
+        zz=pkiso(i1,j1)*cinv(k1,l1)+cinv(i1,j1)*pkiso(k1,l1)
+        
+        cmiso(i1,j1,k1,l1)=xx+(two/three)*yy-(two/three)*zz
       END DO
     END DO
   END DO
 END DO
 
 RETURN
-END SUBROUTINE contraction44
+END SUBROUTINE metiso
 SUBROUTINE metvol(cvol,c,pv,ppv,det,ndi)
 
 
@@ -3117,26 +1255,593 @@ END DO
 
 RETURN
 END SUBROUTINE metvol
-SUBROUTINE deformation(f,c,b,ndi)
+SUBROUTINE matinv3d(a,a_inv,ndi)
+!>    INVERSE OF A 3X3 MATRIX
+!     RETURN THE INVERSE OF A(3,3) - A_INV
+use global
+
+INTEGER, INTENT(IN OUT)                  :: ndi
+DOUBLE PRECISION, INTENT(IN)             :: a(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: a_inv(ndi,ndi)
+
+DOUBLE PRECISION :: det_a,det_a_inv
+
+det_a = a(1,1)*(a(2,2)*a(3,3) - a(3,2)*a(2,3)) -  &
+    a(2,1)*(a(1,2)*a(3,3) - a(3,2)*a(1,3)) +  &
+    a(3,1)*(a(1,2)*a(2,3) - a(2,2)*a(1,3))
+
+IF (det_a <= 0.d0) THEN
+  WRITE(*,*) 'WARNING: SUBROUTINE MATINV3D:'
+  WRITE(*,*) 'WARNING: DET OF MAT=',det_a
+  RETURN
+END IF
+
+det_a_inv = 1.d0/det_a
+
+a_inv(1,1) = det_a_inv*(a(2,2)*a(3,3)-a(3,2)*a(2,3))
+a_inv(1,2) = det_a_inv*(a(3,2)*a(1,3)-a(1,2)*a(3,3))
+a_inv(1,3) = det_a_inv*(a(1,2)*a(2,3)-a(2,2)*a(1,3))
+a_inv(2,1) = det_a_inv*(a(3,1)*a(2,3)-a(2,1)*a(3,3))
+a_inv(2,2) = det_a_inv*(a(1,1)*a(3,3)-a(3,1)*a(1,3))
+a_inv(2,3) = det_a_inv*(a(2,1)*a(1,3)-a(1,1)*a(2,3))
+a_inv(3,1) = det_a_inv*(a(2,1)*a(3,2)-a(3,1)*a(2,2))
+a_inv(3,2) = det_a_inv*(a(3,1)*a(1,2)-a(1,1)*a(3,2))
+a_inv(3,3) = det_a_inv*(a(1,1)*a(2,2)-a(2,1)*a(1,2))
+
+RETURN
+END SUBROUTINE matinv3d
+SUBROUTINE pk2iso(pkiso,pkfic,pl,det,ndi)
 
 
 
-!>     RIGHT AND LEFT CAUCHY-GREEN DEFORMATION TENSORS
+!>    ISOCHORIC PK2 STRESS TENSOR
 use global
 IMPLICIT NONE
 
-INTEGER, INTENT(IN OUT)                  :: ndi
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: c(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: b(ndi,ndi)
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: pkiso(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: pkfic(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: pl(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: det
 
 
-!     RIGHT CAUCHY-GREEN DEFORMATION TENSOR
-c=matmul(transpose(f),f)
-!     LEFT CAUCHY-GREEN DEFORMATION TENSOR
-b=matmul(f,transpose(f))
+
+INTEGER :: i1,j1
+
+DOUBLE PRECISION :: scale2
+
+CALL contraction42(pkiso,pl,pkfic,ndi)
+
+scale2=det**(-two/three)
+DO i1=1,ndi
+  DO j1=1,ndi
+    pkiso(i1,j1)=scale2*pkiso(i1,j1)
+  END DO
+END DO
+
 RETURN
-END SUBROUTINE deformation
+END SUBROUTINE pk2iso
+SUBROUTINE pk2isomatfic(fic,diso,cbar,cbari1,unit2,ndi)
+
+
+
+!>     ISOTROPIC MATRIX: 2PK 'FICTICIOUS' STRESS TENSOR
+!      INPUT:
+!       DISO - STRAIN-ENERGY DERIVATIVES
+!       CBAR - DEVIATORIC LEFT CAUCHY-GREEN TENSOR
+!       CBARI1,CBARI2 - CBAR INVARIANTS
+!       UNIT2 - 2ND ORDER IDENTITY TENSOR
+!      OUTPUT:
+!       FIC - 2ND PIOLA KIRCHOOF 'FICTICIOUS' STRESS TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: fic(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: diso(5)
+DOUBLE PRECISION, INTENT(IN)             :: cbar(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: cbari1
+DOUBLE PRECISION, INTENT(IN)             :: unit2(ndi,ndi)
+
+
+
+INTEGER :: i1,j1
+
+DOUBLE PRECISION :: dudi1,dudi2
+DOUBLE PRECISION :: aux1,aux2
+
+dudi1=diso(1)
+dudi2=diso(2)
+
+aux1=two*(dudi1+cbari1*dudi2)
+aux2=-two*dudi2
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    fic(i1,j1)=aux1*unit2(i1,j1)+aux2*cbar(i1,j1)
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE pk2isomatfic
+SUBROUTINE pk2vol(pkvol,pv,c,ndi, det)
+
+
+
+!>    VOLUMETRIC PK2 STRESS
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN OUT)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: pkvol(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: pv, det
+DOUBLE PRECISION, INTENT(IN OUT)         :: c(ndi,ndi)
+
+INTEGER :: i1,j1
+DOUBLE PRECISION :: cinv(ndi,ndi)
+
+
+CALL matinv3d(c,cinv,ndi)
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    pkvol(i1,j1)=det*pv*cinv(i1,j1)
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE pk2vol
+SUBROUTINE projeul(a,aa,pe,ndi)
+
+
+
+!>    EULERIAN PROJECTION TENSOR
+!      INPUTS:
+!          IDENTITY TENSORS - A, AA
+!      OUTPUTS:
+!          4TH ORDER SYMMETRIC EULERIAN PROJECTION TENSOR - PE
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(IN)             :: a(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: aa(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: pe(ndi,ndi,ndi,ndi)
+
+
+
+INTEGER :: i,j,k,l
+
+
+
+DO i=1,ndi
+  DO j=1,ndi
+    DO k=1,ndi
+      DO l=1,ndi
+        pe(i,j,k,l)=aa(i,j,k,l)-(one/three)*(a(i,j)*a(k,l))
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE projeul
+SUBROUTINE projlag(c,aa,pl,ndi)
+
+
+
+!>    LAGRANGIAN PROJECTION TENSOR
+!      INPUTS:
+!          IDENTITY TENSORS - A, AA
+!          ISOCHORIC LEFT CAUCHY GREEN TENSOR - C
+!          INVERSE OF C - CINV
+!      OUTPUTS:
+!          4TH ORDER SYMMETRIC LAGRANGIAN PROJECTION TENSOR - PL
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN OUT)                      :: ndi
+DOUBLE PRECISION, INTENT(IN)             :: c(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: aa(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: pl(ndi,ndi,ndi,ndi)
+
+
+
+INTEGER :: i,j,k,l
+
+DOUBLE PRECISION :: cinv(ndi,ndi)
+
+CALL matinv3d(c,cinv,ndi)
+
+DO i=1,ndi
+  DO j=1,ndi
+    DO k=1,ndi
+      DO l=1,ndi
+        pl(i,j,k,l)=aa(i,j,k,l)-(one/three)*(cinv(i,j)*c(k,l))
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE projlag
+SUBROUTINE pull2(pk,sig,finv,det,ndi)
+
+
+
+!>       PULL-BACK TIMES DET OF A 2ND ORDER TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: pk(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: sig(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: finv(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: det
+
+
+
+INTEGER :: i1,j1,ii1,jj1
+
+
+DOUBLE PRECISION :: aux
+
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    aux=zero
+    DO ii1=1,ndi
+      DO jj1=1,ndi
+        aux=aux+det*finv(i1,ii1)*finv(j1,jj1)*sig(ii1,jj1)
+      END DO
+    END DO
+    pk(i1,j1)=aux
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE pull2
+SUBROUTINE pull4(mat,spatial,finv,det,ndi)
+
+
+
+!>        PULL-BACK TIMES DET OF 4TH ORDER TENSOR
+
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: mat(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: spatial(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: finv(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: det
+
+
+
+INTEGER :: i1,j1,k1,l1,ii1,jj1,kk1,ll1
+
+
+DOUBLE PRECISION :: aux
+
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    DO k1=1,ndi
+      DO l1=1,ndi
+        aux=zero
+        DO ii1=1,ndi
+          DO jj1=1,ndi
+            DO kk1=1,ndi
+              DO ll1=1,ndi
+                aux=aux+det* finv(i1,ii1)*finv(j1,jj1)*  &
+                    finv(k1,kk1)*finv(l1,ll1)*spatial(ii1,jj1,kk1,ll1)
+              END DO
+            END DO
+          END DO
+        END DO
+        mat(i1,j1,k1,l1)=aux
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE pull4
+SUBROUTINE pullforce(zero0, a, b, machep, t,  &
+        lambda,lambda0,l,r0,mu0,beta,b0)
+
+
+
+!>    SINGLE FILAMENT: COMPUTES PULLING FORCE FOR A GIVEN STRETCH
+!*********************************************************************72
+
+!     ZERO SEEKS THE ROOT OF A FUNCTION F(X) IN AN INTERVAL [A,B].
+
+!     DISCUSSION:
+
+!     THE INTERVAL [A,B] MUST BE A CHANGE OF SIGN INTERVAL FOR F.
+!     THAT IS, F(A) AND F(B) MUST BE OF OPPOSITE SIGNS.  THEN
+!     ASSUMING THAT F IS CONTINUOUS IMPLIES THE EXISTENCE OF AT LEAST
+!     ONE VALUE C BETWEEN A AND B FOR WHICH F(C) = 0.
+
+!     THE LOCATION OF THE ZERO IS DETERMINED TO WITHIN AN ACCURACY
+!     OF 6 * MACHEPS * ABS ( C ) + 2 * T.
+
+
+!     LICENSING:
+
+!     THIS CODE IS DISTRIBUTED UNDER THE GNU LGPL LICENSE.
+
+!     MODIFIED:
+
+!     11 FEBRUARY 2013
+
+!     AUTHOR:
+
+!     RICHARD BRENT
+!     MODIFICATIONS BY JOHN BURKARDT
+
+!     REFERENCE:
+
+!     RICHARD BRENT,
+!     ALGORITHMS FOR MINIMIZATION WITHOUT DERIVATIVES,
+!     DOVER, 2002,
+!     ISBN: 0-486-41998-3,
+!     LC: QA402.5.B74.
+
+!     PARAMETERS:
+
+!     INPUT, DOUBLE PRECISION A, B, THE ENDPOINTS OF THE CHANGE OF SIGN
+!     INTERVAL.
+!     INPUT, DOUBLE PRECISION MACHEP, AN ESTIMATE FOR THE RELATIVE
+!     MACHINE PRECISION.
+
+!     INPUT, DOUBLE PRECISION T, A POSITIVE ERROR TOLERANCE.
+
+!     INPUT, EXTERNAL DOUBLE PRECISION F, THE NAME OF A USER-SUPPLIED
+!     FUNCTION, OF THE FORM "FUNCTION G ( F )", WHICH EVALUATES THE
+!     FUNCTION WHOSE ZERO IS BEING SOUGHT.
+
+!     OUTPUT, DOUBLE PRECISION ZERO, THE ESTIMATED VALUE OF A ZERO OF
+!     THE FUNCTION G.
+use global
+
+DOUBLE PRECISION, INTENT(OUT)            :: zero0
+DOUBLE PRECISION, INTENT(IN)             :: a
+DOUBLE PRECISION, INTENT(IN)             :: b
+DOUBLE PRECISION, INTENT(IN)             :: machep
+DOUBLE PRECISION, INTENT(IN)             :: t
+DOUBLE PRECISION, INTENT(IN OUT)         :: lambda
+DOUBLE PRECISION, INTENT(IN OUT)         :: lambda0
+DOUBLE PRECISION, INTENT(IN OUT)         :: l
+DOUBLE PRECISION, INTENT(IN OUT)         :: r0
+DOUBLE PRECISION, INTENT(IN OUT)         :: mu0
+DOUBLE PRECISION, INTENT(IN OUT)         :: beta
+DOUBLE PRECISION, INTENT(IN OUT)         :: b0
+DOUBLE PRECISION :: c
+DOUBLE PRECISION :: d
+DOUBLE PRECISION :: e
+DOUBLE PRECISION :: fa
+DOUBLE PRECISION :: fb
+DOUBLE PRECISION :: fc
+DOUBLE PRECISION :: m
+
+DOUBLE PRECISION :: p
+DOUBLE PRECISION :: q
+DOUBLE PRECISION :: r
+DOUBLE PRECISION :: s
+DOUBLE PRECISION :: sa
+DOUBLE PRECISION :: sb
+
+DOUBLE PRECISION :: tol
+
+
+
+
+!     MAKE LOCAL COPIES OF A AND B.
+
+sa = a
+sb = b
+CALL evalg(fa,sa,lambda,lambda0,l,r0,mu0,beta,b0)
+CALL evalg(fb,sb,lambda,lambda0,l,r0,mu0,beta,b0)
+!      FA = F ( SA )
+!      FB = F ( SB )
+
+10    CONTINUE
+
+c = sa
+fc = fa
+e = sb - sa
+d = e
+
+20    CONTINUE
+
+IF ( ABS ( fc ) < ABS ( fb ) ) THEN
+  sa = sb
+  sb = c
+  c = sa
+  fa = fb
+  fb = fc
+  fc = fa
+END IF
+
+30    CONTINUE
+
+tol = 2.0D+00 * machep * ABS ( sb ) + t
+m = 0.5D+00 * ( c - sb )
+IF ( ABS ( m ) <= tol .OR. fb == 0.0D+00 ) GO TO 140
+IF ( ABS ( e ) >= tol .AND. ABS ( fa ) > ABS ( fb ) ) GO TO 40
+
+e = m
+d = e
+GO TO 100
+
+40    CONTINUE
+
+s = fb / fa
+IF ( sa /= c ) GO TO 50
+
+p = 2.0D+00 * m * s
+q = 1.0D+00 - s
+GO TO 60
+
+50    CONTINUE
+
+q = fa / fc
+r = fb / fc
+p = s * ( 2.0D+00 * m * q * ( q - r ) - ( sb - sa ) * ( r - 1.0D+00 ) )
+q = ( q - 1.0D+00 ) * ( r - 1.0D+00 ) * ( s - 1.0D+00 )
+
+60    CONTINUE
+
+IF ( p <= 0.0D+00 ) GO TO 70
+
+q = - q
+GO TO 80
+
+70    CONTINUE
+
+p = - p
+
+80    CONTINUE
+
+s = e
+e = d
+IF ( 2.0D+00 * p >= 3.0D+00 * m * q - ABS ( tol * q ) .OR.  &
+    p >= ABS ( 0.5D+00 * s * q ) ) GO TO 90
+
+d = p / q
+GO TO 100
+
+90    CONTINUE
+
+e = m
+d = e
+
+100   CONTINUE
+
+sa = sb
+fa = fb
+IF ( ABS ( d ) <= tol ) GO TO 110
+sb = sb + d
+GO TO 130
+
+110   CONTINUE
+
+IF ( m <= 0.0D+00 ) GO TO 120
+sb = sb + tol
+GO TO 130
+
+120   CONTINUE
+
+sb = sb - tol
+
+130   CONTINUE
+
+!      FB = F ( SB )
+CALL evalg(fb,sb,lambda,lambda0,l,r0,mu0,beta,b0)
+IF ( fb > 0.0D+00 .AND. fc > 0.0D+00 ) GO TO 10
+IF ( fb <= 0.0D+00 .AND. fc <= 0.0D+00 ) GO TO 10
+GO TO 20
+
+140   CONTINUE
+
+zero0 = sb
+
+RETURN
+END SUBROUTINE pullforce
+
+!*********************************************************************72
+SUBROUTINE push2(sig,pk,f,det,ndi)
+
+
+
+!>        PIOLA TRANSFORMATION
+!>      INPUT:
+!>       PK - 2ND PIOLA KIRCHOOF STRESS TENSOR
+!>       F - DEFORMATION GRADIENT
+!>       DET - DEFORMATION DETERMINANT
+!>      OUTPUT:
+!>       SIG - CAUCHY STRESS TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: sig(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: pk(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: f(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: det
+
+
+INTEGER :: i1,j1,ii1,jj1
+
+
+DOUBLE PRECISION :: aux
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    aux=zero
+    DO ii1=1,ndi
+      DO jj1=1,ndi
+        aux=aux+(det**(-one))*f(i1,ii1)*f(j1,jj1)*pk(ii1,jj1)
+      END DO
+    END DO
+    sig(i1,j1)=aux
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE push2
+SUBROUTINE push4(spatial,mat,f,det,ndi)
+
+
+
+!>        PIOLA TRANSFORMATION
+!>      INPUT:
+!>       MAT - MATERIAL ELASTICITY TENSOR
+!>       F - DEFORMATION GRADIENT
+!>       DET - DEFORMATION DETERMINANT
+!>      OUTPUT:
+!>       SPATIAL - SPATIAL ELASTICITY TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: spatial(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: mat(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: det
+
+
+INTEGER :: i1,j1,k1,l1,ii1,jj1,kk1,ll1
+
+
+DOUBLE PRECISION :: aux
+
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    DO k1=1,ndi
+      DO l1=1,ndi
+        aux=zero
+        DO ii1=1,ndi
+          DO jj1=1,ndi
+            DO kk1=1,ndi
+              DO ll1=1,ndi
+                aux=aux+(det**(-one))* f(i1,ii1)*f(j1,jj1)*  &
+                    f(k1,kk1)*f(l1,ll1)*mat(ii1,jj1,kk1,ll1)
+              END DO
+            END DO
+          END DO
+        END DO
+        spatial(i1,j1,k1,l1)=aux
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE push4
 function genbet ( aa, bb )
 
   !*****************************************************************************80
@@ -8256,198 +6961,40 @@ function genbet ( aa, bb )
     return
   end
 
-  subroutine kineticsFunc(cbtau, f, df, args, nargs)
-    ! This subroutine serves as the function we would like to solve for                                         
-    ! the bound crosslinker volume fraction (cbtau = cf/cfmax)                                                  
-    ! by finding cbtau such that f = 0                                                                         
-    use global                                                                                                        
-    implicit none                                                                                               
-                                                                                                                
-    integer, intent(in)              :: nargs                                                                   
-    DOUBLE PRECISION, intent(in out) :: cbtau                                                                   
-    DOUBLE PRECISION, intent(out)    :: f, df                                                                    
-    DOUBLE PRECISION, intent(in)     :: args(nargs)                                                              
-                                                                                                                
-    DOUBLE PRECISION                 :: r0f, etac, r0, r0c, fi, ffi, dwi, ddwi, l, mu0str, beta, b0 
-    DOUBLE PRECISION                 :: cfmax, cbmax, dx_kT, dt, kon, koff0, koff, thetab, Ri
-    DOUBLE PRECISION                 :: lambdai, lambdaif, lambda0, lambda0f, lambdaic, thetaf, cbt                                                           
-    DOUBLE PRECISION                 :: DfDcb,DRiDcb, aratio
-    
-    Ri = zero
-                                                                                                                
-    ! Obtain relevant quantities
-    lambdai = args(1)
-    lambda0 = args(2)
-    aratio  = args(3)
-    etac    = args(4)
-    mu0str  = args(5)
-    beta    = args(6)
-    b0      = args(7)
-    r0c     = args(8)                                                                                         
-    cbmax   = args(9)
-    cfmax   = args(10)
-    dx_kT   = args(11)
-    dt      = args(12)
-    kon     = args(13)
-    koff0   = args(14)
-    thetaf  = args(15)
-    cbt     = args(16)
+  subroutine rnd_gennor (mu, sd, phrase, n, array)
 
-    r0f = 1.6 * (cbtau*1.d3)**(- two / 5.d0)
-    l = aratio * r0f
-    r0 = r0f + r0c
-    
-    IF (lambdai.LE.one) then
-        fi = 0.0
-        DfDcb = 0.0
-    ELSE
-        IF((etac > zero).AND.(etac .LE. one))THEN
-            lambdaif=etac*(r0/r0f)*(lambdai-one)+one
-            lambda0f=etac*(r0/r0f)*(lambda0-one)+one
-            lambdaic=(lambdai*r0-lambdaif*r0f)/r0c
-        ELSE
-            lambdaif=lambdai ! False for a filament attached to a stiff crosslinker (etac = 1), only valid for etac = 0 (???)
-            lambdaic=zero ! False for a stiff crosslinker (etac = 1), only valid for etac = 0 (???)
-        END IF
-        CALL fil(fi,ffi,dwi,ddwi,&
-                lambdai,lambdaif,lambda0,lambda0f,&
-                l,r0,r0f,mu0str,beta,b0,etac,&
-                cbtau,DfDcb)
-            ! CALL filpce(lambdai, fi, dwi, ddwi)
-    END IF
-
-    ! Unbinding rate
-    koff = koff0 * exp(dx_kT * fi)
-    thetab = cbtau / cbmax
-
-    ! Reaction rate and residual                                                                         
-    Ri = kon * cfmax * thetaf / (1 - thetaf) - koff * cbmax * thetab / (1 - thetab)
-    f = cbtau - cbt - Ri * dt                                                      
-                                                                                                                
-    ! Residual derivative
-    dRiDcb = - koff * (cbtau / (1 - thetab) * dx_kT * DfDcb + 1 / (1 - thetab)**2) 
-    df = one - dRiDcb * dt
-    
-end subroutine kineticsFunc
-
-SUBROUTINE setjr(cjr,sigma,unit2,ndi)
-
-
-use global
-IMPLICIT NONE
-!>    JAUMAN RATE CONTRIBUTION FOR THE SPATIAL ELASTICITY TENSOR
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: cjr(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: sigma(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
-
-
-
-INTEGER :: i1,j1,k1,l1
-
-
-DO i1 = 1, ndi
-  DO j1 = 1, ndi
-    DO k1 = 1, ndi
-      DO l1 = 1, ndi
-        
-        cjr(i1,j1,k1,l1)= (one/two)*(unit2(i1,k1)*sigma(j1,l1)  &
-            +sigma(i1,k1)*unit2(j1,l1)+unit2(i1,l1)*sigma(j1,k1)  &
-            +sigma(i1,l1)*unit2(j1,k1))
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE setjr
-    SUBROUTINE sdvwrite(det, statev, sigma, phi_tau, dmudx, Vmol, jfluid, cb, cb_tot)                                           
-    !>    WRITE ALL STATE VARIABLES TO STATEV AT END OF INCREMENT                                                       
-    !>
-    !>    STATEV layout (defined in global.f90):
-    !>      Slot  1       : phi_tau  (polymer volume fraction)
-    !>      Slot  2       : det      (Jacobian J)
-    !>      Slot  3       : c        (fluid content)
-    !>      Slots 4-9     : sigma    (Cauchy stress, 6 components Voigt)
-    !>      Slots 10-12   : -dmudx   (chemical potential gradient)
-    !>      Slots 13-15   : jfluid   (fluid flux vector)
-    !>      Slots 16-NSDV : cb(i)    (bound CL concentration per unique direction)
-    use global
-    implicit none
+  ! Based on subroutine test_gennor 
+  ! See test_gennor (or other test subroutines in main.f90) to verify statistics of the generated distribution
   
-    DOUBLE PRECISION, INTENT(IN)  :: det
-    DOUBLE PRECISION, INTENT(IN)  :: sigma(6)
-    DOUBLE PRECISION, INTENT(IN)  :: phi_tau
-    DOUBLE PRECISION, INTENT(IN)  :: dmudx(3,1), jfluid(3,1)
-    DOUBLE PRECISION, INTENT(IN)  :: Vmol
-    DOUBLE PRECISION, INTENT(IN)  :: cb(ndir), cb_tot
-    DOUBLE PRECISION, INTENT(OUT) :: statev(nsdv)
+  implicit none
+    
+  integer ( kind = 4 ) n
+  integer ( kind = 4 ) i
+  integer ( kind = 4 ) seed1
+  integer ( kind = 4 ) seed2
+  real ( kind = 4 ) gennor
+  real ( kind = 4 ), intent(out) :: array(n)
+  real ( kind = 4 ), intent(in)  :: mu, sd
+  character ( len = * ) phrase
+
+    
+  !  Initialize the generators.
+  call initialize_gen ( )   
   
-    INTEGER :: idir
+  !  Set the seeds based on the phrase.
+  call phrtsd ( phrase, seed1, seed2 )
   
-    ! --- Macroscopic quantities (slots 1-15, fixed layout) ---
-    statev(1)     = phi_tau
-    statev(2)     = det
-    statev(3)     = (1.0d0 - phi_tau) / (Vmol * phi_tau * det)  ! fluid content c
-    statev(4)     = cb_tot
-    statev(5:10)   = sigma(1:6)        ! Cauchy stress (Voigt)
-    statev(11:13) = -dmudx(1:3,1)    ! chemical potential gradient
-    statev(14:16) = jfluid(1:3,1)    ! fluid flux vector
+  !  Initialize all generators.
+  call set_initial_seed ( seed1, seed2 )
 
+  !  Generate N samples.
+  do i = 1, n
+    array(i) = gennor ( mu, sd )
+    !write(*,*) array(i)
+  end do
 
-! Slots 17 to NSDV: bound crosslinker concentrations
-DO idir = 1, ndir
-    statev(nsdv - ndir + idir) = cb(idir)
-END DO
-
-
-! write(*,*) 'nsdv = ', nsdv
-! write(*,*) 'statev = ', statev
-
-RETURN
-
-END SUBROUTINE sdvwrite
-
-SUBROUTINE contraction42(s,LT,rt,ndi)
-
-
-
-!>       DOUBLE CONTRACTION BETWEEN 4TH ORDER AND 2ND ORDER  TENSOR
-!>      INPUT:
-!>       LT - left 4TH ORDER TENSOR
-!>       RT - right  2ND ODER TENSOR
-!>      OUTPUT:
-!>       S - DOUBLE CONTRACTED TENSOR (2ND ORDER)
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: s(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: LT(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rt(ndi,ndi)
-
-
-INTEGER :: i1,j1,k1,l1
-
-
-DOUBLE PRECISION :: aux
-
-
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    aux=zero
-    DO k1=1,ndi
-      DO l1=1,ndi
-        aux=aux+LT(i1,j1,k1,l1)*rt(k1,l1)
-      END DO
-    END DO
-    s(i1,j1)=aux
-  END DO
-END DO
-RETURN
-END SUBROUTINE contraction42
+  return
+end
 SUBROUTINE relax(qv,hv,aux1,hv0,pkiso,dtime,tau,teta,ndi)
 
 
@@ -8486,352 +7033,29 @@ END DO
 
 RETURN
 END SUBROUTINE relax
-! COMMENT WHEN RUNNING IN ABAQUS
-SUBROUTINE getoutdir(outdir, lenoutdir)
+SUBROUTINE rotation(f,r,u,ndi)
 
 
 
-!>     GET CURRENT WORKING DIRECTORY
-! INCLUDE 'aba_param.inc'
-
-
-CHARACTER (LEN=256), INTENT(IN OUT)      :: outdir
-INTEGER, INTENT(OUT)                     :: lenoutdir
-
-
-
-CALL getcwd(outdir)
-!        OUTDIR=OUTDIR(1:SCAN(OUTDIR,'\',BACK=.TRUE.)-1)
-lenoutdir=len_trim(outdir)
-
-RETURN
-END SUBROUTINE getoutdir
-SUBROUTINE pullforce(zero0, a, b, machep, t,  &
-        lambda,lambda0,l,r0,mu0,beta,b0)
-
-
-
-!>    SINGLE FILAMENT: COMPUTES PULLING FORCE FOR A GIVEN STRETCH
-!*********************************************************************72
-
-!     ZERO SEEKS THE ROOT OF A FUNCTION F(X) IN AN INTERVAL [A,B].
-
-!     DISCUSSION:
-
-!     THE INTERVAL [A,B] MUST BE A CHANGE OF SIGN INTERVAL FOR F.
-!     THAT IS, F(A) AND F(B) MUST BE OF OPPOSITE SIGNS.  THEN
-!     ASSUMING THAT F IS CONTINUOUS IMPLIES THE EXISTENCE OF AT LEAST
-!     ONE VALUE C BETWEEN A AND B FOR WHICH F(C) = 0.
-
-!     THE LOCATION OF THE ZERO IS DETERMINED TO WITHIN AN ACCURACY
-!     OF 6 * MACHEPS * ABS ( C ) + 2 * T.
-
-
-!     LICENSING:
-
-!     THIS CODE IS DISTRIBUTED UNDER THE GNU LGPL LICENSE.
-
-!     MODIFIED:
-
-!     11 FEBRUARY 2013
-
-!     AUTHOR:
-
-!     RICHARD BRENT
-!     MODIFICATIONS BY JOHN BURKARDT
-
-!     REFERENCE:
-
-!     RICHARD BRENT,
-!     ALGORITHMS FOR MINIMIZATION WITHOUT DERIVATIVES,
-!     DOVER, 2002,
-!     ISBN: 0-486-41998-3,
-!     LC: QA402.5.B74.
-
-!     PARAMETERS:
-
-!     INPUT, DOUBLE PRECISION A, B, THE ENDPOINTS OF THE CHANGE OF SIGN
-!     INTERVAL.
-!     INPUT, DOUBLE PRECISION MACHEP, AN ESTIMATE FOR THE RELATIVE
-!     MACHINE PRECISION.
-
-!     INPUT, DOUBLE PRECISION T, A POSITIVE ERROR TOLERANCE.
-
-!     INPUT, EXTERNAL DOUBLE PRECISION F, THE NAME OF A USER-SUPPLIED
-!     FUNCTION, OF THE FORM "FUNCTION G ( F )", WHICH EVALUATES THE
-!     FUNCTION WHOSE ZERO IS BEING SOUGHT.
-
-!     OUTPUT, DOUBLE PRECISION ZERO, THE ESTIMATED VALUE OF A ZERO OF
-!     THE FUNCTION G.
-use global
-
-DOUBLE PRECISION, INTENT(OUT)            :: zero0
-DOUBLE PRECISION, INTENT(IN)             :: a
-DOUBLE PRECISION, INTENT(IN)             :: b
-DOUBLE PRECISION, INTENT(IN)             :: machep
-DOUBLE PRECISION, INTENT(IN)             :: t
-DOUBLE PRECISION, INTENT(IN OUT)         :: lambda
-DOUBLE PRECISION, INTENT(IN OUT)         :: lambda0
-DOUBLE PRECISION, INTENT(IN OUT)         :: l
-DOUBLE PRECISION, INTENT(IN OUT)         :: r0
-DOUBLE PRECISION, INTENT(IN OUT)         :: mu0
-DOUBLE PRECISION, INTENT(IN OUT)         :: beta
-DOUBLE PRECISION, INTENT(IN OUT)         :: b0
-DOUBLE PRECISION :: c
-DOUBLE PRECISION :: d
-DOUBLE PRECISION :: e
-DOUBLE PRECISION :: fa
-DOUBLE PRECISION :: fb
-DOUBLE PRECISION :: fc
-DOUBLE PRECISION :: m
-
-DOUBLE PRECISION :: p
-DOUBLE PRECISION :: q
-DOUBLE PRECISION :: r
-DOUBLE PRECISION :: s
-DOUBLE PRECISION :: sa
-DOUBLE PRECISION :: sb
-
-DOUBLE PRECISION :: tol
-
-
-
-
-!     MAKE LOCAL COPIES OF A AND B.
-
-sa = a
-sb = b
-CALL evalg(fa,sa,lambda,lambda0,l,r0,mu0,beta,b0)
-CALL evalg(fb,sb,lambda,lambda0,l,r0,mu0,beta,b0)
-!      FA = F ( SA )
-!      FB = F ( SB )
-
-10    CONTINUE
-
-c = sa
-fc = fa
-e = sb - sa
-d = e
-
-20    CONTINUE
-
-IF ( ABS ( fc ) < ABS ( fb ) ) THEN
-  sa = sb
-  sb = c
-  c = sa
-  fa = fb
-  fb = fc
-  fc = fa
-END IF
-
-30    CONTINUE
-
-tol = 2.0D+00 * machep * ABS ( sb ) + t
-m = 0.5D+00 * ( c - sb )
-IF ( ABS ( m ) <= tol .OR. fb == 0.0D+00 ) GO TO 140
-IF ( ABS ( e ) >= tol .AND. ABS ( fa ) > ABS ( fb ) ) GO TO 40
-
-e = m
-d = e
-GO TO 100
-
-40    CONTINUE
-
-s = fb / fa
-IF ( sa /= c ) GO TO 50
-
-p = 2.0D+00 * m * s
-q = 1.0D+00 - s
-GO TO 60
-
-50    CONTINUE
-
-q = fa / fc
-r = fb / fc
-p = s * ( 2.0D+00 * m * q * ( q - r ) - ( sb - sa ) * ( r - 1.0D+00 ) )
-q = ( q - 1.0D+00 ) * ( r - 1.0D+00 ) * ( s - 1.0D+00 )
-
-60    CONTINUE
-
-IF ( p <= 0.0D+00 ) GO TO 70
-
-q = - q
-GO TO 80
-
-70    CONTINUE
-
-p = - p
-
-80    CONTINUE
-
-s = e
-e = d
-IF ( 2.0D+00 * p >= 3.0D+00 * m * q - ABS ( tol * q ) .OR.  &
-    p >= ABS ( 0.5D+00 * s * q ) ) GO TO 90
-
-d = p / q
-GO TO 100
-
-90    CONTINUE
-
-e = m
-d = e
-
-100   CONTINUE
-
-sa = sb
-fa = fb
-IF ( ABS ( d ) <= tol ) GO TO 110
-sb = sb + d
-GO TO 130
-
-110   CONTINUE
-
-IF ( m <= 0.0D+00 ) GO TO 120
-sb = sb + tol
-GO TO 130
-
-120   CONTINUE
-
-sb = sb - tol
-
-130   CONTINUE
-
-!      FB = F ( SB )
-CALL evalg(fb,sb,lambda,lambda0,l,r0,mu0,beta,b0)
-IF ( fb > 0.0D+00 .AND. fc > 0.0D+00 ) GO TO 10
-IF ( fb <= 0.0D+00 .AND. fc <= 0.0D+00 ) GO TO 10
-GO TO 20
-
-140   CONTINUE
-
-zero0 = sb
-
-RETURN
-END SUBROUTINE pullforce
-
-!*********************************************************************72
-SUBROUTINE contraction24(s,LT,rt,ndi)
-
-
-
-!>       DOUBLE CONTRACTION BETWEEN 4TH ORDER AND 2ND ORDER  TENSOR
-!>      INPUT:
-!>       LT - RIGHT 2ND ORDER TENSOR
-!>       RT - LEFT  4TH ODER TENSOR
-!>      OUTPUT:
-!>       S - DOUBLE CONTRACTED TENSOR (2ND ORDER)
+!>    COMPUTES ROTATION TENSOR
 use global
 IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: s(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: lt(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rt(ndi,ndi,ndi,ndi)
-
-
-
-INTEGER :: i1,j1,k1,l1
-
-
-DOUBLE PRECISION :: aux
-
-
-
-DO k1=1,ndi
-  DO l1=1,ndi
-    aux=zero
-    DO i1=1,ndi
-      DO j1=1,ndi
-        aux=aux+lt(k1,l1)*rt(i1,j1,k1,l1)
-      END DO
-    END DO
-    s(k1,l1)=aux
-  END DO
-END DO
-RETURN
-END SUBROUTINE contraction24
-SUBROUTINE sigisomatfic(sfic,pkfic,f,det,ndi)
-
-
-
-!>    ISOTROPIC MATRIX:  ISOCHORIC CAUCHY STRESS
-use global
-IMPLICIT NONE
-
 
 INTEGER, INTENT(IN OUT)                  :: ndi
-DOUBLE PRECISION, INTENT(IN OUT)         :: sfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: pkfic(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
+DOUBLE PRECISION, INTENT(OUT)            :: r(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: u(ndi,ndi)
 
 
 
 
+DOUBLE PRECISION :: uinv(ndi,ndi)
 
-CALL push2(sfic,pkfic,f,det,ndi)
+CALL matinv3d(u,uinv,ndi)
 
+r = matmul(f,uinv)
 RETURN
-END SUBROUTINE sigisomatfic
-SUBROUTINE uexternaldb(lop,lrestart,time,dtime,kstep,kinc)
-
-
-
-!>    READ FILAMENTS ORIENTATION AND PREFERED DIRECTIONS
-use global
-INCLUDE 'aba_param.inc'
-!       this subroutine get the directions and weights for
-!      the numerical integration
-
-!     UEXTERNAL just called once; work in parallel computing
-
-INTEGER, INTENT(IN OUT)                  :: lop
-INTEGER, INTENT(IN OUT)                  :: lrestart
-REAL, INTENT(IN OUT)                     :: time(2)
-real(8), INTENT(IN OUT)                  :: dtime
-INTEGER, INTENT(IN OUT)                  :: kstep
-INTEGER, INTENT(IN OUT)                  :: kinc
-
-COMMON /kfilp/prefdir
-COMMON /kfile/etadir
-
-! DOUBLE PRECISION :: prefdir(nelem,4)
-DOUBLE PRECISION :: prefdir(1,4)
-DOUBLE PRECISION :: etadir(nelem*8, 2+ndir)
-CHARACTER (LEN=256) ::  filename, jobdir, etafile
-INTEGER :: lenjobdir,i,j,k
-
-!     LOP=0 --> START OF THE ANALYSIS
-IF(lop == 0.OR.lop == 4) THEN
-  
-  CALL getoutdir(jobdir,lenjobdir)
-  write(*,*) 'nelem = ', nelem
-  write(*,*) 'jobdir = ', jobdir
-  write(*,*) 'lenjobdir = ', lenjobdir
-  
-  !preferential direction
-  filename=jobdir(:lenjobdir)//'/'//dir2
-  OPEN(16,FILE=filename,STATUS='OLD')
-  DO i=1,nelem
-    READ(16,*) (prefdir(i,j),j=1,4)
-  END DO
-  CLOSE(16)
-
-  !random CL stiffness eta
-  !etafile = jobdir(:lenjobdir)//'/'//dir3
-  !OPEN(17,FILE=etafile)
-  !DO i=1,nelem*ngp
-  !  READ(17,*) (etadir(i,j),j=1,ndir+2)
-  !END DO
-  !CLOSE(17)
-
-
-END IF
-
-RETURN
-
-END SUBROUTINE uexternaldb
+END SUBROUTINE rotation
 SUBROUTINE setiso(ciso,cfic,pe,siso,sfic,unit2,ndi)
 
 
@@ -8881,524 +7105,71 @@ END DO
 
 RETURN
 END SUBROUTINE setiso
-SUBROUTINE hvread(hv,statev,v1,ndi)
+SUBROUTINE setjr(cjr,sigma,unit2,ndi)
 
-
-
-!>    VISCOUS DISSIPATION: READ STATE VARS
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN OUT)                  :: ndi
-
-DOUBLE PRECISION, INTENT(OUT)            :: hv(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: statev(nsdv)
-INTEGER, INTENT(IN)                      :: v1
-
-
-
-INTEGER :: pos
-
-
-pos=9*v1-9
-hv(1,1)=statev(1+pos)
-hv(1,2)=statev(2+pos)
-hv(1,3)=statev(3+pos)
-hv(2,1)=statev(4+pos)
-hv(2,2)=statev(5+pos)
-hv(2,3)=statev(6+pos)
-hv(3,1)=statev(7+pos)
-hv(3,2)=statev(8+pos)
-hv(3,3)=statev(9+pos)
-
-RETURN
-
-END SUBROUTINE hvread
-SUBROUTINE pullchem(zero0, a, b, machep, t,  &
-        cabp,cfmax,cbmax,chi,Keq)
-
-
-
-!>    SINGLE FILAMENT: COMPUTES PULLING FORCE FOR A GIVEN STRETCH
-!*********************************************************************72
-
-!     ZERO SEEKS THE ROOT OF A FUNCTION F(X) IN AN INTERVAL [A,B].
-
-!     DISCUSSION:
-
-!     THE INTERVAL [A,B] MUST BE A CHANGE OF SIGN INTERVAL FOR F.
-!     THAT IS, F(A) AND F(B) MUST BE OF OPPOSITE SIGNS.  THEN
-!     ASSUMING THAT F IS CONTINUOUS IMPLIES THE EXISTENCE OF AT LEAST
-!     ONE VALUE C BETWEEN A AND B FOR WHICH F(C) = 0.
-
-!     THE LOCATION OF THE ZERO IS DETERMINED TO WITHIN AN ACCURACY
-!     OF 6 * MACHEPS * ABS ( C ) + 2 * T.
-
-
-!     LICENSING:
-
-!     THIS CODE IS DISTRIBUTED UNDER THE GNU LGPL LICENSE.
-
-!     MODIFIED:
-
-!     11 FEBRUARY 2013
-
-!     AUTHOR:
-
-!     RICHARD BRENT
-!     MODIFICATIONS BY JOHN BURKARDT
-
-!     REFERENCE:
-
-!     RICHARD BRENT,
-!     ALGORITHMS FOR MINIMIZATION WITHOUT DERIVATIVES,
-!     DOVER, 2002,
-!     ISBN: 0-486-41998-3,
-!     LC: QA402.5.B74.
-
-!     PARAMETERS:
-
-!     INPUT, DOUBLE PRECISION A, B, THE ENDPOINTS OF THE CHANGE OF SIGN
-!     INTERVAL.
-!     INPUT, DOUBLE PRECISION MACHEP, AN ESTIMATE FOR THE RELATIVE
-!     MACHINE PRECISION.
-
-!     INPUT, DOUBLE PRECISION T, A POSITIVE ERROR TOLERANCE.
-
-!     INPUT, EXTERNAL DOUBLE PRECISION F, THE NAME OF A USER-SUPPLIED
-!     FUNCTION, OF THE FORM "FUNCTION G ( F )", WHICH EVALUATES THE
-!     FUNCTION WHOSE ZERO IS BEING SOUGHT.
-
-!     OUTPUT, DOUBLE PRECISION ZERO, THE ESTIMATED VALUE OF A ZERO OF
-!     THE FUNCTION G.
-use global
-
-DOUBLE PRECISION, INTENT(OUT)            :: zero0
-DOUBLE PRECISION, INTENT(IN)             :: a
-DOUBLE PRECISION, INTENT(IN)             :: b
-DOUBLE PRECISION, INTENT(IN)             :: machep
-DOUBLE PRECISION, INTENT(IN)             :: t
-DOUBLE PRECISION, INTENT(IN)             :: cabp
-DOUBLE PRECISION, INTENT(IN)             :: cfmax
-DOUBLE PRECISION, INTENT(IN)             :: cbmax
-DOUBLE PRECISION, INTENT(IN)             :: chi
-DOUBLE PRECISION, INTENT(IN)             :: Keq
-DOUBLE PRECISION :: c
-DOUBLE PRECISION :: d
-DOUBLE PRECISION :: e
-DOUBLE PRECISION :: fa
-DOUBLE PRECISION :: fb
-DOUBLE PRECISION :: fc
-DOUBLE PRECISION :: m
-
-DOUBLE PRECISION :: p
-DOUBLE PRECISION :: q
-DOUBLE PRECISION :: r
-DOUBLE PRECISION :: s
-DOUBLE PRECISION :: sa
-DOUBLE PRECISION :: sb
-
-DOUBLE PRECISION :: tol
-
-! write(*,*) 'zero: ', a
-! write(*,*) 'cb_upper: ', b
-! write(*,*) 'machep: ', machep
-! write(*,*) 'tol: ', t
-! write(*,*) 'cabp: ', cabp
-! write(*,*) 'cfmax: ', cfmax
-! write(*,*) 'cbmax: ', cbmax
-! write(*,*) 'chi: ', chi
-! write(*,*) 'Keq: ', Keq
-
-!     MAKE LOCAL COPIES OF A AND B.
-
-sa = a
-sb = b
-CALL evalh(fa,sa,cabp,cfmax,cbmax,chi,Keq)
-CALL evalh(fb,sb,cabp,cfmax,cbmax,chi,Keq)
-!      FA = F ( SA )
-!      FB = F ( SB )
-
-10    CONTINUE
-
-c = sa
-fc = fa
-e = sb - sa
-d = e
-
-20    CONTINUE
-
-IF ( ABS ( fc ) < ABS ( fb ) ) THEN
-  sa = sb
-  sb = c
-  c = sa
-  fa = fb
-  fb = fc
-  fc = fa
-END IF
-
-30    CONTINUE
-
-tol = 2.0D+00 * machep * ABS ( sb ) + t
-m = 0.5D+00 * ( c - sb )
-IF ( ABS ( m ) <= tol .OR. fb == 0.0D+00 ) GO TO 140
-IF ( ABS ( e ) >= tol .AND. ABS ( fa ) > ABS ( fb ) ) GO TO 40
-
-e = m
-d = e
-GO TO 100
-
-40    CONTINUE
-
-s = fb / fa
-IF ( sa /= c ) GO TO 50
-
-p = 2.0D+00 * m * s
-q = 1.0D+00 - s
-GO TO 60
-
-50    CONTINUE
-
-q = fa / fc
-r = fb / fc
-p = s * ( 2.0D+00 * m * q * ( q - r ) - ( sb - sa ) * ( r - 1.0D+00 ) )
-q = ( q - 1.0D+00 ) * ( r - 1.0D+00 ) * ( s - 1.0D+00 )
-
-60    CONTINUE
-
-IF ( p <= 0.0D+00 ) GO TO 70
-
-q = - q
-GO TO 80
-
-70    CONTINUE
-
-p = - p
-
-80    CONTINUE
-
-s = e
-e = d
-IF ( 2.0D+00 * p >= 3.0D+00 * m * q - ABS ( tol * q ) .OR.  &
-    p >= ABS ( 0.5D+00 * s * q ) ) GO TO 90
-
-d = p / q
-GO TO 100
-
-90    CONTINUE
-
-e = m
-d = e
-
-100   CONTINUE
-
-sa = sb
-fa = fb
-IF ( ABS ( d ) <= tol ) GO TO 110
-sb = sb + d
-GO TO 130
-
-110   CONTINUE
-
-IF ( m <= 0.0D+00 ) GO TO 120
-sb = sb + tol
-GO TO 130
-
-120   CONTINUE
-
-sb = sb - tol
-
-130   CONTINUE
-
-!      FB = F ( SB )
-CALL evalh(fb,sb,cabp,cfmax,cbmax,chi,Keq)
-IF ( fb > 0.0D+00 .AND. fc > 0.0D+00 ) GO TO 10
-IF ( fb <= 0.0D+00 .AND. fc <= 0.0D+00 ) GO TO 10
-GO TO 20
-
-140   CONTINUE
-
-zero0 = sb
-
-RETURN
-END SUBROUTINE pullchem
-
-!*********************************************************************72
-SUBROUTINE pk2vol(pkvol,pv,c,ndi, det)
-
-
-
-!>    VOLUMETRIC PK2 STRESS
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN OUT)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: pkvol(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: pv, det
-DOUBLE PRECISION, INTENT(IN OUT)         :: c(ndi,ndi)
-
-INTEGER :: i1,j1
-DOUBLE PRECISION :: cinv(ndi,ndi)
-
-
-CALL matinv3d(c,cinv,ndi)
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    pkvol(i1,j1)=det*pv*cinv(i1,j1)
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE pk2vol
-SUBROUTINE getprops_gp(noel, npt, etadir, etadir_array)
 
 use global
 IMPLICIT NONE
-
-INTEGER, INTENT(IN)              :: noel, npt
-DOUBLE PRECISION, INTENT(IN)     :: etadir(nelem*ngp, ndir+2)
-DOUBLE PRECISION, INTENT(OUT)    :: etadir_array(ndir)
-INTEGER                          :: i, l, idx
-
-l = (noel-1)*NGP + npt
-IF ((etadir(l,1)==noel).AND.(etadir(l,2)==npt)) THEN
-  DO i = 1, ndir
-    etadir_array(i) = etadir(l,i+2)
-  END DO
-ELSE
-  DO i = 1, NELEM*NGP
-    IF ((etadir(i,1)==noel).AND.(etadir(i,2)==npt)) THEN
-      idx = i
-      exit
-  END IF
-END DO
-END IF
-
-RETURN
-END SUBROUTINE getprops_gp
-SUBROUTINE matinv3d(a,a_inv,ndi)
-!>    INVERSE OF A 3X3 MATRIX
-!     RETURN THE INVERSE OF A(3,3) - A_INV
-use global
-
-INTEGER, INTENT(IN OUT)                  :: ndi
-DOUBLE PRECISION, INTENT(IN)             :: a(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: a_inv(ndi,ndi)
-
-DOUBLE PRECISION :: det_a,det_a_inv
-
-det_a = a(1,1)*(a(2,2)*a(3,3) - a(3,2)*a(2,3)) -  &
-    a(2,1)*(a(1,2)*a(3,3) - a(3,2)*a(1,3)) +  &
-    a(3,1)*(a(1,2)*a(2,3) - a(2,2)*a(1,3))
-
-IF (det_a <= 0.d0) THEN
-  WRITE(*,*) 'WARNING: SUBROUTINE MATINV3D:'
-  WRITE(*,*) 'WARNING: DET OF MAT=',det_a
-  RETURN
-END IF
-
-det_a_inv = 1.d0/det_a
-
-a_inv(1,1) = det_a_inv*(a(2,2)*a(3,3)-a(3,2)*a(2,3))
-a_inv(1,2) = det_a_inv*(a(3,2)*a(1,3)-a(1,2)*a(3,3))
-a_inv(1,3) = det_a_inv*(a(1,2)*a(2,3)-a(2,2)*a(1,3))
-a_inv(2,1) = det_a_inv*(a(3,1)*a(2,3)-a(2,1)*a(3,3))
-a_inv(2,2) = det_a_inv*(a(1,1)*a(3,3)-a(3,1)*a(1,3))
-a_inv(2,3) = det_a_inv*(a(2,1)*a(1,3)-a(1,1)*a(2,3))
-a_inv(3,1) = det_a_inv*(a(2,1)*a(3,2)-a(3,1)*a(2,2))
-a_inv(3,2) = det_a_inv*(a(3,1)*a(1,2)-a(1,1)*a(3,2))
-a_inv(3,3) = det_a_inv*(a(1,1)*a(2,2)-a(2,1)*a(1,2))
-
-RETURN
-END SUBROUTINE matinv3d
-SUBROUTINE onem(a,aa,aas,ndi)
-
-
-
-!>      THIS SUBROUTINE GIVES:
-!>          2ND ORDER IDENTITY TENSORS - A
-!>          4TH ORDER IDENTITY TENSOR - AA
-!>          4TH ORDER SYMMETRIC IDENTITY TENSOR - AAS
-use global
-IMPLICIT NONE
+!>    JAUMAN RATE CONTRIBUTION FOR THE SPATIAL ELASTICITY TENSOR
 
 INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: a(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: aa(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: aas(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: cjr(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: sigma(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
 
 
 
-INTEGER :: i,j,k,l
+INTEGER :: i1,j1,k1,l1
 
-a = zero
-aa = zero
-aas = zero
 
-DO i = 1, ndi
-  a(i,i) = one
-END DO
-
-DO i=1,ndi
-  DO j=1,ndi
-    DO k=1,ndi
-      DO l=1,ndi
-        IF (i == k .and. j == l) then
-          aa(i,j,k,l) = one
-        END IF
-        aas(i,j,k,l) = (one/two)*(a(i,k)*a(j,l)+a(i,l)*a(j,k))
+DO i1 = 1, ndi
+  DO j1 = 1, ndi
+    DO k1 = 1, ndi
+      DO l1 = 1, ndi
+        
+        cjr(i1,j1,k1,l1)= (one/two)*(unit2(i1,k1)*sigma(j1,l1)  &
+            +sigma(i1,k1)*unit2(j1,l1)+unit2(i1,l1)*sigma(j1,k1)  &
+            +sigma(i1,l1)*unit2(j1,k1))
       END DO
     END DO
   END DO
 END DO
 
 RETURN
-END SUBROUTINE onem
-SUBROUTINE pk2iso(pkiso,pkfic,pl,det,ndi)
+END SUBROUTINE setjr
+SUBROUTINE setvol(cvol,pv,ppv,unit2,unit4s,ndi)
 
 
 
-!>    ISOCHORIC PK2 STRESS TENSOR
+!>    VOLUMETRIC SPATIAL ELASTICITY TENSOR
 use global
 IMPLICIT NONE
 
 INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: pkiso(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: pkfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: pl(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: det
+DOUBLE PRECISION, INTENT(OUT)            :: cvol(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: pv
+DOUBLE PRECISION, INTENT(IN OUT)         :: ppv
+DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: unit4s(ndi,ndi,ndi,ndi)
+
+
+INTEGER :: i1,j1,k1,l1
 
 
 
-INTEGER :: i1,j1
-
-DOUBLE PRECISION :: scale2
-
-CALL contraction42(pkiso,pl,pkfic,ndi)
-
-scale2=det**(-two/three)
-DO i1=1,ndi
-  DO j1=1,ndi
-    pkiso(i1,j1)=scale2*pkiso(i1,j1)
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE pk2iso
-SUBROUTINE push4(spatial,mat,f,det,ndi)
-
-
-
-!>        PIOLA TRANSFORMATION
-!>      INPUT:
-!>       MAT - MATERIAL ELASTICITY TENSOR
-!>       F - DEFORMATION GRADIENT
-!>       DET - DEFORMATION DETERMINANT
-!>      OUTPUT:
-!>       SPATIAL - SPATIAL ELASTICITY TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: spatial(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: mat(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
-
-INTEGER :: i1,j1,k1,l1,ii1,jj1,kk1,ll1
-
-
-DOUBLE PRECISION :: aux
-
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    DO k1=1,ndi
-      DO l1=1,ndi
-        aux=zero
-        DO ii1=1,ndi
-          DO jj1=1,ndi
-            DO kk1=1,ndi
-              DO ll1=1,ndi
-                aux=aux+(det**(-one))* f(i1,ii1)*f(j1,jj1)*  &
-                    f(k1,kk1)*f(l1,ll1)*mat(ii1,jj1,kk1,ll1)
-              END DO
-            END DO
-          END DO
-        END DO
-        spatial(i1,j1,k1,l1)=aux
+DO i1 = 1, ndi
+  DO j1 = 1, ndi
+    DO k1 = 1, ndi
+      DO l1 = 1, ndi
+        cvol(i1,j1,k1,l1)= ppv*unit2(i1,j1)*unit2(k1,l1)  &
+            -two*pv*unit4s(i1,j1,k1,l1)
       END DO
     END DO
   END DO
 END DO
 
 RETURN
-END SUBROUTINE push4
-SUBROUTINE rotation(f,r,u,ndi)
-
-
-
-!>    COMPUTES ROTATION TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN OUT)                  :: ndi
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: r(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: u(ndi,ndi)
-
-
-
-
-DOUBLE PRECISION :: uinv(ndi,ndi)
-
-CALL matinv3d(u,uinv,ndi)
-
-r = matmul(f,uinv)
-RETURN
-END SUBROUTINE rotation
-SUBROUTINE push2(sig,pk,f,det,ndi)
-
-
-
-!>        PIOLA TRANSFORMATION
-!>      INPUT:
-!>       PK - 2ND PIOLA KIRCHOOF STRESS TENSOR
-!>       F - DEFORMATION GRADIENT
-!>       DET - DEFORMATION DETERMINANT
-!>      OUTPUT:
-!>       SIG - CAUCHY STRESS TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: sig(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: pk(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
-
-INTEGER :: i1,j1,ii1,jj1
-
-
-DOUBLE PRECISION :: aux
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    aux=zero
-    DO ii1=1,ndi
-      DO jj1=1,ndi
-        aux=aux+(det**(-one))*f(i1,ii1)*f(j1,jj1)*pk(ii1,jj1)
-      END DO
-    END DO
-    sig(i1,j1)=aux
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE push2
+END SUBROUTINE setvol
 SUBROUTINE sigfilfic(sfic,rho,lambda,dw,m,rw,ndi)
 
 
@@ -9429,519 +7200,6 @@ END DO
 
 RETURN
 END SUBROUTINE sigfilfic
-SUBROUTINE metiso(cmiso,cmfic,pl,pkiso,pkfic,c,unit2,det,ndi)
-
-
-
-!>    ISOCHORIC MATERIAL ELASTICITY TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN OUT)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: cmiso(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: cmfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: pl(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: pkiso(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: pkfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: c(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: det
-
-
-
-INTEGER :: i1,j1,k1,l1
-DOUBLE PRECISION :: cisoaux(ndi,ndi,ndi,ndi), cisoaux1(ndi,ndi,ndi,ndi),  &
-    plt(ndi,ndi,ndi,ndi),cinv(ndi,ndi), pll(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: trfic,xx,yy,zz, aux,aux1
-
-CALL matinv3d(c,cinv,ndi)
-cisoaux1=zero
-cisoaux=zero
-CALL contraction44(cisoaux1,pl,cmfic,ndi)
-DO i1=1,ndi
-  DO j1=1,ndi
-    DO k1=1,ndi
-      DO l1=1,ndi
-        plt(i1,j1,k1,l1)=pl(k1,l1,i1,j1)
-      END DO
-    END DO
-  END DO
-END DO
-
-CALL contraction44(cisoaux,cisoaux1,plt,ndi)
-
-trfic=zero
-aux=det**(-two/three)
-aux1=aux**two
-CALL contraction22(trfic,aux*pkfic,c,ndi)
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    DO k1=1,ndi
-      DO l1=1,ndi
-        xx=aux1*cisoaux(i1,j1,k1,l1)
-        pll(i1,j1,k1,l1)=(one/two)*(cinv(i1,k1)*cinv(j1,l1)+  &
-            cinv(i1,l1)*cinv(j1,k1))- (one/three)*cinv(i1,j1)*cinv(k1,l1)
-        yy=trfic*pll(i1,j1,k1,l1)
-        zz=pkiso(i1,j1)*cinv(k1,l1)+cinv(i1,j1)*pkiso(k1,l1)
-        
-        cmiso(i1,j1,k1,l1)=xx+(two/three)*yy-(two/three)*zz
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE metiso
-SUBROUTINE cmatisomatfic(cmisomatfic,cbar,cbari1,cbari2,  &
-        diso,unit2,unit4,det,ndi)
-
-
-
-!>    ISOTROPIC MATRIX: MATERIAL 'FICTICIOUS' ELASTICITY TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(IN OUT)         :: cmisomatfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: cbar(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: cbari1
-DOUBLE PRECISION, INTENT(IN OUT)         :: cbari2
-DOUBLE PRECISION, INTENT(IN)             :: diso(5)
-DOUBLE PRECISION, INTENT(IN)             :: unit2(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: unit4(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
-
-
-INTEGER :: i1,j1,k1,l1
-    
-
-DOUBLE PRECISION :: dudi1,dudi2,d2ud2i1,d2ud2i2,d2udi1i2
-DOUBLE PRECISION :: aux,aux1,aux2,aux3,aux4
-DOUBLE PRECISION :: uij,ukl,cij,ckl
-
-dudi1=diso(1)
-dudi2=diso(2)
-d2ud2i1=diso(3)
-d2ud2i2=diso(4)
-d2udi1i2=diso(5)
-
-aux1=four*(d2ud2i1+two*cbari1*d2udi1i2+ dudi2+cbari1*cbari1*d2ud2i2)
-aux2=-four*(d2udi1i2+cbari1*d2ud2i2)
-aux3=four*d2ud2i2
-aux4=-four*dudi2
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    DO k1=1,ndi
-      DO l1=1,ndi
-        uij=unit2(i1,j1)
-        ukl=unit2(k1,l1)
-        cij=cbar(i1,j1)
-        ckl=cbar(k1,l1)
-        aux=aux1*uij*ukl+ aux2*(uij*ckl+cij*ukl)+aux3*cij*ckl+  &
-            aux4*unit4(i1,j1,k1,l1)
-        cmisomatfic(i1,j1,k1,l1)=aux * det**(-four/three)
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE cmatisomatfic
-subroutine rnd_gennor (mu, sd, phrase, n, array)
-
-  ! Based on subroutine test_gennor 
-  ! See test_gennor (or other test subroutines in main.f90) to verify statistics of the generated distribution
-  
-  implicit none
-    
-  integer ( kind = 4 ) n
-  integer ( kind = 4 ) i
-  integer ( kind = 4 ) seed1
-  integer ( kind = 4 ) seed2
-  real ( kind = 4 ) gennor
-  real ( kind = 4 ), intent(out) :: array(n)
-  real ( kind = 4 ), intent(in)  :: mu, sd
-  character ( len = * ) phrase
-
-    
-  !  Initialize the generators.
-  call initialize_gen ( )   
-  
-  !  Set the seeds based on the phrase.
-  call phrtsd ( phrase, seed1, seed2 )
-  
-  !  Initialize all generators.
-  call set_initial_seed ( seed1, seed2 )
-
-  !  Generate N samples.
-  do i = 1, n
-    array(i) = gennor ( mu, sd )
-    !write(*,*) array(i)
-  end do
-
-  return
-end
-subroutine solveKinetics(root, args, nargs, rootOld)
-
-    ! Numerical Recipes RTSAFE.
-
-    implicit none
-
-    ! Dummy arguments
-    integer, intent(in)     :: nargs
-    real(8), intent(in)     :: args(nargs)
-    real(8), intent(in)     :: rootOld
-    real(8), intent(out)    :: root
-
-    ! Local variables
-    integer :: j
-    real(8) :: f, df, fl, fh, xl, xh, x1, x2, swap, dxold
-    real(8) :: dx, temp, rootMax, rootMin
-    real(8) :: cbmax
-
-    ! Parameter declarations
-    integer, parameter :: maxit = 50
-    real(8), parameter :: xacc  = 1.0d-12
-    real(8), parameter :: zero  = 0.0d0
-
-    cbmax = args(9)
-
-    ! Set the safe bounds for the root
-    rootMax = cbmax - 1.0d-10
-    rootMin = 1.0d-8
-
-    x1 = rootMin
-    x2 = rootMax
-    call kineticsFunc(x1, fl, df, args, nargs)
-    call kineticsFunc(x2, fh, df, args, nargs)
-
-    ! Check if the root is safely bracketed
-    if (fl * fh >= zero) then
-        root = rootOld
-        write(*,*) 'FYI, root not bracketed on cb'
-        write(*,*) 'fl=', fl
-        write(*,*) 'fh=', fh
-        write(*,*) 'rootOld=', rootOld
-        write(*,*) 'mu =', args(1)
-        write(*,*) 'mu0=', args(2)
-        write(*,*) 'Rgas=', args(3)
-        write(*,*) 'theta=', args(4)
-        write(*,*) 'chi=', args(5)
-        write(*,*) 'Vmol=', args(6)
-        write(*,*) 'Kbulk=', args(7)
-        write(*,*) 'detF=', args(8)
-        write(*,*) 'cb=', args(9)
-        write(*,*) 'cfmax=', args(10)
-        call exit
-        return
-    end if
-
-    ! Orient the search so that f(xl) < 0
-    if (fl < 0.0d0) then
-        xl = x1
-        xh = x2
-    else
-        xh = x1
-        xl = x2
-        swap = fl
-        fl = fh
-        fh = swap
-    end if
-
-    ! Initialize the guess for the root, the "step size before last", and the last step
-    if (rootOld < rootMin) root = rootMin ! rootOld = rootMin
-    if (rootOld > rootMax) root = rootMax ! rootOld = rootMax
-    
-    dxold = abs(x2 - x1)
-    dx    = dxold
-    
-    call kineticsFunc(root, f, df, args, nargs)
-
-    ! Loop over allowed iterations (Replaced old DO 10 loop)
-    do j = 1, maxit
-        
-        ! Bisect if Newton is out of range, or not decreasing fast enough.
-        if ( (((root - xh) * df - f) * ((root - xl) * df - f) >= 0.0d0) .or. &
-             (abs(2.0d0 * f) > abs(dxold * df)) ) then
-
-            dxold = dx
-            dx    = 0.5d0 * (xh - xl)
-            root  = xl + dx
-            
-            ! Change in root is negligible
-            if (xl == root) return
-
-        else
-            ! Newton step is acceptable. Take it.
-            dxold = dx
-            dx    = f / df
-            temp  = root
-            root  = root - dx
-            
-            ! Change in root is negligible
-            if (temp == root) return
-
-        end if
-
-        ! Convergence criterion
-        if (abs(dx) < xacc) return
-
-        ! The one new function evaluation per iteration
-        call kineticsFunc(root, f, df, args, nargs)
-
-        ! Maintain the bracket on the root 
-        if (f < 0.0d0) then
-            xl = root
-            fl = f
-        else
-            xh = root
-            fh = f
-        end if
-
-    end do
-
-    ! If loop finishes without returning, maximum iterations were exceeded
-    write(*, '(/1X,A)') 'solveKinetics EXCEEDING MAXIMUM ITERATIONS'
-    write(*, '(/1X,A)') 'rootOld = ', rootOld
-    write(*, '(/1X,A)') 'root = ', root
-    write(*, '(/1X,A)') 'f = ', f
-    write(*, '(/1X,A)') 'df = ', df
-    
-    return
-end subroutine solveKinetics
-SUBROUTINE csfilfic(cfic,rho,lambda,dw,ddw,m,rw,ndi)
-
-
-
-!>    AFFINE NETWORK: 'FICTICIOUS' ELASTICITY TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rho
-DOUBLE PRECISION, INTENT(IN OUT)         :: lambda
-DOUBLE PRECISION, INTENT(IN)             :: dw
-DOUBLE PRECISION, INTENT(IN)             :: ddw
-DOUBLE PRECISION, INTENT(IN)             :: m(ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rw
-
-
-
-INTEGER :: i1,j1,k1,l1
-
-DOUBLE PRECISION :: aux, aux0
-
-aux0=ddw-(lambda**(-one))*dw
-aux=rho*aux0*rw*(lambda**(-two))
-DO i1=1,ndi
-  DO j1=1,ndi
-    DO k1=1,ndi
-      DO l1=1,ndi
-        cfic(i1,j1,k1,l1)=aux*m(i1)*m(j1)*m(k1)*m(l1)
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE csfilfic
-subroutine thetafFunc(thetaf, f, df, args, nargs)
-    ! This subroutine serves as the function we would like to solve for                                         
-    ! the free crosslinker volume fraction (thetaf = cf/cfmax)                                                  
-    ! by finding thetaf such that f = 0                                                                         
-    use global                                                                                                        
-    implicit none                                                                                               
-                                                                                                                
-    integer, intent(in)              :: nargs                                                                   
-    DOUBLE PRECISION, intent(in out) :: thetaf                                                                   
-    DOUBLE PRECISION, intent(out)    :: f, df                                                                    
-    DOUBLE PRECISION, intent(in)     :: args(nargs)                                                              
-                                                                                                                
-    DOUBLE PRECISION                 :: mu, mu0, Rgas, theta, chi, Vmol, Kbulk                                                           
-    DOUBLE PRECISION                 :: detF, RT, Jc, Je, cb, cfmax
-    ! DOUBLE PRECISION, parameter      :: zero  = 0.0d0                                                                         
-    ! DOUBLE PRECISION, parameter      :: one   = 1.0d0                                                                         
-    ! DOUBLE PRECISION, parameter      :: two   = 2.0d0                                                                         
-                                                                                                                
-    ! Obtain relevant quantities                                                                                
-    mu    = args(1)                                                                                             
-    mu0   = args(2)                                                                                             
-    Rgas  = args(3)                                                                                             
-    theta = args(4)                                                                                             
-    chi   = args(5)                                                                                             
-    Vmol  = args(6)                                                                                             
-    Kbulk = args(7)                                                                                             
-    detF  = args(8)                                                                                             
-    cb    = args(9)                                                         
-    cfmax = args(10)                                                                    
-                                                                                                                
-    ! Compute the useful quantity                                                                               
-    RT = Rgas * theta                                                                                           
-                                                                                                                
-    ! Compute the swelling ratio J^c
-    Jc = one + Vmol * cb + Vmol * cfmax * thetaf
-    
-    ! Compute Elastic Volume Ratio J^e                                                                          
-    Je = detF / Jc                                                       
-                                                                                                                
-    ! Compute the residual f(thetaf) = 0                                                                        
-    f = (mu0 - mu) / RT &                                                                                       
-        + log(thetaf / (one - thetaf)) &                                                                          
-        + chi * (one - two * thetaf) &                                                                            
-        - ((Kbulk * Vmol) / RT) * (log(Je) / Jc)
-                                                                                                                
-    ! Compute the exact analytical tangent df/dthetaf                                                           
-    df = (one / thetaf) + (one / (one - thetaf)) &                                                              
-        - two * chi &                                                                                            
-        + ((Kbulk * Vmol) / RT) * (Vmol * cfmax) * (one + log(Je)) / (Jc * Jc)  
-
-end subroutine thetafFunc
-
-SUBROUTINE pull2(pk,sig,finv,det,ndi)
-
-
-
-!>       PULL-BACK TIMES DET OF A 2ND ORDER TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: pk(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: sig(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: finv(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: det
-
-
-
-INTEGER :: i1,j1,ii1,jj1
-
-
-DOUBLE PRECISION :: aux
-
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    aux=zero
-    DO ii1=1,ndi
-      DO jj1=1,ndi
-        aux=aux+det*finv(i1,ii1)*finv(j1,jj1)*sig(ii1,jj1)
-      END DO
-    END DO
-    pk(i1,j1)=aux
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE pull2
-SUBROUTINE bangle(ang,f,mf,noel,pdir,ndi)
-
-!>    ANGLE BETWEEN FILAMENT AND PREFERED DIRECTION
-
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: ang
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: mf(ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: pdir(ndi)
-INTEGER, INTENT(IN OUT)                  :: noel
-!
-!
-INTEGER :: inoel,i,j
-DOUBLE PRECISION :: dnorm, mfa(ndi),aux
-DOUBLE PRECISION :: c(ndi,ndi),egvc(ndi,ndi),egvl(ndi)
-!
-inoel=0
-i=0
-!DO i=1,nelem
-!               ELEMENT IDENTIFICATION
-!  IF(noel == INT(prefdir(i,1))) THEN
-!    inoel=i
-!  END IF
-!END DO
-!
-!DO i=1,ndi
-!  j=i+1
-!       PREFERED ORIENTATION  ORIENTATION NORMALIZED
-!  pdir(i)=prefdir(inoel,j)
-!END DO
-!        ALTERNATIVE APPROACH: BUNDLES FOLLOW PRINCIPAL DIRECTIONS
-!c=matmul(transpose(f),f)
-!CALL spectral(c,egvl,egvc)
-!       WRITE(*,*) EGVC
-!pdir(1)=egvc(1,1)
-!pdir(2)=egvc(2,1)
-!pdir(3)=egvc(3,1)
-!        END OF ALTERNATIVE
-
-!     PREFERED ORIENTATION
-dnorm=dot_product(pdir,pdir)
-dnorm=DSQRT(dnorm)
-!     PREFERED ORIENTATION  NORMALIZED
-pdir=pdir/dnorm
-
-!       FILAMENT ORIENTATION
-mfa=mf
-dnorm=dot_product(mfa,mfa)
-dnorm=dsqrt(dnorm)
-
-!       FILAMENT ORIENTATION  NORMALIZED
-mfa=mfa/dnorm
-!        ANGLE BETWEEN PREFERED ORIENTATION AND FILAMENT - BANGLE
-aux=dot_product(mfa,pdir)
-!        if AUX.GT.ONE
-!        endif
-!        write(*,*) aux
-ang=acos(aux)
-
-RETURN
-END SUBROUTINE bangle
-
-SUBROUTINE evalg(g,f,lambda,lambda0,l,r0,mu0,beta,b0)
-
-
-
-!>     ESTABLISHMENT OF G(F)=LHS-RHS(F) THAT RELATES
-!>       STRETCHFORCE RELATIONSHIP OF A SINGLE EXNTESIBLE FILAMENT
-use global
-IMPLICIT NONE
-
-DOUBLE PRECISION, INTENT(OUT)            :: g
-DOUBLE PRECISION, INTENT(IN)             :: f
-DOUBLE PRECISION, INTENT(IN)             :: lambda
-DOUBLE PRECISION, INTENT(IN)             :: lambda0
-DOUBLE PRECISION, INTENT(IN)             :: l
-DOUBLE PRECISION, INTENT(IN)             :: r0
-DOUBLE PRECISION, INTENT(IN)             :: mu0
-DOUBLE PRECISION, INTENT(IN OUT)         :: beta
-DOUBLE PRECISION, INTENT(IN OUT)         :: b0
-
-
-DOUBLE PRECISION :: lhs,rhs
-
-
-DOUBLE PRECISION :: aux0,aux1,aux,aux2,aux3,aux4,pi
-
-pi=four*ATAN(one)
-aux0=one-r0/l
-aux1=l*l*((pi*pi*b0)**(-one))
-aux=f/mu0
-aux2=one+aux
-aux3=one+two*aux
-aux4=one+f*aux1+f*aux*aux1
-
-rhs=one+aux-aux0*(aux2**beta)*aux3*(aux4**(-beta))
-lhs=lambda*lambda0*r0*(l**(-one))
-
-g=lhs-rhs
-
-RETURN
-END SUBROUTINE evalg
 SUBROUTINE sigiso(siso,sfic,pe,ndi)
 
 
@@ -9960,202 +7218,97 @@ CALL contraction42(siso,pe,sfic,ndi)
 
 RETURN
 END SUBROUTINE sigiso
-SUBROUTINE fil(f,ff,dw,ddw, &
-            lambdai,lambdaf,lambda0,lambda0f,&
-            ll,r0,r0f,mu0,beta,b0,etac,&
-            cb,DfDcb)
+SUBROUTINE sigisomatfic(sfic,pkfic,f,det,ndi)
 
 
 
-!>    SINGLE FILAMENT: STRAIN ENERGY DERIVATIVES
+!>    ISOTROPIC MATRIX:  ISOCHORIC CAUCHY STRESS
 use global
 IMPLICIT NONE
 
-DOUBLE PRECISION, INTENT(OUT)            :: f
-DOUBLE PRECISION, INTENT(OUT)            :: ff
-DOUBLE PRECISION, INTENT(OUT)            :: dw
-DOUBLE PRECISION, INTENT(OUT)            :: ddw
-DOUBLE PRECISION, INTENT(OUT)            :: DfDcb
-DOUBLE PRECISION, INTENT(IN OUT)         :: lambdai
-DOUBLE PRECISION, INTENT(IN OUT)         :: lambdaf
-DOUBLE PRECISION, INTENT(IN OUT)         :: lambda0
-DOUBLE PRECISION, INTENT(IN OUT)         :: lambda0f
-DOUBLE PRECISION, INTENT(IN OUT)         :: ll
-DOUBLE PRECISION, INTENT(IN OUT)         :: r0
-DOUBLE PRECISION, INTENT(IN OUT)         :: r0f
-DOUBLE PRECISION, INTENT(IN OUT)         :: mu0
-DOUBLE PRECISION, INTENT(IN OUT)         :: beta
-DOUBLE PRECISION, INTENT(IN OUT)         :: b0
-DOUBLE PRECISION, INTENT(IN OUT)         :: etac
-DOUBLE PRECISION, INTENT(IN OUT)         :: cb
-DOUBLE PRECISION :: aratio, r0c
-DOUBLE PRECISION :: a,b,machep,t
-DOUBLE PRECISION :: aux, pi,alpha
-DOUBLE PRECISION :: aux0,aux1,aux2,aux3,aux4,aux5,aux6,y
-DOUBLE PRECISION :: aux00,aux01,aux02,aux03,aux04,aux05
 
-a=zero
-b=1.0E09
-machep=2.2204E-16
-t=1.0E-14 ! 1.0E-6
-f=zero
+INTEGER, INTENT(IN OUT)                  :: ndi
+DOUBLE PRECISION, INTENT(IN OUT)         :: sfic(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: pkfic(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: det
 
-CALL pullforce(f, a, b, machep, t, lambdaf,lambda0f,ll,r0f,mu0,beta,b0)
-! write(*,*) 'lambdaf', lambdaf
-! write(*,*) 'f', f
-pi=four*ATAN(one)
-! ff=f*ll*(pi*pi*b0)**(-one)
-ff=f*ll*ll*(pi*pi*b0)**(-one)
-! ff = 100000000000000000.0
 
-alpha=pi*pi*b0*(ll*ll*mu0)**(-one)
 
-aux0=beta/alpha
-aux=alpha*ff
-aux1=one+ff+aux*ff
-aux2=one+two*aux
-aux3=one+aux
-! aux4=lambda0*r0*r0*mu0*(ll**(-one))
-! OLD
-! aux4=lambda0*lambda0*r0*r0*mu0*(ll**(-one))
-! aux4=lambda0*lambda0f*r0*r0*mu0*(ll**(-one))
-! NEW
-aux4=etac*lambda0f*lambda0*r0*r0*mu0*(ll**(-one))
-aux5=((one+aux)*(aux1**(-one)))**beta
-aux6=one-r0f*((ll)**(-one))
 
-y=aux0*(aux2*aux2*(aux1**(-one)))-beta*(aux2*(aux3**(-one)))-two
 
-! Strain energy derivatives
-dw=lambda0*(r0)*f
-! dw = pi*pi*r0*b0/(ll*ll)*(((ll/r0-1)/(ll/r0-lambda))**TWO - one)
-ddw=aux4*((one+y*aux5*aux6)**(-one))
-
-! Force derivative wrt cb
-aratio=ll/r0f
-r0c = r0 - r0f
-aux00 = two / 5.d0 * cb ** (- two / 5.d0)
-aux01 = 2 * f
-aux02 = etac * r0c / r0f * (lambdai - 1)
-aux03 = b0 * pi * pi / (r0f * aratio)**2
-aux04 = (a - lambdaf) * beta
-aux05 = (f + aux03) / aux04
-DfDcb = aux00 * (aux01 + aux02 * aux05)
+CALL push2(sfic,pkfic,f,det,ndi)
 
 RETURN
-END SUBROUTINE fil
-SUBROUTINE visco(pk,cmat,vv,pkvol,pkiso,cmatvol,cmatiso,dtime,  &
-        vscprops,statev,ndi)
+END SUBROUTINE sigisomatfic
+SUBROUTINE sigvol(svol,pv,unit2,ndi)
 
 
 
-!>    VISCOUS DISSIPATION: MAXWELL SPRINGS AND DASHPOTS SCHEME
+!>    VOLUMETRIC CAUCHY STRESS
+
 use global
 IMPLICIT NONE
 
-INTEGER, INTENT(IN OUT)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: pk(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: cmat(ndi,ndi,ndi,ndi)
-INTEGER, INTENT(IN)                      :: vv
-DOUBLE PRECISION, INTENT(IN)             :: pkvol(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: pkiso(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: cmatvol(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: cmatiso(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: dtime
-DOUBLE PRECISION, INTENT(IN)             :: vscprops(6)
-DOUBLE PRECISION, INTENT(IN OUT)         :: statev(nsdv)
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: svol(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: pv
+DOUBLE PRECISION, INTENT(IN)             :: unit2(ndi,ndi)
 
 
 
-INTEGER :: i1,j1,k1,l1, v1
+INTEGER :: i1,j1
 
-DOUBLE PRECISION :: q(ndi,ndi),qv(ndi,ndi),hv(ndi,ndi), hv0(ndi,ndi)
-DOUBLE PRECISION :: teta,tau,aux,auxc
-
-q=zero
-qv=zero
-hv=zero
-auxc=zero
-
-!     ( GENERAL MAXWELL DASHPOTS)
-DO v1=1,vv
-  
-  tau=vscprops(2*v1-1)
-  teta=vscprops(2*v1)
-  
-!      READ STATE VARIABLES
-  CALL hvread(hv,statev,v1,ndi)
-  hv0=hv
-!        RALAXATION TENSORS
-  CALL relax(qv,hv,aux,hv0,pkiso,dtime,tau,teta,ndi)
-  auxc=auxc+aux
-!        WRITE STATE VARIABLES
-  CALL hvwrite(statev,hv,v1,ndi)
-  
-  q=q+qv
-  
-END DO
-
-auxc=one+auxc
-pk=pkvol+pkiso
 
 
 DO i1=1,ndi
   DO j1=1,ndi
-    pk(i1,j1)=pk(i1,j1)+q(i1,j1)
-    DO k1=1,ndi
-      DO l1=1,ndi
-        cmat(i1,j1,k1,l1)= cmatvol(i1,j1,k1,l1)+ auxc*cmatiso(i1,j1,k1,l1)
-      END DO
-    END DO
+    svol(i1,j1)=pv*unit2(i1,j1)
   END DO
 END DO
 
-
-
 RETURN
-END SUBROUTINE visco
-SUBROUTINE factorial(fact,term)
+END SUBROUTINE sigvol
+SUBROUTINE sliding(ffc,ru,ffc0,ru0,ffcmax,fric,frac,dtime)
 
-
-
-!>    FACTORIAL
-use global
-IMPLICIT NONE
-
-DOUBLE PRECISION, INTENT(OUT)            :: fact
-INTEGER, INTENT(IN)                      :: term
-
-
-
-INTEGER :: m
-
-fact = 1
-
-DO  m = 1, term
-  fact = fact * m
-END DO
-
-RETURN
-END SUBROUTINE factorial
-SUBROUTINE sdvread(statev,thetaf,cb,cb_tot)
 use global
 implicit none
-!>    VISCOUS DISSIPATION: READ STATE VARS
-DOUBLE PRECISION, INTENT(IN)             :: statev(nsdv)
-DOUBLE PRECISION, INTENT(OUT)            :: thetaf, cb(ndir), cb_tot
-INTEGER :: IDIR
 
-DO IDIR = 1, ndir
-    cb(IDIR) = statev(NSDV - ndir + IDIR)
-END DO
+DOUBLE PRECISION, INTENT(OUT)            :: ffc
+DOUBLE PRECISION, INTENT(OUT)            :: ru
+DOUBLE PRECISION, INTENT(IN)             :: ffc0
+DOUBLE PRECISION, INTENT(IN OUT)         :: ru0
+DOUBLE PRECISION, INTENT(IN)             :: ffcmax
+DOUBLE PRECISION, INTENT(IN)         :: fric
+DOUBLE PRECISION, INTENT(IN)             :: frac(4)
+DOUBLE PRECISION, INTENT(IN)             :: dtime
 
-thetaf = statev(1)
-cb_tot  = statev(4)
+
+
+
+
+DOUBLE PRECISION :: aux0,aux1,aux2, arg
+!      INTEGER STATE
+
+aux1=frac(3)
+aux0=aux1+frac(4)
+aux2=aux0
+arg=ffc0/ffcmax
+
+IF(arg < aux1) THEN
+  ffc=aux1*ffcmax
+ELSE IF (arg > aux2)THEN
+  ffc=aux2*ffcmax
+ELSE
+  ffc=ffc0
+END IF
+
+ru=ru0+dtime*(fric**(-one))*(ffc-ffc0)
+ru0=ru
 
 RETURN
 
-END SUBROUTINE sdvread
+END SUBROUTINE sliding
 SUBROUTINE spectral(a,d,v)
 
 
@@ -10400,166 +7553,3148 @@ END DO
 
 RETURN
 END SUBROUTINE eigsrt
-SUBROUTINE pk2isomatfic(fic,diso,cbar,cbari1,unit2,ndi)
+
+subroutine icos_shape ( point_num, edge_num, face_num, face_order_max, &
+  point_coord, edge_point, face_order, face_point )
+
+!*****************************************************************************80
+!
+!! ICOS_SHAPE describes an icosahedron.
+!
+!  Discussion:
+!
+!    The input data required for this routine can be retrieved from ICOS_SIZE.
+!
+!    The vertices lie on the unit sphere.
+!
+!    The dual of an icosahedron is a dodecahedron.
+!
+!    The data has been rearranged from a previous assignment.  
+!    The STRIPACK program refuses to triangulate data if the first
+!    three nodes are "collinear" on the sphere.
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license. 
+!
+!  Modified:
+!
+!    22 July 2007
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    Input, integer ( kind = 4 ) POINT_NUM, the number of points (12).
+!
+!    Input, integer ( kind = 4 ) EDGE_NUM, the number of edges (30).
+!
+!    Input, integer ( kind = 4 ) FACE_NUM, the number of faces (20).
+!
+!    Input, integer ( kind = 4 ) FACE_ORDER_MAX, the maximum number of 
+!    vertices per face (3).
+!
+!    Output, real ( kind = 8 ) POINT_COORD(3,POINT_NUM), the points.
+!
+!    Output, integer ( kind = 4 ) EDGE_POINT(2,EDGE_NUM), the points that 
+!    make up each edge, listed in ascending order of their indexes.
+!
+!    Output, integer ( kind = 4 ) FACE_ORDER(FACE_NUM), the number of vertices
+!    per face.
+!
+!    Output, integer ( kind = 4 ) FACE_POINT(FACE_ORDER_MAX,FACE_NUM); 
+!    FACE_POINT(I,J) is the index of the I-th point in the J-th face.  The
+!    points are listed in the counter clockwise direction defined
+!    by the outward normal at the face.  The nodes of each face are ordered 
+!    so that the lowest index occurs first.  The faces are then sorted by
+!    nodes.
+!
+  use global
+
+  integer ( kind = 4 ) edge_num
+  integer ( kind = 4 ), parameter :: edge_order = 2
+  integer ( kind = 4 ) face_num
+  integer ( kind = 4 ) face_order_max
+  integer ( kind = 4 ) point_num
+
+  real ( kind = 8 ) a
+  real ( kind = 8 ) b
+  integer ( kind = 4 ) edge_point(edge_order,edge_num)
+  integer ( kind = 4 ) face_order(face_num)
+  integer ( kind = 4 ) face_point(face_order_max,face_num)
+  real ( kind = 8 ) phi
+  real ( kind = 8 ) point_coord(3,point_num)
+  real ( kind = 8 ) z
+!
+!  Set the point coordinates.
+!
+  phi = 0.5D+00 * ( sqrt ( 5.0D+00 ) + 1.0D+00 )
+
+  a = phi / sqrt ( 1.0D+00 + phi * phi )
+  b = 1.0D+00 / sqrt ( 1.0D+00 + phi * phi )
+  z = 0.0D+00
+!
+!  A*A + B*B + Z*Z = 1.
+!
+  point_coord(1:3,1:point_num) = reshape ( (/ &
+      a,  b,  z, &
+      a, -b,  z, &
+      b,  z,  a, &
+      b,  z, -a, &
+      z,  a,  b, &
+      z,  a, -b, &
+      z, -a,  b, &
+      z, -a, -b, &
+     -b,  z,  a, &
+     -b,  z, -a, &
+     -a,  b,  z, &
+     -a, -b,  z /), (/ 3, point_num /) )
+!
+!  Set the edges.
+!
+  edge_point(1:edge_order,1:edge_num) = reshape ( (/ &
+     1,  2, &
+     1,  3, &
+     1,  4, &
+     1,  5, &
+     1,  6, &
+     2,  3, &
+     2,  4, &
+     2,  7, &
+     2,  8, &
+     3,  5, &
+     3,  7, &
+     3,  9, &
+     4,  6, &
+     4,  8, &
+     4, 10, &
+     5,  6, &
+     5,  9, &
+     5, 11, &
+     6, 10, &
+     6, 11, &
+     7,  8, &
+     7,  9, &
+     7, 12, &
+     8, 10, &
+     8, 12, &
+     9, 11, &
+     9, 12, &
+    10, 11, &
+    10, 12, &
+    11, 12 /), (/ edge_order, edge_num /) )
+!
+!  Set the face orders.
+!
+  face_order(1:face_num) = (/ &
+    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, &
+    3, 3, 3, 3, 3, 3, 3, 3, 3, 3 /)
+!
+!  Set the faces.
+!
+  face_point(1:face_order_max,1:face_num) = reshape ( (/ &
+     1,  2,  4, &
+     1,  3,  2, &
+     1,  4,  6, &
+     1,  5,  3, &
+     1,  6,  5, &
+     2,  3,  7, &
+     2,  7,  8, &
+     2,  8,  4, &
+     3,  5,  9, &
+     3,  9,  7, &
+     4,  8, 10, &
+     4, 10,  6, &
+     5,  6, 11, &
+     5, 11,  9, &
+     6, 10, 11, &
+     7,  9, 12, &
+     7, 12,  8, &
+     8, 12, 10, &
+     9, 11, 12, &
+    10, 12, 11 /), (/ face_order_max, face_num /) )
+
+  return
+end
+subroutine icos_size ( point_num, edge_num, face_num, face_order_max )
+!*****************************************************************************80
+!
+!! ICOS_SIZE gives "sizes" for an icosahedron in 3D.
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license. 
+!
+!  Modified:
+!
+!    19 July 2007
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    Output, integer ( kind = 4 ) POINT_NUM, the number of points.
+!
+!    Output, integer ( kind = 4 ) EDGE_NUM, the number of edges.
+!
+!    Output, integer ( kind = 4 ) FACE_NUM, the number of faces.
+!
+!    Output, integer ( kind = 4 ) FACE_ORDER_MAX, the maximum order of any face.
+!
+  use global
+
+  integer ( kind = 4 ) edge_num
+  integer ( kind = 4 ) face_num
+  integer ( kind = 4 ) face_order_max
+  integer ( kind = 4 ) point_num
+
+  point_num = 12
+  edge_num = 30
+  face_num = 20
+  face_order_max = 3
+
+  return
+end
+
+subroutine sphere01_triangle_project ( a_xyz, b_xyz, c_xyz, f1, f2, f3, &
+  node_xyz )
+
+!*****************************************************************************80
+!
+!! SPHERE01_TRIANGLE_PROJECT projects from plane to spherical triangle.
+!
+!  Discussion:
+!
+!    We assume that points A, B and C lie on the unit sphere, and they
+!    thus define a spherical triangle.
+!
+!    They also, of course, define a planar triangle.
+!
+!    Let (F1,F2,F3) be the barycentric coordinates of a point in this 
+!    planar triangle.
+!
+!    This function determines the coordinates of the point in the planar
+!    triangle identified by the barycentric coordinates, and returns the
+!    coordinates of the projection of that point onto the unit sphere.
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license. 
+!
+!  Modified:
+!
+!    21 September 2010
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    Input, real ( kind = 8 ) A_XYZ(3), B_XYZ(3), C_XYZ(3), the coordinates
+!    of the points A, B, and C.
+!
+!    Input, integer ( kind = 4 ) F1, F2, F3, the barycentric coordinates
+!    of a point in the triangle ABC.  Normally, these coordinates would
+!    be real numbers, and would sum to 1.  For convenience, we allow these
+!    to be integers which must be divided by F1+F2+F3.
+!
+!    Output, real ( kind = 8 ) NODE_XYZ(3), the coordinates of the 
+!    point on the unit sphere which is the projection of the point on the plane
+!    whose barycentric coordinates with respect to A, B, and C is
+!    (F1,F2,F3)/(F1+F2+F3).
+!
+  use global
+
+  real ( kind = 8 ) a_xyz(3)
+  real ( kind = 8 ) b_xyz(3)
+  real ( kind = 8 ) c_xyz(3)
+  integer ( kind = 4 ) f1
+  integer ( kind = 4 ) f2
+  integer ( kind = 4 ) f3
+  real ( kind = 8 ) node_norm
+  real ( kind = 8 ) node_xyz(3)
+  real ( kind = 8 ) r8vec_norm
+
+  node_xyz(1:3) = &
+    ( real ( f1,           kind = 8 ) * a_xyz(1:3)   &
+    + real (      f2,      kind = 8 ) * b_xyz(1:3)   &
+    + real (           f3, kind = 8 ) * c_xyz(1:3) ) &
+    / real ( f1 + f2 + f3, kind = 8 )
+
+  node_norm = r8vec_norm ( 3, node_xyz(1:3) )
+
+  node_xyz(1:3) = node_xyz(1:3) / node_norm
+
+  return
+end
+
+subroutine sphere01_triangle_vertices_to_sides ( v1, v2, v3, as, bs, cs )
+
+!*****************************************************************************80
+!
+!! SPHERE01_TRIANGLE_VERTICES_TO_SIDES computes spherical triangle sides.
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license. 
+!
+!  Modified:
+!
+!    09 June 2002
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    Input, real ( kind = 8 ) V1(3), V2(3), V3(3), the vertices of the spherical
+!    triangle.
+!
+!    Output, real ( kind = 8 ) AS, BS, CS, the (geodesic) length of the 
+!    sides of the triangle.
+!
+  use global
+
+  real ( kind = 8 ) as
+  real ( kind = 8 ) bs
+  real ( kind = 8 ) cs
+  real ( kind = 8 ) v1(3)
+  real ( kind = 8 ) v2(3)
+  real ( kind = 8 ) v3(3)
+
+  as = acos ( dot_product ( v2(1:3), v3(1:3) ) )
+  bs = acos ( dot_product ( v3(1:3), v1(1:3) ) )
+  cs = acos ( dot_product ( v1(1:3), v2(1:3) ) )
+
+  return
+end
 
 
 
-!>     ISOTROPIC MATRIX: 2PK 'FICTICIOUS' STRESS TENSOR
-!      INPUT:
-!       DISO - STRAIN-ENERGY DERIVATIVES
-!       CBAR - DEVIATORIC LEFT CAUCHY-GREEN TENSOR
-!       CBARI1,CBARI2 - CBAR INVARIANTS
-!       UNIT2 - 2ND ORDER IDENTITY TENSOR
-!      OUTPUT:
-!       FIC - 2ND PIOLA KIRCHOOF 'FICTICIOUS' STRESS TENSOR
+
+subroutine sphere01_triangle_sides_to_angles ( as, bs, cs, a, b, c )
+
+!*****************************************************************************80
+!
+!! SPHERE01_TRIANGLE_SIDES_TO_ANGLES computes spherical triangle angles.
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license. 
+!
+!  Modified:
+!
+!    09 June 2002
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    Input, real ( kind = 8 ) AS, BS, CS, the (geodesic) length of the 
+!    sides of the triangle.
+!
+!    Output, real ( kind = 8 ) A, B, C, the spherical angles of the triangle.
+!    Angle A is opposite the side of length AS, and so on.
+!
+  use global
+
+  real ( kind = 8 ) a
+  real ( kind = 8 ) as
+  real ( kind = 8 ) asu
+  real ( kind = 8 ) b
+  real ( kind = 8 ) bs
+  real ( kind = 8 ) bsu
+  real ( kind = 8 ) c
+  real ( kind = 8 ) cs
+  real ( kind = 8 ) csu
+  real ( kind = 8 ) ssu
+  real ( kind = 8 ) tan_a2
+  real ( kind = 8 ) tan_b2
+  real ( kind = 8 ) tan_c2
+
+  asu = as
+  bsu = bs
+  csu = cs
+  ssu = ( asu + bsu + csu ) / 2.0D+00
+
+  tan_a2 = sqrt ( ( sin ( ssu - bsu ) * sin ( ssu - csu ) ) / &
+                  ( sin ( ssu ) * sin ( ssu - asu )     ) )
+
+  a = 2.0D+00 * atan ( tan_a2 )
+
+  tan_b2 = sqrt ( ( sin ( ssu - asu ) * sin ( ssu - csu ) ) / &
+                  ( sin ( ssu ) * sin ( ssu - bsu )     ) )
+
+  b = 2.0D+00 * atan ( tan_b2 )
+
+  tan_c2 = sqrt ( ( sin ( ssu - asu ) * sin ( ssu - bsu ) ) / &
+                  ( sin ( ssu ) * sin ( ssu - csu )     ) )
+
+  c = 2.0D+00 * atan ( tan_c2 )
+
+  return
+end
+subroutine sphere01_triangle_vertices_to_area ( v1, v2, v3, area )
+
+!*****************************************************************************80
+!
+!! SPHERE01_TRIANGLE_VERTICES_TO_AREA computes the area of a spherical triangle.
+!
+!  Discussion:
+!
+!    A sphere in 3D satisfies the equation:
+!
+!      X^2 + Y^2 + Z^2 = 1
+!
+!    A spherical triangle is specified by three points on the surface
+!    of the sphere.
+!
+!    The area formula is known as Girard's formula.
+!
+!    The area of a spherical triangle is:
+!
+!      AREA = ( A + B + C - PI )
+!
+!    where A, B and C are the (surface) angles of the triangle.
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license. 
+!
+!  Modified:
+!
+!    09 June 2002
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    Input, real ( kind = 8 ) V1(3), V2(3), V3(3), the vertices of the triangle.
+!
+!    Output, real ( kind = 8 ) AREA, the area of the sphere.
+!
+  use global
+
+  real ( kind = 8 ) area
+  real ( kind = 8 ) a
+  real ( kind = 8 ) as
+  real ( kind = 8 ) b
+  real ( kind = 8 ) bs
+  real ( kind = 8 ) c
+  real ( kind = 8 ) cs
+  real ( kind = 8 ) v1(3)
+  real ( kind = 8 ) v2(3)
+  real ( kind = 8 ) v3(3)
+!
+!  Compute the lengths of the sides of the spherical triangle.
+!
+  call sphere01_triangle_vertices_to_sides ( v1, v2, v3, as, bs, cs )
+!
+!  Get the spherical angles.
+!
+  call sphere01_triangle_sides_to_angles ( as, bs, cs, a, b, c )
+!
+!  Get the area.
+!
+  call sphere01_triangle_angles_to_area ( a, b, c, area )
+
+  return
+end
+
+
+subroutine sphere01_triangle_angles_to_area ( a, b, c, area )
+
+!*****************************************************************************80
+!
+!! SPHERE01_TRIANGLE_ANGLES_TO_AREA computes the area of a spherical triangle.
+!
+!  Discussion:
+!
+!    A unit sphere in 3D satisfies the equation:
+!
+!      X^2 + Y^2 + Z^2 = 1
+!
+!    A spherical triangle is specified by three points on the surface
+!    of the sphere.
+!
+!    The area formula is known as Girard's formula.
+!
+!    The area of a spherical triangle is:
+!
+!      AREA = ( A + B + C - PI )
+!
+!    where A, B and C are the (surface) angles of the triangle.
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license. 
+!
+!  Modified:
+!
+!    09 June 2002
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    Input, real ( kind = 8 ) A, B, C, the angles of the triangle.
+!
+!    Output, real ( kind = 8 ) AREA, the area of the sphere.
+!
+  use global
+
+  real ( kind = 8 ) area
+  real ( kind = 8 ) a
+  real ( kind = 8 ) b
+  real ( kind = 8 ) c
+  real ( kind = 8 ), parameter :: pi = 3.141592653589793D+00
+!
+!  Apply Girard's formula.
+!
+  area = a + b + c - pi
+
+  return
+end
+
+subroutine polyterm_exponent ( action, e )
+
+!*****************************************************************************80
+!
+!! POLYTERM_EXPONENT gets or sets the exponents for the polynomial term.
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license. 
+!
+!  Modified:
+!
+!    08 June 2002
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    Input, character ( len = 3 ) ACTION.
+!    'GET' asks the routine to return the current values in E.
+!    'SET' asks the routine to set the current values to E.
+!
+!    Input/output, integer ( kind = 4 ) E(3), storage used to set or get values.
+!
+  use global
+
+  character ( len = * )  action
+  integer   ( kind = 4 ) e(3)
+  integer   ( kind = 4 ), save, dimension ( 3 ) :: e_save = (/ 0, 0, 0 /)
+  character ( len = 80 ) text
+  character ( len = 80 ) text2
+
+  if ( action(1:1) == 'G' ) then
+
+    e(1:3) = e_save(1:3)
+
+  else if ( action(1:1) == 'P' ) then
+
+    write ( *, '(a)' ) ' '
+
+    if ( all ( e_save(1:3) == 0 ) ) then
+
+      text = 'P(X,Y,Z) = 1'
+
+    else
+
+      text = 'P(X,Y,Z) = '
+
+      if ( e_save(1) == 0 ) then
+
+      else if ( e_save(1) == 1 ) then
+
+        call s_cat ( text, ' X', text )
+
+      else
+
+        call s_cat ( text, ' X^', text )
+
+        write ( text2, '(i2)' ) e_save(1)
+        text2 = adjustl ( text2 )
+        call s_cat ( text, text2, text )
+
+      end if
+
+      if ( e_save(2) == 0 ) then
+
+      else if ( e_save(2) == 1 ) then
+
+        call s_cat ( text, ' Y', text )
+
+      else
+
+        call s_cat ( text, ' Y^', text )
+
+        write ( text2, '(i2)' ) e_save(2)
+        text2 = adjustl ( text2 )
+        call s_cat ( text, text2, text )
+
+      end if
+       
+      if ( e_save(3) == 0 ) then
+
+      else if ( e_save(3) == 1 ) then
+
+        call s_cat ( text, ' Z', text )
+
+      else
+
+        call s_cat ( text, ' Z^', text )
+
+        write ( text2, '(i2)' ) e_save(3)
+        text2 = adjustl ( text2 )
+        call s_cat ( text, text2, text )
+
+      end if
+ 
+    end if
+
+    write ( *, '(a)' ) trim ( text )
+    
+  else if ( action(1:1) == 'S' ) then
+
+    e_save(1:3) = e(1:3)
+
+  end if
+
+  return
+end
+subroutine polyterm_value_3d ( n, x, f )
+
+!*****************************************************************************80
+!
+!! POLYTERM_VALUE_3D evaluates a single polynomial term in 3D.
+!
+!  Discussion:
+!
+!    The polynomial term has the form:
+!
+!      F(X) = X(1)^E(1) * X(2)^E(2) * X(3)^E(3)
+!
+!    The exponents E(1:3) are set by calling POLYTERM_EXPONENT.
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license. 
+!
+!  Modified:
+!
+!    13 September 2010
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    Input, integer ( kind = 4 ) N, the number of points.
+!
+!    Input, real ( kind = 8 ) X(3,N), the points where the polynomial term 
+!    is to be evaluated.
+!
+!    Output, real ( kind = 8 ) F(N), the value of the polynomial term.
+!
+  use global
+
+  integer ( kind = 4 ) n
+
+  integer ( kind = 4 ) e(3)
+  real ( kind = 8 ) f(n)
+  integer ( kind = 4 ) i
+  real ( kind = 8 ) x(3,n)
+
+  call polyterm_exponent ( 'GET', e )
+
+  f(1:n) = 1.0D+00
+
+  do i = 1, 3
+
+    if ( e(i) /= 0 ) then
+      f(1:n) = f(1:n) * x(i,1:n)**e(i)
+    end if
+
+  end do
+  
+  return
+end
+
+function r8_gamma ( x )
+
+!*****************************************************************************80
+!
+!! R8_GAMMA evaluates Gamma(X) for a real argument.
+!
+!  Discussion:
+!
+!    This routine calculates the gamma function for a real argument X.
+!
+!    Computation is based on an algorithm outlined in reference 1.
+!    The program uses rational functions that approximate the gamma
+!    function to at least 20 significant decimal digits.  Coefficients
+!    for the approximation over the interval (1,2) are unpublished.
+!    Those for the approximation for 12 <= X are from reference 2.
+!
+!  Modified:
+!
+!    11 February 2008
+!
+!  Author:
+!
+!    Original FORTRAN77 version by William Cody, Laura Stoltz.
+!    FORTRAN90 version by John Burkardt.
+!
+!  Reference:
+!
+!    William Cody,
+!    An Overview of Software Development for Special Functions,
+!    in Numerical Analysis Dundee, 1975,
+!    edited by GA Watson,
+!    Lecture Notes in Mathematics 506,
+!    Springer, 1976.
+!
+!    John Hart, Ward Cheney, Charles Lawson, Hans Maehly,
+!    Charles Mesztenyi, John Rice, Henry Thatcher,
+!    Christoph Witzgall,
+!    Computer Approximations,
+!    Wiley, 1968,
+!    LC: QA297.C64.
+!
+!  Parameters:
+!
+!    Input, real ( kind = 8 ) X, the argument of the function.
+!
+!    Output, real ( kind = 8 ) R8_GAMMA, the value of the function.
+!
+  use global
+
+  real ( kind = 8 ), dimension ( 7 ) :: c = (/ &
+   -1.910444077728D-03, &
+    8.4171387781295D-04, &
+   -5.952379913043012D-04, &
+    7.93650793500350248D-04, &
+   -2.777777777777681622553D-03, &
+    8.333333333333333331554247D-02, &
+    5.7083835261D-03 /)
+  real ( kind = 8 ), parameter :: eps = 2.22D-16
+  real ( kind = 8 ) fact
+  integer ( kind = 4 ) i
+  integer ( kind = 4 ) n
+  real ( kind = 8 ), dimension ( 8 ) :: p = (/ &
+    -1.71618513886549492533811D+00, &
+     2.47656508055759199108314D+01, &
+    -3.79804256470945635097577D+02, &
+     6.29331155312818442661052D+02, &
+     8.66966202790413211295064D+02, &
+    -3.14512729688483675254357D+04, &
+    -3.61444134186911729807069D+04, &
+     6.64561438202405440627855D+04 /)
+  logical parity
+  real ( kind = 8 ), parameter :: pi = 3.1415926535897932384626434D+00
+  real ( kind = 8 ), dimension ( 8 ) :: q = (/ &
+    -3.08402300119738975254353D+01, &
+     3.15350626979604161529144D+02, &
+    -1.01515636749021914166146D+03, &
+    -3.10777167157231109440444D+03, &
+     2.25381184209801510330112D+04, &
+     4.75584627752788110767815D+03, &
+    -1.34659959864969306392456D+05, &
+    -1.15132259675553483497211D+05 /)
+  real ( kind = 8 ) r8_gamma
+  real ( kind = 8 ) res
+  real ( kind = 8 ), parameter :: sqrtpi = 0.9189385332046727417803297D+00
+  real ( kind = 8 ) sum
+  real ( kind = 8 ) x
+  real ( kind = 8 ), parameter :: xbig = 171.624D+00
+  real ( kind = 8 ) xden
+  real ( kind = 8 ), parameter :: xinf = 1.0D+30
+  real ( kind = 8 ), parameter :: xminin = 2.23D-308
+  real ( kind = 8 ) xnum
+  real ( kind = 8 ) y
+  real ( kind = 8 ) y1
+  real ( kind = 8 ) ysq
+  real ( kind = 8 ) z
+
+  parity = .false.
+  fact = 1.0D+00
+  n = 0
+  y = x
+!
+!  Argument is negative.
+!
+  if ( y <= 0.0D+00 ) then
+
+    y = - x
+    y1 = aint ( y )
+    res = y - y1
+
+    if ( res /= 0.0D+00 ) then
+
+      if ( y1 /= aint ( y1 * 0.5D+00 ) * 2.0D+00 ) then
+        parity = .true.
+      end if
+
+      fact = - pi / sin ( pi * res )
+      y = y + 1.0D+00
+
+    else
+
+      res = xinf
+      r8_gamma = res
+      return
+
+    end if
+
+  end if
+!
+!  Argument is positive.
+!
+  if ( y < eps ) then
+!
+!  Argument < EPS.
+!
+    if ( xminin <= y ) then
+      res = 1.0D+00 / y
+    else
+      res = xinf
+      r8_gamma = res
+      return
+    end if
+
+  else if ( y < 12.0D+00 ) then
+
+    y1 = y
+!
+!  0.0 < argument < 1.0.
+!
+    if ( y < 1.0D+00 ) then
+
+      z = y
+      y = y + 1.0D+00
+!
+!  1.0 < argument < 12.0.
+!  Reduce argument if necessary.
+!
+    else
+
+      n = int ( y ) - 1
+      y = y - real ( n, kind = 8 )
+      z = y - 1.0D+00
+
+    end if
+!
+!  Evaluate approximation for 1.0 < argument < 2.0.
+!
+    xnum = 0.0D+00
+    xden = 1.0D+00
+    do i = 1, 8
+      xnum = ( xnum + p(i) ) * z
+      xden = xden * z + q(i)
+    end do
+
+    res = xnum / xden + 1.0D+00
+!
+!  Adjust result for case  0.0 < argument < 1.0.
+!
+    if ( y1 < y ) then
+
+      res = res / y1
+!
+!  Adjust result for case 2.0 < argument < 12.0.
+!
+    else if ( y < y1 ) then
+
+      do i = 1, n
+        res = res * y
+        y = y + 1.0D+00
+      end do
+
+    end if
+
+  else
+!
+!  Evaluate for 12.0 <= argument.
+!
+    if ( y <= xbig ) then
+
+      ysq = y * y
+      sum = c(7)
+      do i = 1, 6
+        sum = sum / ysq + c(i)
+      end do
+      sum = sum / y - y + sqrtpi
+      sum = sum + ( y - 0.5D+00 ) * log ( y )
+      res = exp ( sum )
+
+    else
+
+      res = xinf
+      r8_gamma = res
+      return
+
+    end if
+
+  end if
+!
+!  Final adjustments and return.
+!
+  if ( parity ) then
+    res = - res
+  end if
+
+  if ( fact /= 1.0D+00 ) then
+    res = fact / res
+  end if
+
+  r8_gamma = res
+
+  return
+end
+function r8_uniform_01 ( seed )
+
+!*****************************************************************************80
+!
+!! R8_UNIFORM_01 returns a unit pseudorandom R8.
+!
+!  Discussion:
+!
+!    An R8 is a real ( kind = 8 ) value.
+!
+!    For now, the input quantity SEED is an integer variable.
+!
+!    This routine implements the recursion
+!
+!      seed = 16807 * seed mod ( 2^31 - 1 )
+!      r8_uniform_01 = seed / ( 2^31 - 1 )
+!
+!    The integer arithmetic never requires more than 32 bits,
+!    including a sign bit.
+!
+!    If the initial seed is 12345, then the first three computations are
+!
+!      Input     Output      R8_UNIFORM_01
+!      SEED      SEED
+!
+!         12345   207482415  0.096616
+!     207482415  1790989824  0.833995
+!    1790989824  2035175616  0.947702
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license. 
+!
+!  Modified:
+!
+!    05 July 2006
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Reference:
+!
+!    Paul Bratley, Bennett Fox, Linus Schrage,
+!    A Guide to Simulation,
+!    Springer Verlag, pages 201-202, 1983.
+!
+!    Pierre L'Ecuyer,
+!    Random Number Generation,
+!    in Handbook of Simulation,
+!    edited by Jerry Banks,
+!    Wiley Interscience, page 95, 1998.
+!
+!    Bennett Fox,
+!    Algorithm 647:
+!    Implementation and Relative Efficiency of Quasirandom
+!    Sequence Generators,
+!    ACM Transactions on Mathematical Software,
+!    Volume 12, Number 4, pages 362-376, 1986.
+!
+!    Peter Lewis, Allen Goodman, James Miller
+!    A Pseudo-Random Number Generator for the System/360,
+!    IBM Systems Journal,
+!    Volume 8, pages 136-143, 1969.
+!
+!  Parameters:
+!
+!    Input/output, integer ( kind = 4 ) SEED, the "seed" value, which should
+!    NOT be 0. On output, SEED has been updated.
+!
+!    Output, real ( kind = 8 ) R8_UNIFORM_01, a new pseudorandom variate,
+!    strictly between 0 and 1.
+!
+  use global
+
+  integer ( kind = 4 ), parameter :: i4_huge = 2147483647
+  integer ( kind = 4 ) k
+  real ( kind = 8 ) r8_uniform_01
+  integer ( kind = 4 ) seed
+
+  if ( seed == 0 ) then
+    write ( *, '(a)' ) ' '
+    write ( *, '(a)' ) 'R8_UNIFORM_01 - Fatal error!'
+    write ( *, '(a)' ) '  Input value of SEED = 0.'
+    stop
+  end if
+
+  k = seed / 127773
+
+  seed = 16807 * ( seed - k * 127773 ) - k * 2836
+
+  if ( seed < 0 ) then
+    seed = seed + i4_huge
+  end if
+!
+!  Although SEED can be represented exactly as a 32 bit integer,
+!  it generally cannot be represented exactly as a 32 bit real number!
+!
+  r8_uniform_01 = real ( seed, kind = 8 ) * 4.656612875D-10
+
+  return
+end
+function r8vec_norm ( n, a )
+
+!*****************************************************************************80
+!
+!! R8VEC_NORM returns the L2 norm of an R8VEC.
+!
+!  Discussion:
+!
+!    An R8VEC is a vector of R8's.
+!
+!    The vector L2 norm is defined as:
+!
+!      R8VEC_NORM = sqrt ( sum ( 1 <= I <= N ) A(I)^2 ).
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license. 
+!
+!  Modified:
+!
+!    21 August 2010
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    Input, integer ( kind = 4 ) N, the number of entries in A.
+!
+!    Input, real ( kind = 8 ) A(N), the vector whose L2 norm is desired.
+!
+!    Output, real ( kind = 8 ) R8VEC_NORM, the L2 norm of A.
+!
+  use global
+
+  integer ( kind = 4 ) n
+
+  real ( kind = 8 ) a(n)
+  real ( kind = 8 ) r8vec_norm
+
+  r8vec_norm = sqrt ( sum ( a(1:n)**2 ) )
+
+  return
+end
+subroutine r8vec_polarize ( n, a, p, a_normal, a_parallel )
+
+!*****************************************************************************80
+!
+!! R8VEC_POLARIZE decomposes an R8VEC into normal and parallel components.
+!
+!  Discussion:
+!
+!    An R8VEC is a vector of R8's.
+!
+!    The (nonzero) vector P defines a direction.
+!
+!    The vector A can be written as the sum
+!
+!      A = A_normal + A_parallel
+!
+!    where A_parallel is a linear multiple of P, and A_normal
+!    is perpendicular to P.
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license. 
+!
+!  Modified:
+!
+!    08 November 2000
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    Input, integer ( kind = 4 ) N, the number of entries in the array.
+!
+!    Input, real ( kind = 8 ) A(N), the vector to be polarized.
+!
+!    Input, real ( kind = 8 ) P(N), the polarizing direction.
+!
+!    Output, real ( kind = 8 ) A_NORMAL(N), A_PARALLEL(N), the normal
+!    and parallel components of A.
+!
+  use global
+
+  integer ( kind = 4 ) n
+
+  real ( kind = 8 ) a(n)
+  real ( kind = 8 ) a_dot_p
+  real ( kind = 8 ) a_normal(n)
+  real ( kind = 8 ) a_parallel(n)
+  real ( kind = 8 ) p(n)
+  real ( kind = 8 ) p_norm
+
+  p_norm = sqrt ( sum ( p(1:n)**2 ) )
+
+  if ( p_norm == 0.0D+00 ) then
+    a_normal(1:n) = a(1:n)
+    a_parallel(1:n) = 0.0D+00
+    return
+  end if
+
+  a_dot_p = dot_product ( a(1:n), p(1:n) ) / p_norm
+
+  a_parallel(1:n) = a_dot_p * p(1:n) / p_norm
+
+  a_normal(1:n) = a(1:n) - a_parallel(1:n)
+
+  return
+end
+subroutine s_cat ( s1, s2, s3 )
+
+!*****************************************************************************80
+!
+!! S_CAT concatenates two strings to make a third string.
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license. 
+!
+!  Modified:
+!
+!    18 September 2000
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    Input, character ( len = * ) S1, the "prefix" string.
+!
+!    Input, character ( len = * ) S2, the "postfix" string.
+!
+!    Output, character ( len = * ) S3, the string made by
+!    concatenating S1 and S2, ignoring any trailing blanks.
+!
+  use global
+
+  character ( len = * ) s1
+  character ( len = * ) s2
+  character ( len = * ) s3
+
+  if ( s1 == ' ' .and. s2 == ' ' ) then
+    s3 = ' '
+  else if ( s1 == ' ' ) then
+    s3 = s2
+  else if ( s2 == ' ' ) then
+    s3 = s1
+  else
+    s3 = trim ( s1 ) // trim ( s2 )
+  end if
+
+  return
+end
+subroutine sphere01_monomial_integral ( e, integral )
+
+!*****************************************************************************80
+!
+!! SPHERE01_MONOMIAL_INTEGRAL returns monomial integrals on the unit sphere.
+!
+!  Discussion:
+!
+!    The integration region is 
+!
+!      X^2 + Y^2 + Z^2 = 1.
+!
+!    The monomial is F(X,Y,Z) = X^E(1) * Y^E(2) * Z^E(3).
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license. 
+!
+!  Modified:
+!
+!    24 June 2002
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Reference:
+!
+!    Philip Davis, Philip Rabinowitz,
+!    Methods of Numerical Integration,
+!    Second Edition,
+!    Academic Press, 1984, page 263.
+!
+!  Parameters:
+!
+!    Input, integer ( kind = 4 ) E(3), the exponents of X, Y and Z in the 
+!    monomial.  Each exponent must be nonnegative.
+!
+!    Output, real ( kind = 8 ) INTEGRAL, the integral.
+!
+  use global
+
+  integer ( kind = 4 ) e(3)
+  integer ( kind = 4 ) i
+  real ( kind = 8 ) integral
+  real ( kind = 8 ), parameter :: pi = 3.141592653589793D+00
+  real ( kind = 8 ) r8_gamma
+
+  if ( any ( e(1:3) < 0 ) ) then
+    integral = - huge ( integral )
+    write ( *, '(a)' ) ' '
+    write ( *, '(a)' ) 'SPHERE01_MONOMIAL_INTEGRAL - Fatal error!'
+    write ( *, '(a)' ) '  All exponents must be nonnegative.'
+    write ( *, '(a,i8)' ) '  E(1) = ', e(1)
+    write ( *, '(a,i8)' ) '  E(2) = ', e(2)
+    write ( *, '(a,i8)' ) '  E(3) = ', e(3)
+    stop
+  end if
+
+  if ( all ( e(1:3) == 0 ) ) then
+
+    integral = 2.0D+00 * sqrt ( pi**3 ) / r8_gamma ( 1.5D+00 )
+
+  else if ( any ( mod ( e(1:3), 2 ) == 1 ) ) then
+
+    integral = 0.0D+00
+
+  else
+
+    integral = 2.0D+00
+
+    do i = 1, 3
+      integral = integral * r8_gamma ( 0.5D+00 * real ( e(i) + 1, kind = 8 ) )
+    end do
+
+    integral = integral &
+      / r8_gamma ( 0.5D+00 * ( real ( sum ( e(1:3) + 1 ), kind = 8 ) ) )
+
+  end if
+
+  return
+end
+SUBROUTINE stretch(c,b,u,v,ndi)
+
+
+
+!>    STRETCH TENSORS
+
 use global
 IMPLICIT NONE
 
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: fic(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: diso(5)
-DOUBLE PRECISION, INTENT(IN)             :: cbar(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: cbari1
-DOUBLE PRECISION, INTENT(IN)             :: unit2(ndi,ndi)
+INTEGER, INTENT(IN OUT)                  :: ndi
+
+DOUBLE PRECISION, INTENT(IN OUT)         :: c(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: b(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: u(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: v(ndi,ndi)
 
 
 
-INTEGER :: i1,j1
 
-DOUBLE PRECISION :: dudi1,dudi2
-DOUBLE PRECISION :: aux1,aux2
+DOUBLE PRECISION :: eigval(ndi),omega(ndi),eigvec(ndi,ndi)
 
-dudi1=diso(1)
-dudi2=diso(2)
+CALL spectral(c,omega,eigvec)
 
-aux1=two*(dudi1+cbari1*dudi2)
-aux2=-two*dudi2
+eigval(1) = DSQRT(omega(1))
+eigval(2) = DSQRT(omega(2))
+eigval(3) = DSQRT(omega(3))
 
-DO i1=1,ndi
-  DO j1=1,ndi
-    fic(i1,j1)=aux1*unit2(i1,j1)+aux2*cbar(i1,j1)
+u(1,1) = eigval(1)
+u(2,2) = eigval(2)
+u(3,3) = eigval(3)
+
+u = matmul(matmul(eigvec,u),transpose(eigvec))
+
+CALL spectral(b,omega,eigvec)
+
+eigval(1) = DSQRT(omega(1))
+eigval(2) = DSQRT(omega(2))
+eigval(3) = DSQRT(omega(3))
+!      write(*,*) eigvec(1,1),eigvec(2,1),eigvec(3,1)
+
+v(1,1) = eigval(1)
+v(2,2) = eigval(2)
+v(3,3) = eigval(3)
+
+v = matmul(matmul(eigvec,v),transpose(eigvec))
+RETURN
+END SUBROUTINE stretch
+!****************************************************************************
+
+
+
+!     Utility subroutines
+!****************************************************************************
+!***************************************************************************
+
+SUBROUTINE matinv3dd(a,a_inv,det_a,istat)
+!
+! Returns A_inv, the inverse and det_A, the determinant
+! Note that the det is of the original matrix, not the
+! inverse
+!
+use global
+
+real(8), INTENT(IN)                       :: a(3,3)
+real(8), INTENT(OUT)                      :: a_inv(3,3)
+real(8), INTENT(OUT)                      :: det_a
+INTEGER, INTENT(OUT)                     :: istat
+
+!
+
+!
+real(8)  det_a_inv
+!
+istat = 1
+
+det_a = a(1,1)*(a(2,2)*a(3,3) - a(3,2)*a(2,3)) -  &
+    a(2,1)*(a(1,2)*a(3,3) - a(3,2)*a(1,3)) +  &
+    a(3,1)*(a(1,2)*a(2,3) - a(2,2)*a(1,3))
+
+IF (det_a <= 0.d0) THEN
+  WRITE(*,*) 'WARNING: subroutine matInv3Dd:'
+  WRITE(*,*) 'WARNING: det of mat=',det_a
+  istat = 0
+  RETURN
+END IF
+!
+det_a_inv = 1.d0/det_a
+!
+a_inv(1,1) = det_a_inv*(a(2,2)*a(3,3)-a(3,2)*a(2,3))
+a_inv(1,2) = det_a_inv*(a(3,2)*a(1,3)-a(1,2)*a(3,3))
+a_inv(1,3) = det_a_inv*(a(1,2)*a(2,3)-a(2,2)*a(1,3))
+a_inv(2,1) = det_a_inv*(a(3,1)*a(2,3)-a(2,1)*a(3,3))
+a_inv(2,2) = det_a_inv*(a(1,1)*a(3,3)-a(3,1)*a(1,3))
+a_inv(2,3) = det_a_inv*(a(2,1)*a(1,3)-a(1,1)*a(2,3))
+a_inv(3,1) = det_a_inv*(a(2,1)*a(3,2)-a(3,1)*a(2,2))
+a_inv(3,2) = det_a_inv*(a(3,1)*a(1,2)-a(1,1)*a(3,2))
+a_inv(3,3) = det_a_inv*(a(1,1)*a(2,2)-a(2,1)*a(1,2))
+!
+RETURN
+END SUBROUTINE matinv3dd
+!!!
+
+SUBROUTINE matinv2d(a,a_inv,det_a,istat)
+!
+! Returns A_inv, the inverse, and det_A, the determinant
+! Note that the det is of the original matrix, not the
+! inverse
+!
+use global
+
+real(8), INTENT(IN)                       :: a(2,2)
+real(8), INTENT(OUT)                      :: a_inv(2,2)
+real(8), INTENT(OUT)                      :: det_a
+INTEGER, INTENT(OUT)                     :: istat
+
+!
+
+!
+real(8)  det_a_inv
+
+
+istat = 1
+
+det_a = a(1,1)*a(2,2) - a(1,2)*a(2,1)
+
+IF (det_a <= 0.d0) THEN
+  WRITE(*,*) 'WARNING: subroutine matInv2D:'
+  WRITE(*,*) 'WARNING: det of mat=',det_a
+  istat = 0
+  RETURN
+END IF
+
+det_a_inv = 1.d0/det_a
+
+a_inv(1,1) =  det_a_inv*a(2,2)
+a_inv(1,2) = -det_a_inv*a(1,2)
+a_inv(2,1) = -det_a_inv*a(2,1)
+a_inv(2,2) =  det_a_inv*a(1,1)
+
+
+RETURN
+END SUBROUTINE matinv2d
+
+!****************************************************************************
+
+SUBROUTINE mdet(a,det)
+!
+! This subroutine calculates the determinant
+! of a 3 by 3 matrix [A]
+!
+use global
+
+real(8), INTENT(IN)                       :: a(3,3)
+real(8), INTENT(OUT)                      :: det
+
+!
+
+
+
+det = a(1,1)*a(2,2)*a(3,3) + a(1,2)*a(2,3)*a(3,1)  &
+    + a(1,3)*a(2,1)*a(3,2) - a(3,1)*a(2,2)*a(1,3)  &
+    - a(3,2)*a(2,3)*a(1,1) - a(3,3)*a(2,1)*a(1,2)
+
+
+RETURN
+END SUBROUTINE mdet
+
+!****************************************************************************
+
+SUBROUTINE onem0(a)
+!
+! This subroutine stores the identity matrix in the
+! 3 by 3 matrix [A]
+!
+use global
+
+real(8), INTENT(OUT)                      :: a(3,3)
+
+!
+INTEGER :: i,j
+!
+
+
+
+DO i=1,3
+  DO j=1,3
+    IF (i == j) THEN
+      a(i,j) = 1.0
+    ELSE
+      a(i,j) = 0.0
+    END IF
   END DO
 END DO
 
+
 RETURN
-END SUBROUTINE pk2isomatfic
-SUBROUTINE projeul(a,aa,pe,ndi)
+END SUBROUTINE onem0
+!***************************************************************************
+SUBROUTINE visco(pk,cmat,vv,pkvol,pkiso,cmatvol,cmatiso,dtime,  &
+        vscprops,statev,ndi)
 
 
 
-!>    EULERIAN PROJECTION TENSOR
-!      INPUTS:
-!          IDENTITY TENSORS - A, AA
-!      OUTPUTS:
-!          4TH ORDER SYMMETRIC EULERIAN PROJECTION TENSOR - PE
+!>    VISCOUS DISSIPATION: MAXWELL SPRINGS AND DASHPOTS SCHEME
 use global
 IMPLICIT NONE
 
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(IN)             :: a(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: aa(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: pe(ndi,ndi,ndi,ndi)
+INTEGER, INTENT(IN OUT)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: pk(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: cmat(ndi,ndi,ndi,ndi)
+INTEGER, INTENT(IN)                      :: vv
+DOUBLE PRECISION, INTENT(IN)             :: pkvol(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: pkiso(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: cmatvol(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: cmatiso(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: dtime
+DOUBLE PRECISION, INTENT(IN)             :: vscprops(6)
+DOUBLE PRECISION, INTENT(IN OUT)         :: statev(nsdv)
 
 
 
-INTEGER :: i,j,k,l
+INTEGER :: i1,j1,k1,l1, v1
+
+DOUBLE PRECISION :: q(ndi,ndi),qv(ndi,ndi),hv(ndi,ndi), hv0(ndi,ndi)
+DOUBLE PRECISION :: teta,tau,aux,auxc
+
+q=zero
+qv=zero
+hv=zero
+auxc=zero
+
+!     ( GENERAL MAXWELL DASHPOTS)
+DO v1=1,vv
+  
+  tau=vscprops(2*v1-1)
+  teta=vscprops(2*v1)
+  
+!      READ STATE VARIABLES
+  CALL hvread(hv,statev,v1,ndi)
+  hv0=hv
+!        RALAXATION TENSORS
+  CALL relax(qv,hv,aux,hv0,pkiso,dtime,tau,teta,ndi)
+  auxc=auxc+aux
+!        WRITE STATE VARIABLES
+  CALL hvwrite(statev,hv,v1,ndi)
+  
+  q=q+qv
+  
+END DO
+
+auxc=one+auxc
+pk=pkvol+pkiso
 
 
-
-DO i=1,ndi
-  DO j=1,ndi
-    DO k=1,ndi
-      DO l=1,ndi
-        pe(i,j,k,l)=aa(i,j,k,l)-(one/three)*(a(i,j)*a(k,l))
+DO i1=1,ndi
+  DO j1=1,ndi
+    pk(i1,j1)=pk(i1,j1)+q(i1,j1)
+    DO k1=1,ndi
+      DO l1=1,ndi
+        cmat(i1,j1,k1,l1)= cmatvol(i1,j1,k1,l1)+ auxc*cmatiso(i1,j1,k1,l1)
       END DO
     END DO
   END DO
 END DO
 
+
+
 RETURN
-END SUBROUTINE projeul
-SUBROUTINE indexx(stress,ddsdde,sig,tng,ntens,ndi)
+END SUBROUTINE visco
+SUBROUTINE xit()
 
 
 
-!>    INDEXATION: FULL SIMMETRY  IN STRESSES AND ELASTICITY TENSORS
+CALL EXIT()
+
+END SUBROUTINE
+SUBROUTINE density(rho,ang,bb,erfi)
+
+
+
+!>    SINGLE FILAMENT: DENSITY FUNCTION VALUE
 use global
 IMPLICIT NONE
 
-INTEGER, INTENT(IN OUT)                  :: ndi
-INTEGER, INTENT(IN)                      :: ntens
-DOUBLE PRECISION, INTENT(OUT)            :: stress(ntens)
-DOUBLE PRECISION, INTENT(OUT)            :: ddsdde(ntens,ntens)
-DOUBLE PRECISION, INTENT(IN)             :: sig(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: tng(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: rho
+DOUBLE PRECISION, INTENT(IN OUT)         :: ang
+DOUBLE PRECISION, INTENT(IN OUT)         :: bb
+DOUBLE PRECISION, INTENT(IN OUT)         :: erfi
 
 
 
-INTEGER :: ii1(6),ii2(6), i1,j1
-
-
-DOUBLE PRECISION :: pp1,pp2
-
-ii1(1)=1
-ii1(2)=2
-ii1(3)=3
-ii1(4)=1
-ii1(5)=1
-ii1(6)=2
-
-ii2(1)=1
-ii2(2)=2
-ii2(3)=3
-ii2(4)=2
-ii2(5)=3
-ii2(6)=3
-
-DO i1=1,ntens
-!       STRESS VECTOR
-  stress(i1)=sig(ii1(i1),ii2(i1))
-  DO j1=1,ntens
-!       DDSDDE - FULLY SIMMETRY IMPOSED
-    pp1=tng(ii1(i1),ii2(i1),ii1(j1),ii2(j1))
-    pp2=tng(ii1(i1),ii2(i1),ii2(j1),ii1(j1))
-    ddsdde(i1,j1)=(one/two)*(pp1+pp2)
-  END DO
-END DO
-
-RETURN
-
-END SUBROUTINE indexx
-! SUBROUTINE erfi(erf,b,nterm) (original)
-SUBROUTINE erfi(erf,b)
-
-
-!>    IMAGINARY ERROR FUNCTION OF SQRT(B); B IS THE DISPERSION PARAM
-use global
-IMPLICIT NONE
-
-DOUBLE PRECISION, INTENT(OUT)            :: erf
-DOUBLE PRECISION, INTENT(IN OUT)         :: b
-! INTEGER, INTENT(IN)                      :: nterm (original)
-
-
-DOUBLE PRECISION :: pi
-DOUBLE PRECISION :: aux,aux1,aux2,aux3,aux4,fact
-INTEGER :: i1,j1
+DOUBLE PRECISION :: pi,aux1,aux2
 
 pi=four*ATAN(one)
-aux=SQRT(two*b)
-aux1=two*aux
-aux2=(two/three)*(aux**three)
-aux4=zero
-DO j1=3,nterm
-  i1=j1-1
-  CALL factorial (fact,i1)
-  aux3=two*j1-one
-  aux4=aux4+(aux**aux3)/(half*aux3*fact)
+aux1=SQRT(bb/(two*pi))
+aux2=DEXP(bb*(COS(two*ang)+one))
+rho=four*aux1*aux2*(erfi**(-one))
+! RHO=RHO*((FOUR*PI)**(-ONE))
+! Normalization according to Li et al. 2018 (equations 2.7-2.8)
+rho = rho*((two*pi)**(-one))
+
+RETURN
+END SUBROUTINE density
+SUBROUTINE evalh(h,cb0,cabp,cfmax,cbmax,chi,Keq)
+
+
+
+!>     ESTABLISHMENT OF H(F)=LHS-RHS(F) THAT RELATES
+!>       KEQ - CB0 RELATIONSHIP OF A SINGLE EXNTESIBLE FILAMENT
+use global
+IMPLICIT NONE
+
+DOUBLE PRECISION, INTENT(OUT)            :: h
+DOUBLE PRECISION, INTENT(IN)             :: cb0
+DOUBLE PRECISION, INTENT(IN)             :: Keq
+DOUBLE PRECISION, INTENT(IN)             :: cabp
+DOUBLE PRECISION, INTENT(IN)             :: cfmax
+DOUBLE PRECISION, INTENT(IN)             :: cbmax
+DOUBLE PRECISION, INTENT(IN)             :: chi
+
+DOUBLE PRECISION :: lhs,rhs
+
+
+DOUBLE PRECISION :: aux0,aux1,aux2,aux3,aux4
+
+aux0 = cabp - cb0
+aux1 = aux0 / cfmax
+aux2 = 1.0d0 - aux1
+aux3 = exp(- chi * (1.0d0 - 2.0d0 * aux1))
+    
+rhs = cb0 * aux2 * aux3
+lhs = Keq * aux0 * (1.0d0 - cb0 / cbmax)
+
+h = lhs-rhs
+
+RETURN
+END SUBROUTINE evalh
+    SUBROUTINE sdvwrite(det, statev, sigma, phi_tau, dmudx, Vmol, jfluid, cb, cb_tot)                                           
+    !>    WRITE ALL STATE VARIABLES TO STATEV AT END OF INCREMENT                                                       
+    !>
+    !>    STATEV layout (defined in global.f90):
+    !>      Slot  1       : phi_tau  (polymer volume fraction)
+    !>      Slot  2       : det      (Jacobian J)
+    !>      Slot  3       : c        (fluid content)
+    !>      Slots 4-9     : sigma    (Cauchy stress, 6 components Voigt)
+    !>      Slots 10-12   : -dmudx   (chemical potential gradient)
+    !>      Slots 13-15   : jfluid   (fluid flux vector)
+    !>      Slots 16-NSDV : cb(i)    (bound CL concentration per unique direction)
+    use global
+    implicit none
+  
+    DOUBLE PRECISION, INTENT(IN)  :: det
+    DOUBLE PRECISION, INTENT(IN)  :: sigma(6)
+    DOUBLE PRECISION, INTENT(IN)  :: phi_tau
+    DOUBLE PRECISION, INTENT(IN)  :: dmudx(3,1), jfluid(3,1)
+    DOUBLE PRECISION, INTENT(IN)  :: Vmol
+    DOUBLE PRECISION, INTENT(IN)  :: cb(ndir), cb_tot
+    DOUBLE PRECISION, INTENT(OUT) :: statev(nsdv)
+  
+    INTEGER :: idir
+  
+    ! --- Macroscopic quantities (slots 1-15, fixed layout) ---
+    statev(1)     = phi_tau
+    statev(2)     = det
+    statev(3)     = (1.0d0 - phi_tau) / (Vmol * phi_tau * det)  ! fluid content c
+    statev(4)     = cb_tot
+    statev(5:10)   = sigma(1:6)        ! Cauchy stress (Voigt)
+    statev(11:13) = -dmudx(1:3,1)    ! chemical potential gradient
+    statev(14:16) = jfluid(1:3,1)    ! fluid flux vector
+
+
+! Slots 17 to NSDV: bound crosslinker concentrations
+DO idir = 1, ndir
+    statev(nsdv - ndir + idir) = cb(idir)
 END DO
 
-erf=pi**(-one/two)*(aux1+aux2+aux4)
+
+! write(*,*) 'nsdv = ', nsdv
+! write(*,*) 'statev = ', statev
+
 RETURN
-END SUBROUTINE erfi
+
+END SUBROUTINE sdvwrite
+
+SUBROUTINE vol(ssev,pv,ppv,k,det,Jc)
+
+! Code converted using TO_F90 by Alan Miller
+! Date: 2020-12-12  Time: 12:08:12
+
+!>     VOLUMETRIC CONTRIBUTION :STRAIN ENERGY FUNCTION AND DERIVATIVES
+use global
+implicit none
+
+
+DOUBLE PRECISION :: Je
+DOUBLE PRECISION, INTENT(OUT)            :: ssev
+DOUBLE PRECISION, INTENT(OUT)            :: pv
+DOUBLE PRECISION, INTENT(OUT)            :: ppv
+DOUBLE PRECISION, INTENT(IN)             :: k
+DOUBLE PRECISION, INTENT(IN)             :: det
+DOUBLE PRECISION, INTENT(IN)             :: Jc
+
+Je = det / Jc
+
+! Volumetric Strain Energy: Psi_vol = 0.5 * K * (ln(Je))^2
+SSEV = 0.5D0 * k * (DLOG(Je))**2
+
+! Cauchy Pressure: PV = (K * ln(Je)) / J
+PV = (k * DLOG(Je)) / det
+
+! Tangent Modulus Term (p + J*dp/dJ): PPV = K / J
+PPV = k / det
+
+RETURN
+END SUBROUTINE vol
+! ! COMMENT WHEN RUNNING IN ABAQUS
+! SUBROUTINE getoutdir(outdir, lenoutdir)
+
+
+
+! !>     GET CURRENT WORKING DIRECTORY
+! ! INCLUDE 'aba_param.inc'
+
+
+! CHARACTER (LEN=256), INTENT(IN OUT)      :: outdir
+! INTEGER, INTENT(OUT)                     :: lenoutdir
+
+
+
+! CALL getcwd(outdir)
+! !        OUTDIR=OUTDIR(1:SCAN(OUTDIR,'\',BACK=.TRUE.)-1)
+! lenoutdir=len_trim(outdir)
+
+! RETURN
+! END SUBROUTINE getoutdir
+SUBROUTINE initialize(statev, thetaf_t, Vmol, cb0)
+use global
+IMPLICIT NONE
+
+!      DOUBLE PRECISION TIME(2),KSTEP
+INTEGER :: pos1, i
+DOUBLE PRECISION, INTENT(IN)             :: thetaf_t, Vmol, cb0
+DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
+
+
+pos1=1
+!     VOLUME FRACTION
+statev(pos1)=thetaf_t
+!       DETERMINANT
+statev(pos1+1)=one
+!      CL CONTENT
+statev(pos1+2) = (1.0d0 - thetaf_t) / (Vmol * thetaf_t)
+!      TOTAL CB
+statev(pos1+3) = cb0
+!       STRESSES and CL FLUX
+DO i = pos1+4, nsdv - ndir
+    statev(i)=zero
+END DO
+
+DO i = 1, ndir
+    statev(nsdv - ndir + i) = cb0 ! INITIAL CL CONCENTRATION
+END DO
+!        CONTRACTION VARIANCE
+!statev(pos1+2)=zero
+
+RETURN
+
+END SUBROUTINE initialize
+SUBROUTINE pullchem(zero0, a, b, machep, t,  &
+        cabp,cfmax,cbmax,chi,Keq)
+
+
+
+!>    SINGLE FILAMENT: COMPUTES PULLING FORCE FOR A GIVEN STRETCH
+!*********************************************************************72
+
+!     ZERO SEEKS THE ROOT OF A FUNCTION F(X) IN AN INTERVAL [A,B].
+
+!     DISCUSSION:
+
+!     THE INTERVAL [A,B] MUST BE A CHANGE OF SIGN INTERVAL FOR F.
+!     THAT IS, F(A) AND F(B) MUST BE OF OPPOSITE SIGNS.  THEN
+!     ASSUMING THAT F IS CONTINUOUS IMPLIES THE EXISTENCE OF AT LEAST
+!     ONE VALUE C BETWEEN A AND B FOR WHICH F(C) = 0.
+
+!     THE LOCATION OF THE ZERO IS DETERMINED TO WITHIN AN ACCURACY
+!     OF 6 * MACHEPS * ABS ( C ) + 2 * T.
+
+
+!     LICENSING:
+
+!     THIS CODE IS DISTRIBUTED UNDER THE GNU LGPL LICENSE.
+
+!     MODIFIED:
+
+!     11 FEBRUARY 2013
+
+!     AUTHOR:
+
+!     RICHARD BRENT
+!     MODIFICATIONS BY JOHN BURKARDT
+
+!     REFERENCE:
+
+!     RICHARD BRENT,
+!     ALGORITHMS FOR MINIMIZATION WITHOUT DERIVATIVES,
+!     DOVER, 2002,
+!     ISBN: 0-486-41998-3,
+!     LC: QA402.5.B74.
+
+!     PARAMETERS:
+
+!     INPUT, DOUBLE PRECISION A, B, THE ENDPOINTS OF THE CHANGE OF SIGN
+!     INTERVAL.
+!     INPUT, DOUBLE PRECISION MACHEP, AN ESTIMATE FOR THE RELATIVE
+!     MACHINE PRECISION.
+
+!     INPUT, DOUBLE PRECISION T, A POSITIVE ERROR TOLERANCE.
+
+!     INPUT, EXTERNAL DOUBLE PRECISION F, THE NAME OF A USER-SUPPLIED
+!     FUNCTION, OF THE FORM "FUNCTION G ( F )", WHICH EVALUATES THE
+!     FUNCTION WHOSE ZERO IS BEING SOUGHT.
+
+!     OUTPUT, DOUBLE PRECISION ZERO, THE ESTIMATED VALUE OF A ZERO OF
+!     THE FUNCTION G.
+use global
+
+DOUBLE PRECISION, INTENT(OUT)            :: zero0
+DOUBLE PRECISION, INTENT(IN)             :: a
+DOUBLE PRECISION, INTENT(IN)             :: b
+DOUBLE PRECISION, INTENT(IN)             :: machep
+DOUBLE PRECISION, INTENT(IN)             :: t
+DOUBLE PRECISION, INTENT(IN)             :: cabp
+DOUBLE PRECISION, INTENT(IN)             :: cfmax
+DOUBLE PRECISION, INTENT(IN)             :: cbmax
+DOUBLE PRECISION, INTENT(IN)             :: chi
+DOUBLE PRECISION, INTENT(IN)             :: Keq
+DOUBLE PRECISION :: c
+DOUBLE PRECISION :: d
+DOUBLE PRECISION :: e
+DOUBLE PRECISION :: fa
+DOUBLE PRECISION :: fb
+DOUBLE PRECISION :: fc
+DOUBLE PRECISION :: m
+
+DOUBLE PRECISION :: p
+DOUBLE PRECISION :: q
+DOUBLE PRECISION :: r
+DOUBLE PRECISION :: s
+DOUBLE PRECISION :: sa
+DOUBLE PRECISION :: sb
+
+DOUBLE PRECISION :: tol
+
+! write(*,*) 'zero: ', a
+! write(*,*) 'cb_upper: ', b
+! write(*,*) 'machep: ', machep
+! write(*,*) 'tol: ', t
+! write(*,*) 'cabp: ', cabp
+! write(*,*) 'cfmax: ', cfmax
+! write(*,*) 'cbmax: ', cbmax
+! write(*,*) 'chi: ', chi
+! write(*,*) 'Keq: ', Keq
+
+!     MAKE LOCAL COPIES OF A AND B.
+
+sa = a
+sb = b
+CALL evalh(fa,sa,cabp,cfmax,cbmax,chi,Keq)
+CALL evalh(fb,sb,cabp,cfmax,cbmax,chi,Keq)
+!      FA = F ( SA )
+!      FB = F ( SB )
+
+10    CONTINUE
+
+c = sa
+fc = fa
+e = sb - sa
+d = e
+
+20    CONTINUE
+
+IF ( ABS ( fc ) < ABS ( fb ) ) THEN
+  sa = sb
+  sb = c
+  c = sa
+  fa = fb
+  fb = fc
+  fc = fa
+END IF
+
+30    CONTINUE
+
+tol = 2.0D+00 * machep * ABS ( sb ) + t
+m = 0.5D+00 * ( c - sb )
+IF ( ABS ( m ) <= tol .OR. fb == 0.0D+00 ) GO TO 140
+IF ( ABS ( e ) >= tol .AND. ABS ( fa ) > ABS ( fb ) ) GO TO 40
+
+e = m
+d = e
+GO TO 100
+
+40    CONTINUE
+
+s = fb / fa
+IF ( sa /= c ) GO TO 50
+
+p = 2.0D+00 * m * s
+q = 1.0D+00 - s
+GO TO 60
+
+50    CONTINUE
+
+q = fa / fc
+r = fb / fc
+p = s * ( 2.0D+00 * m * q * ( q - r ) - ( sb - sa ) * ( r - 1.0D+00 ) )
+q = ( q - 1.0D+00 ) * ( r - 1.0D+00 ) * ( s - 1.0D+00 )
+
+60    CONTINUE
+
+IF ( p <= 0.0D+00 ) GO TO 70
+
+q = - q
+GO TO 80
+
+70    CONTINUE
+
+p = - p
+
+80    CONTINUE
+
+s = e
+e = d
+IF ( 2.0D+00 * p >= 3.0D+00 * m * q - ABS ( tol * q ) .OR.  &
+    p >= ABS ( 0.5D+00 * s * q ) ) GO TO 90
+
+d = p / q
+GO TO 100
+
+90    CONTINUE
+
+e = m
+d = e
+
+100   CONTINUE
+
+sa = sb
+fa = fb
+IF ( ABS ( d ) <= tol ) GO TO 110
+sb = sb + d
+GO TO 130
+
+110   CONTINUE
+
+IF ( m <= 0.0D+00 ) GO TO 120
+sb = sb + tol
+GO TO 130
+
+120   CONTINUE
+
+sb = sb - tol
+
+130   CONTINUE
+
+!      FB = F ( SB )
+CALL evalh(fb,sb,cabp,cfmax,cbmax,chi,Keq)
+IF ( fb > 0.0D+00 .AND. fc > 0.0D+00 ) GO TO 10
+IF ( fb <= 0.0D+00 .AND. fc <= 0.0D+00 ) GO TO 10
+GO TO 20
+
+140   CONTINUE
+
+zero0 = sb
+
+RETURN
+END SUBROUTINE pullchem
+
+!*********************************************************************72
+SUBROUTINE uexternaldb(lop,lrestart,time,dtime,kstep,kinc)
+
+
+
+!>    READ FILAMENTS ORIENTATION AND PREFERED DIRECTIONS
+use global
+INCLUDE 'aba_param.inc'
+!       this subroutine get the directions and weights for
+!      the numerical integration
+
+!     UEXTERNAL just called once; work in parallel computing
+
+INTEGER, INTENT(IN OUT)                  :: lop
+INTEGER, INTENT(IN OUT)                  :: lrestart
+REAL, INTENT(IN OUT)                     :: time(2)
+real(8), INTENT(IN OUT)                  :: dtime
+INTEGER, INTENT(IN OUT)                  :: kstep
+INTEGER, INTENT(IN OUT)                  :: kinc
+
+COMMON /kfilp/prefdir
+COMMON /kfile/etadir
+
+! DOUBLE PRECISION :: prefdir(nelem,4)
+DOUBLE PRECISION :: prefdir(1,4)
+DOUBLE PRECISION :: etadir(nelem*8, 2+ndir)
+CHARACTER (LEN=256) ::  filename, jobdir, etafile
+INTEGER :: lenjobdir,i,j,k
+
+!     LOP=0 --> START OF THE ANALYSIS
+IF(lop == 0.OR.lop == 4) THEN
+  
+  CALL getoutdir(jobdir,lenjobdir)
+  write(*,*) 'nelem = ', nelem
+  write(*,*) 'jobdir = ', jobdir
+  write(*,*) 'lenjobdir = ', lenjobdir
+  
+  !preferential direction
+  filename=jobdir(:lenjobdir)//'/'//dir2
+  OPEN(16,FILE=filename,STATUS='OLD')
+  DO i=1,nelem
+    READ(16,*) (prefdir(i,j),j=1,4)
+  END DO
+  CLOSE(16)
+
+  !random CL stiffness eta
+  !etafile = jobdir(:lenjobdir)//'/'//dir3
+  !OPEN(17,FILE=etafile)
+  !DO i=1,nelem*ngp
+  !  READ(17,*) (etadir(i,j),j=1,ndir+2)
+  !END DO
+  !CLOSE(17)
+
+
+END IF
+
+RETURN
+
+END SUBROUTINE uexternaldb
+!>********************************************************************
+!> Record of revisions:                                              |
+!>        Date        Programmer        Description of change        |
+!>        ====        ==========        =====================        |
+!>                                                                   |
+!>--------------------------------------------------------------------
+!>     Description:
+!C>     UMAT: USER MATERIAL FOR THE FULL NETWORK MODEL.
+!C>                 AFFINE DEFORMATIONS
+!C>     UEXTERNALDB: READ FILAMENTS ORIENTATION AND PREFERED DIRECTION
+!>--------------------------------------------------------------------
+!>---------------------------------------------------------------------
+
+! SUBROUTINE material(stress,statev,ddsdde,sse,spd,scd, rpl,ddsddt,drplde,drpldt,  &
+!     stran,dstran,time,dtime,temp,dtemp,predef,dpred,cmname,  &
+!     ndi,nshr,ntens,nstatev,props,nprops,coords,drot,pnewdt,  &
+!     celent,dfgrd0,dfgrd1,noel,npt,layer,kspt,kstep,kinc)
+
+    SUBROUTINE MATERIAL(SIGMA,STATEV,DDSIGDDE,DFGRD0,DFGRD1,DET, &
+    TIME,DTIME,PREDEF,NDI,NSHR,NTENS,NSTATEV,PROPS,NPROPS,COORDS, &
+    PNEWDT,NOEL,NPT,KSTEP,KINC,MU_TAU,THETAF_TAU,DTHETAFDT, &
+      DTHETAFDMU,RMACRO,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,CFMAX,DSIGDMU,SPCUMODFAC)
+!
+use global  
+IMPLICIT NONE
+!----------------------------------------------------------------------
+!--------------------------- DECLARATIONS -----------------------------
+!----------------------------------------------------------------------
+INTEGER :: NDI, NSHR, NTENS, NSTATEV, NPROPS, NOEL, NPT, &
+            LAYER, KSPT, KSTEP, KINC
+
+INTEGER, PARAMETER :: nargs = 10
+
+REAL(KIND=8) :: STRESS(NTENS), STATEV(NSTATEV), &
+                DDSDDE(NTENS,NTENS), DDSDDT(NTENS), DRPLDE(NTENS), &
+                STRAN(NTENS), DSTRAN(NTENS), TIME(2), PREDEF(1), DPRED(1), &
+                PROPS(NPROPS), COORDS(3), DROT(3,3), DFGRD0(3,3), DFGRD1(3,3), &
+                FIBORI(NELEM,4), ARGS(NARGS)
+
+REAL(8), INTENT(IN)      :: MU_TAU, DMUDX(3,1)
+! REAL(8), INTENT(OUT)     :: SPUCMOD(NDI,NDI), SPCUMODFAC(NDI,NDI)
+REAL(8), INTENT(OUT)     :: DSIGDMU(NDI,NDI), SPCUMODFAC(NDI,NDI)
+REAL(8), INTENT(OUT)     :: THETAF_TAU, DTHETAFDT, DTHETAFDMU, RMACRO! DPHIDMU, DPHIDOTDMU
+REAL(8), INTENT(OUT)     :: MFLUID, DMDMU, DMDJ, VMOL, CFMAX
+
+! cfmax can probably be defined at the element level
+REAL(8) :: THETAF_T
+! DIFFUSION VARIABLES
+REAL(8) :: CHI, D, MU0, RGAS
+REAL(8) :: PHI_PER, PHI_M, dPdt_per, dPdt_m, DELTAMU, JFLUID(3,1)
+REAL(8) :: DphiDJ, DmDphi
+
+REAL(KIND=8) :: SSE, SPD, SCD, RPL, DRPLDT, DTIME, TEMP, &
+                DTEMP, PNEWDT, CELENT
+
+COMMON /kfilp/prefdir
+COMMON /kfile/etadir
+DOUBLE PRECISION :: prefdir(nelem,4)
+DOUBLE PRECISION :: etadir(nelem*ngp, ndir+2)
+DOUBLE PRECISION :: etadir_array(ndir)
+
+!
+!     FLAGS
+!      INTEGER FLAG1
+!     UTILITY TENSORS
+DOUBLE PRECISION :: unit2(ndi,ndi),unit4(ndi,ndi,ndi,ndi),  &
+    unit4s(ndi,ndi,ndi,ndi), proje(ndi,ndi,ndi,ndi),projl(ndi,ndi,ndi,ndi)
+!     KINEMATICS
+DOUBLE PRECISION :: distgr(ndi,ndi),c(ndi,ndi),b(ndi,ndi),  &
+    cbar(ndi,ndi),bbar(ndi,ndi),distgrinv(ndi,ndi),  &
+    ubar(ndi,ndi),vbar(ndi,ndi),rot(ndi,ndi), dfgrd1inv(ndi,ndi)
+DOUBLE PRECISION :: det,detfe, detfs,cbari1,cbari2
+!     VOLUMETRIC CONTRIBUTION
+DOUBLE PRECISION :: pkvol(ndi,ndi),svol(ndi,ndi),  &
+    cvol(ndi,ndi,ndi,ndi),cmvol(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: k,pv,ppv,ssev
+!     ISOCHORIC CONTRIBUTION
+DOUBLE PRECISION :: siso(ndi,ndi),pkiso(ndi,ndi),pk2(ndi,ndi),  &
+    ciso(ndi,ndi,ndi,ndi),cmiso(ndi,ndi,ndi,ndi),  &
+    sfic(ndi,ndi),cfic(ndi,ndi,ndi,ndi), pkfic(ndi,ndi),cmfic(ndi,ndi,ndi,ndi)
+!     ISOCHORIC ISOTROPIC CONTRIBUTION
+DOUBLE PRECISION :: c10,c01,sseiso,diso(5),pkmatfic(ndi,ndi),  &
+    smatfic(ndi,ndi),sisomatfic(ndi,ndi), cmisomatfic(ndi,ndi,ndi,ndi),  &
+    cisomatfic(ndi,ndi,ndi,ndi)
+!     FILAMENTS NETWORK CONTRIBUTION
+DOUBLE PRECISION :: filprops(10), affprops(5) ! affprops(6)
+DOUBLE PRECISION :: cactin,cabp,ll,lambda0,mu0str,beta,nn,b0,bb
+DOUBLE PRECISION :: phinet,r0,r0c,r0f,a,p,etac,na,mactin,rhoactin
+DOUBLE PRECISION :: pknetfic(ndi,ndi),cmnetfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: snetfic(ndi,ndi),cnetfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: pknetficaf(ndi,ndi),pknetficnaf(ndi,ndi)
+DOUBLE PRECISION :: snetficaf(ndi,ndi),snetficnaf(ndi,ndi)
+DOUBLE PRECISION :: cmnetficaf(ndi,ndi,ndi,ndi), cmnetficnaf(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: cnetficaf(ndi,ndi,ndi,ndi), cnetficnaf(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: efi, kb, dx, Lp, theta
+DOUBLE PRECISION :: R, Rfmax, Rbmax, Keq, Koff0, Kon0
+DOUBLE PRECISION :: cb(ndir), cb0, cbmax, thetab, thetaf0 !, cfmax
+DOUBLE PRECISION :: cb_tot, cb_tot_new, cf
+DOUBLE PRECISION :: cb_upper, machep, tol
+DOUBLE PRECISION :: Jc, f, df
+
+! INTEGER :: nterm,factor 
+!
+!     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)
+DOUBLE PRECISION :: cjr(ndi,ndi,ndi,ndi)
+!     CAUCHY STRESS AND ELASTICITY TENSOR
+DOUBLE PRECISION :: sigma(ndi,ndi),ddsigdde(ndi,ndi,ndi,ndi),  &
+    ddpkdde(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: stest(ndi,ndi), ctest(ndi,ndi,ndi,ndi)
+
+! DECLARATIONS FOR RANDOM GENERATION
+INTEGER (kind=4) :: seed1, seed2
+INTEGER (kind=4) :: test, test_num
+INTEGER (kind=4) :: l, i, idx
+CHARACTER(len=100) :: phrase
+!REAL(kind=4) , allocatable :: etac_array(:), array(:)
+DOUBLE PRECISION :: etac_sdv(nsdv-1)
+!REAL(kind=4) :: l_bound, h_bound
+REAL(kind=4) :: mean, sd
+
+INTEGER :: I1, J1, K1, L1
+
+
+!----------------------------------------------------------------------
+!-------------------------- INITIALIZATIONS ---------------------------
+!----------------------------------------------------------------------
+!     IDENTITY AND PROJECTION TENSORS
+unit2=zero
+unit4=zero
+unit4s=zero
+proje=zero
+projl=zero
+!     KINEMATICS
+distgr=zero
+c=zero
+b=zero
+cbar=zero
+bbar=zero
+ubar=zero
+vbar=zero
+rot=zero
+det=zero
+cbari1=zero
+cbari2=zero
+!     VOLUMETRIC
+pkvol=zero
+svol=zero
+cvol=zero
+k=zero
+pv=zero
+ppv=zero
+ssev=zero
+!     ISOCHORIC
+siso=zero
+pkiso=zero
+pk2=zero
+ciso=zero
+cfic=zero
+sfic=zero
+pkfic=zero
+!     ISOTROPIC
+c10=zero
+c01=zero
+sseiso=zero
+diso=zero
+pkmatfic=zero
+smatfic=zero
+sisomatfic=zero
+cmisomatfic=zero
+cisomatfic=zero
+!     FILAMENTS NETWORK
+snetfic=zero
+cnetfic=zero
+pknetfic=zero
+pknetficaf=zero
+pknetficnaf=zero
+snetficaf=zero
+snetficnaf=zero
+cmnetfic=zero
+cmnetficaf=zero
+cmnetficnaf=zero
+cnetficaf=zero
+cnetficnaf=zero
+!     JAUMANN RATE
+cjr=zero
+!     TOTAL CAUCHY STRESS AND ELASTICITY TENSORS
+sigma=zero
+ddsigdde=zero
+!     FLUID FLUX
+jfluid=zero
+!----------------------------------------------------------------------
+!------------------------ IDENTITY TENSORS ----------------------------
+!----------------------------------------------------------------------
+CALL onem(unit2,unit4,unit4s,ndi)
+!----------------------------------------------------------------------
+!------------------------ RANDOM GENERATION ---------------------------
+!----------------------------------------------------------------------
+
+!----------------------------------------------------------------------
+!------------------- MATERIAL CONSTANTS AND DATA ----------------------
+!----------------------------------------------------------------------
+!     VOLUMETRIC
+k        = props(1)
+!     ISOCHORIC ISOTROPIC
+c10      = props(2)
+c01      = props(3)
+phinet   = props(4)
+!     ACTIN/CROSSLINKERS
+a        = props(5)  ! Ratio between contour length and end-to-end distance
+r0c      = props(6)
+etac     = props(7)
+mu0str   = props(8)
+beta     = props(9)
+Lp       = props(10) ! Persistence length
+theta    = props(11) ! Absolute temperature
+dx       = props(12) ! CL reactive distance / bond length
+!     AFFINE NETWORK
+bb       = props(13)
+lambda0  = props(14)
+cactin   = props(15)
+R        = props(16) ! CL to actin ratio
+Rfmax    = props(17) ! Maximum free CL to actin ratio
+Rbmax   = props(18) ! Maximum bound CL to actin ratio
+!     SOLVENT
+CHI    = PROPS(19)
+D      = PROPS(20)
+MU0    = PROPS(21)
+VMOL   = PROPS(22)
+Koff0  = PROPS(23)
+Keq    = PROPS(24)
+
+!Other parameters (Check which of these will be actually needed in the UMAT and not only in the AFFCL subroutine)
+kb = 1.380649e-5      
+b0 = Lp * theta * kb
+rgas = 8.314462618
+Mactin = 42.0e-3       ! [MDa]
+rhoactin = 16.0        ! [MDa/microm]
+NA = 6.022e5           ! [1/amol]
+Kon0 = Koff0 * Keq
+
+filprops = (/a, r0c, etac, mu0str, beta, Lp, theta, dx, kb, NA/)
+affprops = (/bb, lambda0, cactin, Mactin, rhoactin/)
+
+! write(*,*) 'Inside the material routine!'
+! write(*,*) 'ELEM/GP: ', noel, npt
+
+!     CL CONCENTRATION
+!!! THIS NEEDS TO BE CHANGED AFTER DIFFUSION IS IMPLEMENTED IN UEL
+cabp = cactin*R  ! <-- Placeholder: Replace with true UEL cR later!
+! Maximum allowable CL concentration
+cfmax = Rfmax * cactin
+cbmax = Rbmax * cactin
+
+!        STATE VARIABLES AND CHEMICAL PARAMETERS
+! IF ((kinc <= 1).AND.(kstep == 1)) THEN
+IF (STATEV(1) == 0.0d0) THEN
+! Initial bound and free CL concentrations
+  cb_upper = MIN(cabp, cbmax)
+  machep = 2.22d-16
+  tol = 1.0d-12
+  write(*,*) 'Calling pullchem at t=0'
+  CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq)
+  thetaf0 = (cabp - cb0) / cfmax
+  CALL initialize(statev,thetaf0,vmol,cb0)
+END IF
+!        READ STATEV
+CALL sdvread(statev, thetaf_t, cb, cb_tot)
+!----------------------------------------------------------------------
+!---------------------------- KINEMATICS ------------------------------
+!----------------------------------------------------------------------
+!     DISTORTION GRADIENT
+CALL fslip(dfgrd1,distgr,det,ndi)
+!     INVERSE OF DEFORMATION GRADIENT
+CALL matinv3d(dfgrd1,dfgrd1inv,ndi)
+!     INVERSE OF DISTORTION GRADIENT
+CALL matinv3d(distgr,distgrinv,ndi)
+!     CAUCHY-GREEN DEFORMATION TENSORS
+CALL deformation(dfgrd1,c,b,ndi)
+CALL deformation(distgr,cbar,bbar,ndi)
+!     INVARIANTS OF DEVIATORIC DEFORMATION TENSORS
+CALL invariants(cbar,cbari1,cbari2,ndi)
+!     STRETCH TENSORS
+CALL stretch(cbar,bbar,ubar,vbar,ndi)
+!     ROTATION TENSORS
+CALL rotation(distgr,rot,ubar,ndi)
+!     DEVIATORIC PROJECTION TENSORS
+CALL projeul(unit2,unit4s,proje,ndi)
+
+CALL projlag(c,unit4,projl,ndi)
+!----------------------------------------------------------------------
+!---------------------- COUPLED DIFFUSION -----------------------------
+!----------------------------------------------------------------------
+
+!     1. Solve for current free crosslinker fraction (THETAF_TAU)
+      ARGS(1) = MU_TAU
+      ARGS(2) = MU0
+      ARGS(3) = RGAS
+      ARGS(4) = THETA
+      ARGS(5) = CHI
+      ARGS(6) = VMOL
+      ARGS(7) = K
+      ARGS(8) = DET
+      ARGS(9) = CB_TOT
+      ARGS(10) = CFMAX
+      ! write(*,*) 'ARGS = ', ARGS
+      CALL SOLVETHETAF(THETAF_TAU, ARGS, NARGS, THETAF_T)
+
+      cf = THETAF_TAU * cfmax
+      Jc = 1.0d0 + VMOL * (cb_tot + cf)
+
+      ! Evaluate tangent at converged root
+      CALL thetafFunc(THETAF_TAU, f, df, ARGS, NARGS)
+      DTHETAFDMU = one / (RGAS * THETA * df)
+
+      ! write(*,*) 'kinc = ', kinc
+      ! write(*,*) 'kstep = ', kstep
+      ! write(*,*) 'DTIME = ', DTIME
+
+      IF (DTIME > 1.0d-12) THEN
+        DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME            
+      ELSE
+        DTHETAFDT = 0.0d0
+      END IF
+
+
+      ! Fluid mobility and permeability
+      MFLUID = D * cf * (1.0d0 - THETAF_TAU)
+
+      ! Mobility tangents
+      DMDMU = D * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) * DTHETAFDMU
+      ! dm/dJ via Implicit Function Theorem on H(THETAF_TAU, mu, J) = 0:
+      !   dthetaf/dJ = (k*Vmol) / (RT * Jc * det * df)
+      !   dm/dJ = dm/dthetaf * dthetaf/dJ
+      DMDJ  = D * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) &
+            * (k * VMOL) / (RGAS * THETA * Jc * det * df)
+
+      ! Fluid flux vector (for visualization/SVARS)
+      jfluid = -MFLUID * DMUDX
+
+      
+!       DETFE = DET * PHI_TAU
+!       !     2. Time rate of swelling
+!       DPDT = (PHI_TAU - PHI_T) / DTIME
+      
+!       !     3. Analytical derivatives of PHI
+!       DPHIDMU = (ONE / (RGAS * THETA)) / &
+!       ( (ONE / (PHI_TAU - ONE)) + ONE + TWO * CHI * PHI_TAU &
+!       - ((VMOL * K) / (RGAS * THETA * PHI_TAU)) &
+!       + ((VMOL * K) / (RGAS * THETA * PHI_TAU)) * DLOG(DETFE) )
+      
+!       DPHIDJ  = ( ((VMOL * K) / (RGAS * THETA * DET)) &
+!       - ((VMOL * K) / (RGAS * THETA * DET)) * DLOG(DETFE) ) / &
+!       ( (ONE / (PHI_TAU - ONE)) + ONE + TWO * CHI * PHI_TAU &
+!       - ((VMOL * K) / (RGAS * THETA * PHI_TAU)) &
+!       + ((VMOL * K) / (RGAS * THETA * PHI_TAU)) * DLOG(DETFE) )
+      
+!       !     4. Numerical Perturbation for D(PHIDOT)/DMU
+!       IF (DABS(MU_TAU) > ONE) THEN
+!         DELTAMU = DABS(MU_TAU) * 1.D-8
+!       ELSE
+!         DELTAMU = 1.D-8
+!       END IF
+      
+!       ARGS(1) = MU_TAU + DELTAMU
+!       CALL SOLVEPHI(PHI_PER, ARGS, NARGS, PHI_T)
+!       DPDT_PER = (PHI_PER - PHI_T) / DTIME
+      
+!       ARGS(1) = MU_TAU - DELTAMU
+!       CALL SOLVEPHI(PHI_M, ARGS, NARGS, PHI_T)
+!       DPDT_M = (PHI_M - PHI_T) / DTIME
+      
+!       DPHIDOTDMU = (DPDT_PER - DPDT_M) / (TWO * DELTAMU)
+      
+!       !     5. Fluid mobility and permeability
+!       MFLUID = (D * (ONE / PHI_TAU - ONE)) / (DET * VMOL * RGAS * THETA)
+!       DMDPHI = -(D / (DET * VMOL * PHI_TAU * PHI_TAU * RGAS * THETA))
+!       DMDMU  = DMDPHI * DPHIDMU
+!       DMDJ   = DMDPHI * DPHIDJ
+
+!       !    6. Fluid flux vector (just for plotting)
+!       JFLUID = -MFLUID * DMUDX
+      
+!----------------------------------------------------------------------
+!--------------------- CONSTITUTIVE RELATIONS  ------------------------
+!----------------------------------------------------------------------
+!---- VOLUMETRIC ------------------------------------------------------
+!     STRAIN-ENERGY
+CALL vol(ssev,pv,ppv,k,det,Jc)
+
+!---- ISOCHORIC ISOTROPIC ---------------------------------------------
+IF (phinet < one) THEN
+!     STRAIN-ENERGY
+  CALL isomat(sseiso,diso,c10,c01,cbari1,cbari2)
+!     PK2 'FICTICIOUS' STRESS TENSOR
+  CALL pk2isomatfic(pkmatfic,diso,cbar,cbari1,unit2,ndi)
+!     CAUCHY 'FICTICIOUS' STRESS TENSOR
+  CALL sigisomatfic(sisomatfic,pkmatfic,distgr,det,ndi)
+!     'FICTICIOUS' MATERIAL ELASTICITY TENSOR
+  CALL cmatisomatfic(cmisomatfic,cbar,cbari1,cbari2, diso,unit2,unit4,det,ndi)
+!     'FICTICIOUS' SPATIAL ELASTICITY TENSOR
+  CALL csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
+  
+END IF
+!---- FILAMENTS NETWORK -----------------------------------------------
+!     IMAGINARY ERROR FUNCTION BASED ON DISPERSION PARAMETER
+CALL erfi(efi,bb)
+!     'FICTICIOUS' PK2 STRESS AND MATERIAL ELASTICITY TENSORS
+!------------ AFFINE NETWORK --------------
+IF (phinet > zero) THEN
+  write(*,*) 'Calling affclnetfic_discrete at t = ', time(1)
+  CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,filprops,  &
+      affprops,efi,noel,det,prefdir,ndi,cb,dtime,cfmax,cbmax,chi,Keq,Koff0, &
+      thetaf_tau, cb_tot_new)
+END IF
+
+! Macroscopic reaction source (homogenized binding rate)
+IF (DTIME > 1.0d-12) THEN
+  RMACRO = (cb_tot_new - cb_tot) / DTIME
+ELSE
+  RMACRO = 0.0d0
+END IF
+write(*,*) 'cb_tot = ', cb_tot
+write(*,*) 'cb_tot_new = ', cb_tot_new
+
+!      PKNETFIC=PKNETFICNAF+PKNETFICAF
+snetfic=snetficnaf+snetficaf
+!      CMNETFIC=CMNETFICNAF+CMNETFICAF
+cnetfic=cnetficnaf+cnetficaf
+!----------------------------------------------------------------------
+!     STRAIN-ENERGY
+SSE=SSEV+SSEISO
+!     PK2 'FICTICIOUS' STRESS
+pkfic=(one-phinet)*pkmatfic+pknetfic
+!     CAUCHY 'FICTICIOUS' STRESS
+sfic=(one-phinet)*sisomatfic+snetfic
+!     MATERIAL 'FICTICIOUS' ELASTICITY TENSOR
+cmfic=(one-phinet)*cmisomatfic+cmnetfic
+!     SPATIAL 'FICTICIOUS' ELASTICITY TENSOR
+cfic=(one-phinet)*cisomatfic+cnetfic
+!----------------------------------------------------------------------
+!-------------------------- STRESS MEASURES ---------------------------
+!----------------------------------------------------------------------
+!---- VOLUMETRIC ------------------------------------------------------
+!      PK2 STRESS
+! CALL pk2vol(pkvol,pv,c,ndi)
+CALL pk2vol(pkvol,pv,c,ndi,det)
+!      CAUCHY STRESS
+CALL sigvol(svol,pv,unit2,ndi)
+!---- ISOCHORIC -------------------------------------------------------
+!      PK2 STRESS
+CALL pk2iso(pkiso,pkfic,projl,det,ndi)
+!      CAUCHY STRESS
+CALL sigiso(siso,sfic,proje,ndi)
+!      ACTIVE CAUCHY STRESS
+!      CALL SIGISO(SACTISO,SNETFICAF,PROJE,NDI)
+
+!      CALL SPECTRAL(SACTISO,SACTVL,SACTVC)
+!---- VOLUMETRIC + ISOCHORIC ------------------------------------------
+!      PK2 STRESS
+pk2 = pkvol + pkiso
+!      CAUCHY STRESS
+sigma = svol + siso
+
+!----------------------------------------------------------------------
+!-------------------- MATERIAL ELASTICITY TENSOR ----------------------
+!----------------------------------------------------------------------
+
+!---- VOLUMETRIC ------------------------------------------------------
+
+!      CALL METVOL(CMVOL,C,PV,PPV,DET,NDI)
+
+!---- ISOCHORIC -------------------------------------------------------
+
+!      CALL METISO(CMISO,CMFIC,PROJL,PKISO,PKFIC,C,UNIT2,DET,NDI)
+
+!----------------------------------------------------------------------
+
+!      DDPKDDE=CMVOL+CMISO
+
+!----------------------------------------------------------------------
+!--------------------- SPATIAL ELASTICITY TENSOR ----------------------
+!----------------------------------------------------------------------
+
+!---- VOLUMETRIC ------------------------------------------------------
+
+CALL setvol(cvol,pv,ppv,unit2,unit4s,ndi)
+
+!---- ISOCHORIC -------------------------------------------------------
+
+CALL setiso(ciso,cfic,proje,siso,sfic,unit2,ndi)
+
+!-----JAUMMAN RATE ----------------------------------------------------
+
+CALL setjr(cjr,sigma,unit2,ndi)
+
+!----------------------------------------------------------------------
+
+!     ELASTICITY TENSOR
+ddsigdde=cvol+ciso ! +cjr
+
+!----------------------------------------------------------------------
+!------------------------- CROSS-COUPLINGS ----------------------------
+!----------------------------------------------------------------------
+!     DISPLACEMENT - CHEMICAL POTENTIAL MODULUS
+! DO I1 = 1, NDI
+!     DO J1 = 1, NDI
+!       ! Derivative of Cauchy stress with respect to phi
+!       SPUCMOD(I1,J1) = (K / (DETFE * PHI_TAU)) * UNIT2(I1,J1) * DPHIDMU
+!     END DO
+! END DO
+
+!     CHEMICAL POTENTIAL - DISPLACEMENT MODULUS
+DO I1 = 1, NDI
+    DO J1 = 1, NDI
+      ! Existing mobility term + dm/dJ contribution (via J * delta_il)
+      SPCUMODFAC(I1,J1) = (MFLUID + DMDJ * det) * UNIT2(I1,J1)
+    END DO
+END DO
+
+
+!     CAUCHY STRESS - CHEMICAL POTENTIAL MODULUS (dS / dMu)
+  DO I1 = 1, NDI
+      DO J1 = 1, NDI
+        DSIGDMU(I1,J1) = -((K * VMOL * CFMAX) / (DET * Jc)) * UNIT2(I1,J1) * DTHETAFDMU
+      END DO
+  END DO
+
+
+!----------------------------------------------------------------------
+!------------------------- INDEX ALLOCATION ---------------------------
+!----------------------------------------------------------------------
+!     VOIGT NOTATION  - FULLY SIMMETRY IMPOSED
+CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
+
+!----------------------------------------------------------------------
+!--------------------------- STATE VARIABLES --------------------------
+!----------------------------------------------------------------------
+!     DO K1 = 1, NTENS
+!      STATEV(1:27) = VISCOUS TENSORS
+CALL sdvwrite(det,statev,stress,thetaf_tau,dmudx,Vmol,jfluid,cb,cb_tot_new)
+! CALL sdvwrite(det,etac_sdv,statev)
+!     END DO
+!----------------------------------------------------------------------
+RETURN
+END SUBROUTINE material
+!----------------------------------------------------------------------
+!--------------------------- END OF UMAT ------------------------------
+!----------------------------------------------------------------------
+
+!----------------------------------------------------------------------
+!----------------------- AUXILIAR SUBROUTINES -------------------------
+!----------------------------------------------------------------------
+!                         INPUT FILES
+!----------------------------------------------------------------------
+
+!----------------------------------------------------------------------
+!                         KINEMATIC QUANTITIES
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+!                         STRESS TENSORS
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+!                   LINEARISED ELASTICITY TENSORS
+!----------------------------------------------------------------------
+
+
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+!----------------------- UTILITY SUBROUTINES --------------------------
+!----------------------------------------------------------------------
+
+! SUBROUTINE affclnetfic_discrete(sfic,cfic,f,filprops,affprops,  &
+!           efi,noel,det,prefdir,ndi) ! (original)
+
+SUBROUTINE affclnetfic_discrete(sfic,cfic,f,filprops,affprops,  &
+  efi,noel,det,prefdir,ndi,cb,dtime,cfmax,cbmax,chi,Keq,Koff0, &
+  thetaf, cbtau_tot)
+
+
+
+!>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
+!> DISCRETE ANGULAR INTEGRATION SCHEME (icosahedron)
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: filprops(10)
+DOUBLE PRECISION, INTENT(IN)             :: affprops(5)
+DOUBLE PRECISION, INTENT(IN OUT)         :: efi
+INTEGER, INTENT(IN OUT)                  :: noel
+DOUBLE PRECISION, INTENT(IN OUT)         :: det
+
+DOUBLE PRECISION, INTENT(IN)             :: dtime
+DOUBLE PRECISION, INTENT(IN)             :: cfmax
+DOUBLE PRECISION, INTENT(IN)             :: cbmax
+DOUBLE PRECISION, INTENT(IN)             :: CHI
+DOUBLE PRECISION, INTENT(IN)             :: Keq
+DOUBLE PRECISION, INTENT(IN)             :: Koff0
+DOUBLE PRECISION, INTENT(IN)             :: thetaf
+DOUBLE PRECISION, INTENT(OUT)            :: cbtau_tot
+DOUBLE PRECISION, INTENT(IN OUT)         :: cb(ndir)
+
+INTEGER :: i1,j1,k1,l1,m1, im1, isub, n_sub
+INTEGER, PARAMETER :: nargs = 16
+DOUBLE PRECISION :: args(nargs)
+DOUBLE PRECISION :: sfilfic(ndi,ndi), cfilfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
+DOUBLE PRECISION :: aux,lambdai,dwi,ddwi,rwi,lambdaic
+DOUBLE PRECISION :: l,Lp,r0f,r0,mu0str,b0,beta,lambda0,lambda0f,rho,n,fi,ffi,aratio
+DOUBLE PRECISION :: r0c,etac,lambdaif
+DOUBLE PRECISION :: bdisp,ang, frac(4)
+DOUBLE PRECISION :: prefdir(nelem,4), pd(3),lambda_pref,prefdir0(3)
+DOUBLE PRECISION :: dx,kb,theta,na
+DOUBLE PRECISION :: cactin, Mactin, rhoactin
+DOUBLE PRECISION :: cbt_i, cbtau_i, thetab_i, Kon, Koff_i, R_i, dtime_sub, cb_sub
+INTEGER :: iter
+DOUBLE PRECISION :: cb_new, Res, cb_pert, dcb, r0f_p, l_p, r0_p
+DOUBLE PRECISION :: dummy_DfDcb
+
+
+! INTEGRATION SCHEME
+  integer, parameter :: nfacedir = 2
+  integer ( kind = 4 ) ifacedir
+  integer :: f3_start(nfacedir), f3_end(nfacedir), f2_start(nfacedir)
+  integer, dimension(3, nfacedir) :: off_a, off_b, off_c
+  integer ( kind = 4 ) a, b, c
+  real ( kind = 8 ) a_xyz(3), b_xyz(3), c_xyz(3)
+  real ( kind = 8 ) a2_xyz(3), b2_xyz(3), c2_xyz(3)
+  real ( kind = 8 ) area_total, ai !area of triangle i
+  integer ( kind = 4 ), allocatable, dimension ( :, : ) :: edge_point
+  integer ( kind = 4 ) f1, f2, f3
+  integer ( kind = 4 ) face, face_num, face_order_max, node_num, edge_num, point_num
+  integer ( kind = 4 ), allocatable, dimension ( : ) :: face_order
+  integer ( kind = 4 ), allocatable, dimension ( :, : ) :: face_point
+  real ( kind = 8 ) node_xyz(3)
+  real ( kind = 8 ), parameter :: pi = 3.141592653589793D+00
+  real ( kind = 8 ), allocatable, dimension ( :, : ) :: point_coord
+  real ( kind = 8 ) rr, aa, v
+
+
+
+!  Size the icosahedron.
+!
+  call icos_size ( point_num, edge_num, face_num, face_order_max )
+!
+!  Set the icosahedron.
+!
+  allocate ( point_coord(1:3,1:point_num) )
+  allocate ( edge_point(1:2,1:edge_num) )
+  allocate ( face_order(1:face_num) )
+  allocate ( face_point(1:face_order_max,1:face_num) )
+
+  call icos_shape ( point_num, edge_num, face_num, face_order_max, &
+    point_coord, edge_point, face_order, face_point )
+!
+!  Set aux variables for the integration scheme 
+!
+f3_start(1) = 1; f3_end(1) = 3 * factor - 2
+f2_start(1) = 1
+f3_start(2) = 2; f3_end(2) = 3 * factor - 4
+f2_start(2) = 2
+off_a(:,1) = [2, -1, -1];  off_b(:,1) = [-1, 2, -1];  off_c(:,1) = [-1, -1, 2]
+off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
+!
+!  Initialize the integral data.
+!
+  rr = 0.0D+00
+  area_total = 0.0D+00
+  node_num = 0
+
+!! initialize the model data
+  !     FILAMENT
+  aratio   = filprops(1)
+  r0c      = filprops(2)
+  etac     = filprops(3)
+  mu0str   = filprops(4)
+  beta     = filprops(5)
+  Lp       = filprops(6)
+  theta    = filprops(7)
+  dx       = filprops(8)
+  kb       = filprops(9)
+  NA       = filprops(10)
+  b0       = Lp * theta * kb
+  !     NETWORK
+  bdisp    = affprops(1)
+  lambda0  = affprops(2)                                                                                                                                                           
+  cactin   = affprops(3)                                                                                              
+  Mactin   = affprops(4)                                                                                            
+  rhoactin = affprops(5)  
+  
+    ! aux=n*(det**(-one))
+    cfic=zero
+    sfic=zero
+  
+    ! rho=one
+    r0=r0f+r0c
+  
+    aa = zero
+
+    cbtau_tot = zero
+!----------------------------------------------------------------------
+  
+  ! preferred direction measures (macroscale measures)
+  ! prefdir0=prefdir(noel,2:4)
+  ! Currently assuming all elements have the same preferential direction
+  prefdir0=prefdir(1,2:4)
+  !calculate preferred direction in the deformed configuration
+  CALL deffil(lambda_pref,pd,prefdir0,f,ndi)
+  !update preferential direction - deformed configuration
+  pd=pd/dsqrt(dot_product(pd,pd))
+
+!  Pick a face of the icosahedron, and identify its vertices as A, B, C.
+!
+! Integrate only one hemisphere of the icosahedron (faces 1 to 10) 
+! Remember to multiply each direction's contribution by 2 to account for the other hemisphere
+do face = 1, face_num/2
+!
+    a = face_point(1,face)
+    b = face_point(2,face)
+    c = face_point(3,face)
+!
+    a_xyz(1:3) = point_coord(1:3,a)
+    b_xyz(1:3) = point_coord(1:3,b)
+    c_xyz(1:3) = point_coord(1:3,c)
+!
+!  Some subtriangles will have the same direction as the face.
+!  Generate each in turn, by determining the barycentric coordinates
+!  of the centroid (F1,F2,F3), from which we can also work out the barycentric
+!  coordinates of the vertices of the subtriangle.
+!
+  do ifacedir = 1, nfacedir
+    do f3 = f3_start(ifacedir), f3_end(ifacedir), 3
+      do f2 = f2_start(ifacedir), 3 * factor - f3 - ifacedir, 3
+
+        f1 = 3 * factor - f3 - f2
+
+        node_num = node_num + 1
+
+        call sphere01_triangle_project ( a_xyz, b_xyz, c_xyz, f1, f2, f3, &
+          node_xyz )
+
+        call sphere01_triangle_project ( &
+          a_xyz, b_xyz, c_xyz, f1 + off_a(1,ifacedir), f2 + off_a(2,ifacedir), f3 + off_a(3,ifacedir), a2_xyz )
+        call sphere01_triangle_project ( &
+          a_xyz, b_xyz, c_xyz, f1 + off_b(1,ifacedir), f2 + off_b(2,ifacedir), f3 + off_b(3,ifacedir), b2_xyz )
+        call sphere01_triangle_project ( &
+          a_xyz, b_xyz, c_xyz, f1 + off_c(1,ifacedir), f2 + off_c(2,ifacedir), f3 + off_c(3,ifacedir), c2_xyz )
+
+        call sphere01_triangle_vertices_to_area ( a2_xyz, b2_xyz, c2_xyz, ai )
+        
+        !direction of the sphere triangle barycenter - direction i
+        mf0i=node_xyz
+        CALL deffil(lambdai,mfi,mf0i,f,ndi)
+        
+        CALL bangle(ang,f,mfi,noel,pd,ndi)
+        
+        CALL density(rho,ang,bdisp,efi)
+        
+        fi = zero
+        dummy_DfDcb = zero
+
+          ! ================= KINETICS (IMPLICIT NEWTON-RAPHSON) =================
+        cbt_i = MAX(cb(node_num), 1.0d-10)
+        cbtau_i = cbt_i  ! Initial guess is the old state
+        kon = Koff0 * Keq * exp(CHI * (1.0d0 - 2.0d0 * thetaf))
+
+        args(1)  = lambdai
+        args(2)  = lambda0
+        args(3)  = aratio
+        args(4)  = etac
+        args(5)  = mu0str
+        args(6)  = beta
+        args(7)  = b0
+        args(8)  = r0c
+        args(9)  = cbmax
+        args(10) = cfmax
+        args(11) = dx / (kb * theta)
+        args(12) = dtime
+        args(13) = kon
+        args(14) = Koff0
+        args(15) = thetaf
+        args(16) = cbt_i
+
+        CALL solveKinetics(cbtau_i, args, nargs, cbt_i)
+
+        cb(node_num) = cbtau_i
+        ! FINAL STATE UPDATE
+        r0f = 1.6 * (1.0d3 * cb(node_num))**(-two/5.0d0)
+        l = aratio * r0f
+        r0 = r0f + r0c
+        n = l**(-1) * (cactin * NA * Mactin / rhoactin)
+        aux = n * (det**(-one))
+
+        IF((etac > zero).AND.(etac .LE. one)) THEN
+          lambdaif = etac*(r0/r0f)*(lambdai-one)+one
+          lambda0f = etac*(r0/r0f)*(lambda0-one)+one
+        ELSE
+          lambdaif = lambdai 
+        END IF
+
+        fi = zero
+        IF(lambdai .GE. 1.0d0) THEN 
+          CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),dummy_DfDcb)
+          CALL sigfilfic(sfilfic,rho,lambdai,dwi,mfi,ai,ndi)
+          CALL csfilfic(cfilfic,rho,lambdai,dwi,ddwi,mfi,ai,ndi)
+
+          DO j1=1,ndi
+            DO k1=1,ndi
+                sfic(j1,k1) = sfic(j1,k1) + aux*sfilfic(j1,k1)
+                DO l1=1,ndi
+                  DO m1=1,ndi
+                    cfic(j1,k1,l1,m1) = cfic(j1,k1,l1,m1) + aux*cfilfic(j1,k1,l1,m1)
+                  END DO
+                END DO
+            END DO
+          END DO
+        END IF 
+         
+        ! Update total bound CL concentration for this integration point                                                       
+        cbtau_tot = cbtau_tot + cb(node_num) * rho * ai
+        ! ==============================================================   
+
+        !v=dwi
+        !rr = rr + ai * v
+        !area_total = area_total + ai
+
+      end do
+    end do
+  end do
+  end do
+!
+!  Discard allocated memory.
+!
+  deallocate ( edge_point )
+  deallocate ( face_order )
+  deallocate ( face_point )
+  deallocate ( point_coord )
+
+RETURN
+END SUBROUTINE affclnetfic_discrete
+SUBROUTINE fil(f,ff,dw,ddw, &
+            lambdai,lambdaf,lambda0,lambda0f,&
+            ll,r0,r0f,mu0,beta,b0,etac,&
+            cb,DfDcb)
+
+
+
+!>    SINGLE FILAMENT: STRAIN ENERGY DERIVATIVES
+use global
+IMPLICIT NONE
+
+DOUBLE PRECISION, INTENT(OUT)            :: f
+DOUBLE PRECISION, INTENT(OUT)            :: ff
+DOUBLE PRECISION, INTENT(OUT)            :: dw
+DOUBLE PRECISION, INTENT(OUT)            :: ddw
+DOUBLE PRECISION, INTENT(OUT)            :: DfDcb
+DOUBLE PRECISION, INTENT(IN OUT)         :: lambdai
+DOUBLE PRECISION, INTENT(IN OUT)         :: lambdaf
+DOUBLE PRECISION, INTENT(IN OUT)         :: lambda0
+DOUBLE PRECISION, INTENT(IN OUT)         :: lambda0f
+DOUBLE PRECISION, INTENT(IN OUT)         :: ll
+DOUBLE PRECISION, INTENT(IN OUT)         :: r0
+DOUBLE PRECISION, INTENT(IN OUT)         :: r0f
+DOUBLE PRECISION, INTENT(IN OUT)         :: mu0
+DOUBLE PRECISION, INTENT(IN OUT)         :: beta
+DOUBLE PRECISION, INTENT(IN OUT)         :: b0
+DOUBLE PRECISION, INTENT(IN OUT)         :: etac
+DOUBLE PRECISION, INTENT(IN OUT)         :: cb
+DOUBLE PRECISION :: aratio, r0c
+DOUBLE PRECISION :: a,b,machep,t
+DOUBLE PRECISION :: aux, pi,alpha
+DOUBLE PRECISION :: aux0,aux1,aux2,aux3,aux4,aux5,aux6,y
+DOUBLE PRECISION :: aux00,aux01,aux02,aux03,aux04,aux05
+
+a=zero
+b=1.0E09
+machep=2.2204E-16
+t=1.0E-14 ! 1.0E-6
+f=zero
+
+CALL pullforce(f, a, b, machep, t, lambdaf,lambda0f,ll,r0f,mu0,beta,b0)
+! write(*,*) 'lambdaf', lambdaf
+! write(*,*) 'f', f
+pi=four*ATAN(one)
+! ff=f*ll*(pi*pi*b0)**(-one)
+ff=f*ll*ll*(pi*pi*b0)**(-one)
+! ff = 100000000000000000.0
+
+alpha=pi*pi*b0*(ll*ll*mu0)**(-one)
+
+aux0=beta/alpha
+aux=alpha*ff
+aux1=one+ff+aux*ff
+aux2=one+two*aux
+aux3=one+aux
+! aux4=lambda0*r0*r0*mu0*(ll**(-one))
+! OLD
+! aux4=lambda0*lambda0*r0*r0*mu0*(ll**(-one))
+! aux4=lambda0*lambda0f*r0*r0*mu0*(ll**(-one))
+! NEW
+aux4=etac*lambda0f*lambda0*r0*r0*mu0*(ll**(-one))
+aux5=((one+aux)*(aux1**(-one)))**beta
+aux6=one-r0f*((ll)**(-one))
+
+y=aux0*(aux2*aux2*(aux1**(-one)))-beta*(aux2*(aux3**(-one)))-two
+
+! Strain energy derivatives
+dw=lambda0*(r0)*f
+! dw = pi*pi*r0*b0/(ll*ll)*(((ll/r0-1)/(ll/r0-lambda))**TWO - one)
+ddw=aux4*((one+y*aux5*aux6)**(-one))
+
+! Force derivative wrt cb
+aratio=ll/r0f
+r0c = r0 - r0f
+aux00 = two / 5.d0 * cb ** (- two / 5.d0)
+aux01 = 2 * f
+aux02 = etac * r0c / r0f * (lambdai - 1)
+aux03 = b0 * pi * pi / (r0f * aratio)**2
+aux04 = (a - lambdaf) * beta
+aux05 = (f + aux03) / aux04
+DfDcb = aux00 * (aux01 + aux02 * aux05)
+
+RETURN
+END SUBROUTINE fil
+subroutine kineticsFunc(cbtau, f, df, args, nargs)
+    ! This subroutine serves as the function we would like to solve for                                         
+    ! the bound crosslinker volume fraction (cbtau = cf/cfmax)                                                  
+    ! by finding cbtau such that f = 0                                                                         
+    use global                                                                                                        
+    implicit none                                                                                               
+                                                                                                                
+    integer, intent(in)              :: nargs                                                                   
+    DOUBLE PRECISION, intent(in out) :: cbtau                                                                   
+    DOUBLE PRECISION, intent(out)    :: f, df                                                                    
+    DOUBLE PRECISION, intent(in)     :: args(nargs)                                                              
+                                                                                                                
+    DOUBLE PRECISION                 :: r0f, etac, r0, r0c, fi, ffi, dwi, ddwi, l, mu0str, beta, b0 
+    DOUBLE PRECISION                 :: cfmax, cbmax, dx_kT, dt, kon, koff0, koff, thetab, Ri
+    DOUBLE PRECISION                 :: lambdai, lambdaif, lambda0, lambda0f, lambdaic, thetaf, cbt                                                           
+    DOUBLE PRECISION                 :: DfDcb,DRiDcb, aratio
+    
+    Ri = zero
+                                                                                                                
+    ! Obtain relevant quantities
+    lambdai = args(1)
+    lambda0 = args(2)
+    aratio  = args(3)
+    etac    = args(4)
+    mu0str  = args(5)
+    beta    = args(6)
+    b0      = args(7)
+    r0c     = args(8)                                                                                         
+    cbmax   = args(9)
+    cfmax   = args(10)
+    dx_kT   = args(11)
+    dt      = args(12)
+    kon     = args(13)
+    koff0   = args(14)
+    thetaf  = args(15)
+    cbt     = args(16)
+
+    r0f = 1.6 * (cbtau*1.d3)**(- two / 5.d0)
+    l = aratio * r0f
+    r0 = r0f + r0c
+    
+    IF (lambdai.LE.one) then
+        fi = 0.0
+        DfDcb = 0.0
+    ELSE
+        IF((etac > zero).AND.(etac .LE. one))THEN
+            lambdaif=etac*(r0/r0f)*(lambdai-one)+one
+            lambda0f=etac*(r0/r0f)*(lambda0-one)+one
+            lambdaic=(lambdai*r0-lambdaif*r0f)/r0c
+        ELSE
+            lambdaif=lambdai ! False for a filament attached to a stiff crosslinker (etac = 1), only valid for etac = 0 (???)
+            lambdaic=zero ! False for a stiff crosslinker (etac = 1), only valid for etac = 0 (???)
+        END IF
+        CALL fil(fi,ffi,dwi,ddwi,&
+                lambdai,lambdaif,lambda0,lambda0f,&
+                l,r0,r0f,mu0str,beta,b0,etac,&
+                cbtau,DfDcb)
+            ! CALL filpce(lambdai, fi, dwi, ddwi)
+    END IF
+
+    ! Unbinding rate
+    koff = koff0 * exp(dx_kT * fi)
+    thetab = cbtau / cbmax
+
+    ! Reaction rate and residual                                                                         
+    Ri = kon * cfmax * thetaf / (1 - thetaf) - koff * cbmax * thetab / (1 - thetab)
+    f = cbtau - cbt - Ri * dt                                                      
+                                                                                                                
+    ! Residual derivative
+    dRiDcb = - koff * (cbtau / (1 - thetab) * dx_kT * DfDcb + 1 / (1 - thetab)**2) 
+    df = one - dRiDcb * dt
+    
+end subroutine kineticsFunc
+
+SUBROUTINE sdvread(statev,thetaf,cb,cb_tot)
+use global
+implicit none
+!>    VISCOUS DISSIPATION: READ STATE VARS
+DOUBLE PRECISION, INTENT(IN)             :: statev(nsdv)
+DOUBLE PRECISION, INTENT(OUT)            :: thetaf, cb(ndir), cb_tot
+INTEGER :: IDIR
+
+DO IDIR = 1, ndir
+    cb(IDIR) = statev(NSDV - ndir + IDIR)
+END DO
+
+thetaf = statev(1)
+cb_tot  = statev(4)
+
+RETURN
+
+END SUBROUTINE sdvread
+subroutine solveKinetics(root, args, nargs, rootOld)
+
+    ! Numerical Recipes RTSAFE.
+
+    implicit none
+
+    ! Dummy arguments
+    integer, intent(in)     :: nargs
+    real(8), intent(in)     :: args(nargs)
+    real(8), intent(in)     :: rootOld
+    real(8), intent(out)    :: root
+
+    ! Local variables
+    integer :: j
+    real(8) :: f, df, fl, fh, xl, xh, x1, x2, swap, dxold
+    real(8) :: dx, temp, rootMax, rootMin
+    real(8) :: cbmax
+
+    ! Parameter declarations
+    integer, parameter :: maxit = 50
+    real(8), parameter :: xacc  = 1.0d-12
+    real(8), parameter :: zero  = 0.0d0
+
+    cbmax = args(9)
+
+    ! Set the safe bounds for the root
+    rootMax = cbmax - 1.0d-10
+    rootMin = 1.0d-8
+
+    x1 = rootMin
+    x2 = rootMax
+    call kineticsFunc(x1, fl, df, args, nargs)
+    call kineticsFunc(x2, fh, df, args, nargs)
+
+    ! Check if the root is safely bracketed
+    if (fl * fh >= zero) then
+        root = rootOld
+        write(*,*) 'FYI, root not bracketed on cb'
+        write(*,*) 'fl=', fl
+        write(*,*) 'fh=', fh
+        write(*,*) 'rootOld=', rootOld
+        write(*,*) 'mu =', args(1)
+        write(*,*) 'mu0=', args(2)
+        write(*,*) 'Rgas=', args(3)
+        write(*,*) 'theta=', args(4)
+        write(*,*) 'chi=', args(5)
+        write(*,*) 'Vmol=', args(6)
+        write(*,*) 'Kbulk=', args(7)
+        write(*,*) 'detF=', args(8)
+        write(*,*) 'cb=', args(9)
+        write(*,*) 'cfmax=', args(10)
+        call exit
+        return
+    end if
+
+    ! Orient the search so that f(xl) < 0
+    if (fl < 0.0d0) then
+        xl = x1
+        xh = x2
+    else
+        xh = x1
+        xl = x2
+        swap = fl
+        fl = fh
+        fh = swap
+    end if
+
+    ! Initialize the guess for the root, the "step size before last", and the last step
+    if (rootOld < rootMin) root = rootMin ! rootOld = rootMin
+    if (rootOld > rootMax) root = rootMax ! rootOld = rootMax
+    
+    dxold = abs(x2 - x1)
+    dx    = dxold
+    
+    call kineticsFunc(root, f, df, args, nargs)
+
+    ! Loop over allowed iterations (Replaced old DO 10 loop)
+    do j = 1, maxit
+        
+        ! Bisect if Newton is out of range, or not decreasing fast enough.
+        if ( (((root - xh) * df - f) * ((root - xl) * df - f) >= 0.0d0) .or. &
+             (abs(2.0d0 * f) > abs(dxold * df)) ) then
+
+            dxold = dx
+            dx    = 0.5d0 * (xh - xl)
+            root  = xl + dx
+            
+            ! Change in root is negligible
+            if (xl == root) return
+
+        else
+            ! Newton step is acceptable. Take it.
+            dxold = dx
+            dx    = f / df
+            temp  = root
+            root  = root - dx
+            
+            ! Change in root is negligible
+            if (temp == root) return
+
+        end if
+
+        ! Convergence criterion
+        if (abs(dx) < xacc) return
+
+        ! The one new function evaluation per iteration
+        call kineticsFunc(root, f, df, args, nargs)
+
+        ! Maintain the bracket on the root 
+        if (f < 0.0d0) then
+            xl = root
+            fl = f
+        else
+            xh = root
+            fh = f
+        end if
+
+    end do
+
+    ! If loop finishes without returning, maximum iterations were exceeded
+    write(*, '(/1X,A)') 'solveKinetics EXCEEDING MAXIMUM ITERATIONS'
+    write(*, '(/1X,A)') 'rootOld = ', rootOld
+    write(*, '(/1X,A)') 'root = ', root
+    write(*, '(/1X,A)') 'f = ', f
+    write(*, '(/1X,A)') 'df = ', df
+    
+    return
+end subroutine solveKinetics
 subroutine solveThetaf(root, args, nargs, rootOld)
 
     ! This subroutine will numerically solve for the free
@@ -10683,190 +10818,55 @@ subroutine solveThetaf(root, args, nargs, rootOld)
     
     return
 end subroutine solveThetaf
-SUBROUTINE xit()
+subroutine thetafFunc(thetaf, f, df, args, nargs)
+    ! This subroutine serves as the function we would like to solve for                                         
+    ! the free crosslinker volume fraction (thetaf = cf/cfmax)                                                  
+    ! by finding thetaf such that f = 0                                                                         
+    use global                                                                                                        
+    implicit none                                                                                               
+                                                                                                                
+    integer, intent(in)              :: nargs                                                                   
+    DOUBLE PRECISION, intent(in out) :: thetaf                                                                   
+    DOUBLE PRECISION, intent(out)    :: f, df                                                                    
+    DOUBLE PRECISION, intent(in)     :: args(nargs)                                                              
+                                                                                                                
+    DOUBLE PRECISION                 :: mu, mu0, Rgas, theta, chi, Vmol, Kbulk                                                           
+    DOUBLE PRECISION                 :: detF, RT, Jc, Je, cb, cfmax
+    ! DOUBLE PRECISION, parameter      :: zero  = 0.0d0                                                                         
+    ! DOUBLE PRECISION, parameter      :: one   = 1.0d0                                                                         
+    ! DOUBLE PRECISION, parameter      :: two   = 2.0d0                                                                         
+                                                                                                                
+    ! Obtain relevant quantities                                                                                
+    mu    = args(1)                                                                                             
+    mu0   = args(2)                                                                                             
+    Rgas  = args(3)                                                                                             
+    theta = args(4)                                                                                             
+    chi   = args(5)                                                                                             
+    Vmol  = args(6)                                                                                             
+    Kbulk = args(7)                                                                                             
+    detF  = args(8)                                                                                             
+    cb    = args(9)                                                         
+    cfmax = args(10)                                                                    
+                                                                                                                
+    ! Compute the useful quantity                                                                               
+    RT = Rgas * theta                                                                                           
+                                                                                                                
+    ! Compute the swelling ratio J^c
+    Jc = one + Vmol * cb + Vmol * cfmax * thetaf
+    
+    ! Compute Elastic Volume Ratio J^e                                                                          
+    Je = detF / Jc                                                       
+                                                                                                                
+    ! Compute the residual f(thetaf) = 0                                                                        
+    f = (mu0 - mu) / RT &                                                                                       
+        + log(thetaf / (one - thetaf)) &                                                                          
+        + chi * (one - two * thetaf) &                                                                            
+        - ((Kbulk * Vmol) / RT) * (log(Je) / Jc)
+                                                                                                                
+    ! Compute the exact analytical tangent df/dthetaf                                                           
+    df = (one / thetaf) + (one / (one - thetaf)) &                                                              
+        - two * chi &                                                                                            
+        + ((Kbulk * Vmol) / RT) * (Vmol * cfmax) * (one + log(Je)) / (Jc * Jc)  
+
+end subroutine thetafFunc
 
-
-
-CALL EXIT()
-
-END SUBROUTINE
-SUBROUTINE pull4(mat,spatial,finv,det,ndi)
-
-
-
-!>        PULL-BACK TIMES DET OF 4TH ORDER TENSOR
-
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: mat(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: spatial(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: finv(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: det
-
-
-
-INTEGER :: i1,j1,k1,l1,ii1,jj1,kk1,ll1
-
-
-DOUBLE PRECISION :: aux
-
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    DO k1=1,ndi
-      DO l1=1,ndi
-        aux=zero
-        DO ii1=1,ndi
-          DO jj1=1,ndi
-            DO kk1=1,ndi
-              DO ll1=1,ndi
-                aux=aux+det* finv(i1,ii1)*finv(j1,jj1)*  &
-                    finv(k1,kk1)*finv(l1,ll1)*spatial(ii1,jj1,kk1,ll1)
-              END DO
-            END DO
-          END DO
-        END DO
-        mat(i1,j1,k1,l1)=aux
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE pull4
-SUBROUTINE hvwrite(statev,hv,v1,ndi)
-
-
-
-!>    VISCOUS DISSIPATION: WRITE STATE VARS
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN OUT)                  :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
-DOUBLE PRECISION, INTENT(IN)             :: hv(ndi,ndi)
-INTEGER, INTENT(IN)                      :: v1
-
-
-
-INTEGER :: pos
-
-
-pos=9*v1-9
-statev(1+pos)=hv(1,1)
-statev(2+pos)=hv(1,2)
-statev(3+pos)=hv(1,3)
-statev(4+pos)=hv(2,1)
-statev(5+pos)=hv(2,2)
-statev(6+pos)=hv(2,3)
-statev(7+pos)=hv(3,1)
-statev(8+pos)=hv(3,2)
-statev(9+pos)=hv(3,3)
-
-RETURN
-
-END SUBROUTINE hvwrite
-SUBROUTINE sigvol(svol,pv,unit2,ndi)
-
-
-
-!>    VOLUMETRIC CAUCHY STRESS
-
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: svol(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: pv
-DOUBLE PRECISION, INTENT(IN)             :: unit2(ndi,ndi)
-
-
-
-INTEGER :: i1,j1
-
-
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    svol(i1,j1)=pv*unit2(i1,j1)
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE sigvol
-SUBROUTINE stretch(c,b,u,v,ndi)
-
-
-
-!>    STRETCH TENSORS
-
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN OUT)                  :: ndi
-
-DOUBLE PRECISION, INTENT(IN OUT)         :: c(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: b(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: u(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: v(ndi,ndi)
-
-
-
-
-DOUBLE PRECISION :: eigval(ndi),omega(ndi),eigvec(ndi,ndi)
-
-CALL spectral(c,omega,eigvec)
-
-eigval(1) = DSQRT(omega(1))
-eigval(2) = DSQRT(omega(2))
-eigval(3) = DSQRT(omega(3))
-
-u(1,1) = eigval(1)
-u(2,2) = eigval(2)
-u(3,3) = eigval(3)
-
-u = matmul(matmul(eigvec,u),transpose(eigvec))
-
-CALL spectral(b,omega,eigvec)
-
-eigval(1) = DSQRT(omega(1))
-eigval(2) = DSQRT(omega(2))
-eigval(3) = DSQRT(omega(3))
-!      write(*,*) eigvec(1,1),eigvec(2,1),eigvec(3,1)
-
-v(1,1) = eigval(1)
-v(2,2) = eigval(2)
-v(3,3) = eigval(3)
-
-v = matmul(matmul(eigvec,v),transpose(eigvec))
-RETURN
-END SUBROUTINE stretch
-SUBROUTINE isomat(sseiso,diso,c10,c01,cbari1,cbari2)
-
-
-
-!>     ISOTROPIC MATRIX : ISOCHORIC SEF AND DERIVATIVES
-use global
-IMPLICIT NONE
-
-
-DOUBLE PRECISION, INTENT(OUT)            :: sseiso
-DOUBLE PRECISION, INTENT(OUT)            :: diso(5)
-DOUBLE PRECISION, INTENT(IN)             :: c10
-DOUBLE PRECISION, INTENT(IN)             :: c01
-DOUBLE PRECISION, INTENT(IN OUT)         :: cbari1
-DOUBLE PRECISION, INTENT(IN OUT)         :: cbari2
-
-
-sseiso=c10*(cbari1-three)+c01*(cbari2-three)
-
-diso(1)=c10
-diso(2)=c01
-diso(3)=zero
-diso(4)=zero
-diso(5)=zero
-
-RETURN
-END SUBROUTINE isomat

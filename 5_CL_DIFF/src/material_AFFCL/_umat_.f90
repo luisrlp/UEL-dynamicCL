@@ -241,8 +241,7 @@ Kon0 = Koff0 * Keq
 filprops = (/a, r0c, etac, mu0str, beta, Lp, theta, dx, kb, NA/)
 affprops = (/bb, lambda0, cactin, Mactin, rhoactin/)
 
-! write(*,*) 'Inside the material routine!'
-! write(*,*) 'ELEM/GP: ', noel, npt
+
 
 !     CL CONCENTRATION
 !!! THIS NEEDS TO BE CHANGED AFTER DIFFUSION IS IMPLEMENTED IN UEL
@@ -258,8 +257,9 @@ IF (STATEV(1) == 0.0d0) THEN
   cb_upper = MIN(cabp, cbmax)
   machep = 2.22d-16
   tol = 1.0d-12
-  write(*,*) 'Calling pullchem at t=0'
+  ! write(*,*) 'Calling pullchem at t=0'
   CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq)
+  ! write(*,*) 'cb0 = ', cb0
   thetaf0 = (cabp - cb0) / cfmax
   CALL initialize(statev,thetaf0,vmol,cb0)
 END IF
@@ -303,7 +303,9 @@ CALL projlag(c,unit4,projl,ndi)
       ARGS(9) = CB_TOT
       ARGS(10) = CFMAX
       ! write(*,*) 'ARGS = ', ARGS
+      ! write(*,*) 'THETAF_T =', THETAF_T
       CALL SOLVETHETAF(THETAF_TAU, ARGS, NARGS, THETAF_T)
+      ! write(*,*) 'THETAF_TAU =', THETAF_TAU
 
       cf = THETAF_TAU * cfmax
       Jc = 1.0d0 + VMOL * (cb_tot + cf)
@@ -407,7 +409,7 @@ CALL erfi(efi,bb)
 !     'FICTICIOUS' PK2 STRESS AND MATERIAL ELASTICITY TENSORS
 !------------ AFFINE NETWORK --------------
 IF (phinet > zero) THEN
-  write(*,*) 'Calling affclnetfic_discrete at t = ', time(1)
+  ! write(*,*) 'Calling affclnetfic_discrete at t = ', time(1)
   CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,filprops,  &
       affprops,efi,noel,det,prefdir,ndi,cb,dtime,cfmax,cbmax,chi,Keq,Koff0, &
       thetaf_tau, cb_tot_new)
@@ -419,8 +421,8 @@ IF (DTIME > 1.0d-12) THEN
 ELSE
   RMACRO = 0.0d0
 END IF
-write(*,*) 'cb_tot = ', cb_tot
-write(*,*) 'cb_tot_new = ', cb_tot_new
+! write(*,*) 'cb_tot = ', cb_tot
+! write(*,*) 'cb_tot_new = ', cb_tot_new
 
 !      PKNETFIC=PKNETFICNAF+PKNETFICAF
 snetfic=snetficnaf+snetficaf

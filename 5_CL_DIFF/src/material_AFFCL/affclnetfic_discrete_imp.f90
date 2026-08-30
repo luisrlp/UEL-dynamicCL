@@ -233,6 +233,10 @@ do face = 1, face_num/2
         fi = zero
         IF(lambdai .GE. 1.0d0) THEN 
           CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),dummy_DfDcb)
+          IF(lambdaif .GE. 1.1d0) THEN 
+            write(*,*) 'fi =', fi
+            write(*,*) 'lambdaif =', lambdaif
+          END IF
           CALL sigfilfic(sfilfic,rho,lambdai,dwi,mfi,ai,ndi)
           CALL csfilfic(cfilfic,rho,lambdai,dwi,ddwi,mfi,ai,ndi)
 

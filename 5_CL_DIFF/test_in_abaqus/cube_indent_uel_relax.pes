@@ -372,11 +372,11 @@ SURFACE-Top, SURFACE-Probe
 **
 **
 *uel property, elset=main_mesh
-1000.0,1.0,0.0,0.99,1.2,0.014,0.5,38600.0,
+1000.0,0.0,0.0,1.0,1.2,0.014,0.8,38600000000000.0,
 **
-0.5,16.0,298.0,0.001,0.001,1.0,0.0095,0.1,
+0.5,16.0,298.0,0.1,1e-06,1.0,0.0095,0.1,
 **
-0.1,0.025,0.1,0.1,0.0,0.15,0.05,0.25,
+1.0,0.25,0.1,0.1,0.0,0.15,0.1,0.5,
 ** nlSdv ngSdv
 106, 106
 
@@ -390,7 +390,7 @@ SURFACE-Top, SURFACE-Probe
 ** INITIAL CONDITIONS
 ************************************************************************
 *Initial conditions, type=temperature
-all_nodes, -5885.596868
+all_nodes, -6333.877232
 *Initial conditions, type=temperature
 extra_element, 0.0
 ** ----------------------------------------------------------------
@@ -398,8 +398,8 @@ extra_element, 0.0
 ** ----------------------------------------------------------------
 *Step, name=indentation, nlgeom=YES
 ** Updated to Coupled temp-disp to support DOF 11 (chemical potential)
-*Coupled temperature-displacement, deltmx=1.0
-0.01, 1., 1e-05, 0.1
+*Coupled temperature-displacement, deltmx=100.0
+0.001, 1., 1e-05, 0.05
 **
 ** BOUNDARY CONDITIONS
 ** Fix Bottom
@@ -416,7 +416,7 @@ Set-Bottom, YSYMM
 *Boundary
 Set-RP, 1, 1
 ** Set-RP, 2, 2, -0.75
-Set-RP, 2, 2, -0.7
+Set-RP, 2, 2, -0.5
 Set-RP, 3, 3
 Set-RP, 4, 4
 Set-RP, 5, 5
@@ -451,8 +451,8 @@ uvarm, le
 ** ----------------------------------------------------------------
 *Step, name=relaxation, nlgeom=YES
 ** Long time period for fluid to diffuse (e.g., 10,000 seconds)
-*Coupled temperature-displacement, deltmx=1.0
-0.1, 1000.0, 1e-05, 100.0
+*Coupled temperature-displacement, deltmx=100.0
+0.01, 60.0, 1e-05, 1.
 **
 ** BOUNDARY CONDITIONS
 ** (No new boundary conditions are defined here)

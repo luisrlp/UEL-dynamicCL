@@ -372,9 +372,9 @@ SURFACE-Top, SURFACE-Probe
 **
 **
 *uel property, elset=main_mesh
-1000.0,0.0,0.0,1.0,1.2,0.014,0.5,38600.0,
+1000.0,0.0,0.0,1.0,1.2,0.014,0.5,38600000000000.0,
 **
-0.5,16.0,298.0,0.001,0.001,1.0,0.0095,0.1,
+0.5,16.0,298.0,0.1,1e-06,1.0,0.0095,0.1,
 **
 1.0,0.25,0.1,0.1,0.0,0.15,0.05,0.25,
 ** nlSdv ngSdv
@@ -399,7 +399,7 @@ extra_element, 0.0
 *Step, name=indentation, nlgeom=YES
 ** Updated to Coupled temp-disp to support DOF 11 (chemical potential)
 *Coupled temperature-displacement, deltmx=100.0
-0.001, 1., 1e-05, 0.1
+0.001, 1., 1e-05, 0.05
 **
 ** BOUNDARY CONDITIONS
 ** Fix Bottom
@@ -416,7 +416,7 @@ Set-Bottom, YSYMM
 *Boundary
 Set-RP, 1, 1
 ** Set-RP, 2, 2, -0.75
-Set-RP, 2, 2, -0.75
+Set-RP, 2, 2, -0.5
 Set-RP, 3, 3
 Set-RP, 4, 4
 Set-RP, 5, 5

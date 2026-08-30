@@ -1,13 +1,14 @@
 import math                                                                                    
 # --- YOUR MATERIAL PROPERTIES --- 
 # Copy from properties.inp                                                 
+density = 0.0005
 K = 1000.0
 C10 = 0.0
 C01 = 0.0
 PHINET = 1.0
 a = 1.2
 R0C = 0.014
-ETAC = 0.5
+ETAC = 0.66666667
 MU0STRETCH = 38600000000000.0
 BETA = 0.5
 LP = 16.0
@@ -23,9 +24,13 @@ CHI = 0.1
 D = 0.1
 MU0 = 0.0
 VMOL = 0.15
-KOFF0 = 0.05
-KEQ = 0.25
+KOFF0 = 0.1
+KEQ = 0.5
 
+
+# Baseline
+# koff0 = 0.05
+# Keq = 0.25
 # --- CAPACITIES ---
 CR = CACTIN * R
 F_MAX = CACTIN * RFMAX
@@ -33,7 +38,7 @@ C_MAX = CACTIN * RBMAX
 
 RGAS = 8.31446261815324  # J/(mol*K)
 
-# --- TRANSCENDENTAL EQUATION FOR cb0 ---
+# --- EQUATION FOR cb0 ---
 def evalh(cb0):
     cf0 = CR - cb0
     thetaf0 = cf0 / F_MAX
@@ -70,5 +75,6 @@ INITMU = MU0 + RGAS * THETA * (
     (K * VMOL / (RGAS * THETA)) * (math.log(JE) / JC)
 )
 
+print(f"cb0 for Abaqus = {cb0_root:.6f}")
 print(f"THETAF_T for Abaqus = {thetaf0:.6f}")
 print(f"INITMU for Abaqus = {INITMU:.6f}")

@@ -363,7 +363,7 @@
                ! Perform the time integration at this integ. point to compute
                !  all the specific forms and parameters needed for the solution
                !
-               write(*,*) 'Calling the material routine!'
+               ! write(*,*) 'Calling the material routine!'
                call material(sigma_tau, statev, DDSIGDDE, F_t, F_tau, detF_tau, &
                        TIME, DTIME, PREDEF, nDim, nshr, ntens, nsdv, PROPS, NPROPS, coords, &
                        PNEWDT, JELEM, intpt, KSTEP, KINC,MU_TAU,THETAF_TAU,DTHETAFDT, &
@@ -386,8 +386,8 @@
          globalSdv(jelem, intPt, 1:nsdv) = statev
 
          ! Time stepping algorithm based on the constitutive response
-         write(*,*) 'statev(1) = ', statev(1)
-         write(*,*) 'thetaf_tau = ', thetaf_tau
+         ! write(*,*) 'statev(1) = ', statev(1)
+         ! write(*,*) 'thetaf_tau = ', thetaf_tau
          ! thetafLmt = 0.005d0
          ! thetafLmt = 0.01d0
          ! thetaf_tau = statev(1)

@@ -27,6 +27,8 @@ subroutine solveKinetics(root, args, nargs, rootOld)
     rootMax = cbmax - 1.0d-10
     rootMin = 1.0d-8
 
+    ! write(*,*) 'solveKinetics: rootOld =', rootOld
+
     x1 = rootMin
     x2 = rootMax
     call kineticsFunc(x1, fl, df, args, nargs)
@@ -66,6 +68,7 @@ subroutine solveKinetics(root, args, nargs, rootOld)
     end if
 
     ! Initialize the guess for the root, the "step size before last", and the last step
+    root = rootOld
     if (rootOld < rootMin) root = rootMin ! rootOld = rootMin
     if (rootOld > rootMax) root = rootMax ! rootOld = rootMax
     
@@ -118,11 +121,11 @@ subroutine solveKinetics(root, args, nargs, rootOld)
     end do
 
     ! If loop finishes without returning, maximum iterations were exceeded
-    write(*, '(/1X,A)') 'solveKinetics EXCEEDING MAXIMUM ITERATIONS'
-    write(*, '(/1X,A)') 'rootOld = ', rootOld
-    write(*, '(/1X,A)') 'root = ', root
-    write(*, '(/1X,A)') 'f = ', f
-    write(*, '(/1X,A)') 'df = ', df
+    ! write(*, '(/1X,A)') 'solveKinetics EXCEEDING MAXIMUM ITERATIONS'
+    ! write(*, '(/1X,A)') 'rootOld = ', rootOld
+    ! write(*, '(/1X,A)') 'root = ', root
+    ! write(*, '(/1X,A)') 'f = ', f
+    ! write(*, '(/1X,A)') 'df = ', df
     
     return
 end subroutine solveKinetics
