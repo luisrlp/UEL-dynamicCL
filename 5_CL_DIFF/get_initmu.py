@@ -8,7 +8,7 @@ C01 = 0.0
 PHINET = 1.0
 a = 1.2
 R0C = 0.014
-ETAC = 0.66666667
+ETAC = 0.666667
 MU0STRETCH = 38600000000000.0
 BETA = 0.5
 LP = 16.0
@@ -24,8 +24,8 @@ CHI = 0.1
 D = 0.1
 MU0 = 0.0
 VMOL = 0.15
-KOFF0 = 0.1
-KEQ = 0.5
+KOFF0 = 0.05
+KEQ = 0.25
 
 
 # Baseline

@@ -359,7 +359,7 @@ SURFACE-Top, SURFACE-Probe
 **
 *Material, name=dummy_material
 *User output variables
-106
+108
 *elastic
 1.e-20
 *Conductivity

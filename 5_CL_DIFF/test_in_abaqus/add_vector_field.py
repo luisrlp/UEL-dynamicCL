@@ -122,9 +122,71 @@ def add_vector_fields(job_id):
     odb.close()
     print("\nScript completed successfully.")
 
+def extract_cb_history_node1(job_id):                                    
+        try:                                                                 
+            from abaqus import session                                       
+            import visualization                                             
+            import csv                                                       
+        except ImportError:                                                  
+            print("\nSkipping history extraction: Run with 'abaqus cae noGUI=add_vector_field.py' to enable this feature.")                       
+            return                                                           
+                                                                             
+        odbPath = job_id + '.odb'                                            
+        print(f"\nExtracting UVARM17 to UVARM106 history for Node 1...")     
+                                                                             
+        odb = session.openOdb(name=odbPath)                                  
+                                                                             
+        time_array = []                                                      
+        uvarm_data = {}  # Dictionary to hold the values for each direction  
+                                                                             
+        for i in range(17, 107):                                             
+            uvarm_name = f'UVARM{i}'                                         
+                                                                             
+            xy = session.xyDataListFromField(                                
+                odb=odb,                                                     
+                outputPosition=visualization.NODAL,                          
+                variable=((uvarm_name, visualization.INTEGRATION_POINT), ),  
+                nodePick=(('PART-1-1', 1, ('[#1 ]', )), )                    
+            )                                                                
+                                                                             
+            if xy:                                                           
+                # xy[0].data is a tuple of (Time, Value) pairs               
+                data_tuples = xy[0].data                                     
+                                                                             
+                # If this is the first successful UVARM, populate the Time column                                                                     
+                if not time_array:                                           
+                    time_array = [pt[0] for pt in data_tuples]               
+                                                                             
+                # Extract just the UVARM values for this direction           
+                uvarm_data[uvarm_name] = [pt[1] for pt in data_tuples]       
+                                                                             
+        if time_array and uvarm_data:                                        
+            out_file = job_id + '_cb_node1.csv'                              
+                                                                             
+            # Write to a clean CSV file                                      
+            with open(out_file, 'wb') as f:  # use 'w' if Python 3, 'wb' for Python 2 (Abaqus CAE uses Python 2.7)                                      
+                writer = csv.writer(f)                                       
+                                                                             
+                # 1. Write the Header Row                                    
+                header = ['Time'] + list(uvarm_data.keys() )                       
+                writer.writerow(header)                                      
+                                                                             
+                # 2. Write the Data Rows                                     
+                for row_idx in range(len(time_array)):                       
+                    row = [time_array[row_idx]]                              
+                    for name in uvarm_data.keys():                           
+                        row.append(uvarm_data[name][row_idx])                
+                    writer.writerow(row)
+    
+            print(f"Successfully saved cleanly to '{out_file}' (Ready for Pandas/Numpy!)")
+        
+        odb.close()
+                                              
+
 if __name__ == '__main__':
     usage = "usage: abaqus python add_vector_field.py <job name>"
     
+    print("\nStarting add_vector_field.py script...")
     if len(sys.argv) < 2:
         print(usage)
         sys.exit(0)
@@ -137,4 +199,6 @@ if __name__ == '__main__':
         print(f"Error: {odbPath} does not exist!")
         sys.exit(0)
         
-    add_vector_fields(JobID)
+    # add_vector_fields(JobID)
+
+    extract_cb_history_node1(JobID)

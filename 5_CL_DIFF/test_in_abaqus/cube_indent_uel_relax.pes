@@ -358,7 +358,7 @@ SURFACE-Top, SURFACE-Probe
 **
 *Material, name=dummy_material
 *User output variables
-106
+108
 *elastic
 1.e-20
 *Conductivity
@@ -372,11 +372,11 @@ SURFACE-Top, SURFACE-Probe
 **
 **
 *uel property, elset=main_mesh
-1000.0,0.0,0.0,1.0,1.2,0.014,0.8,38600000000000.0,
+1000.0,0.0,0.0,1.0,1.2,0.014,0.666667,38600000000000.0,
 **
 0.5,16.0,298.0,0.1,1e-06,1.0,0.0095,0.1,
 **
-1.0,0.25,0.1,0.1,0.0,0.15,0.1,0.5,
+1.0,0.25,0.1,0.1,0.0,0.15,0.05,0.25,
 ** nlSdv ngSdv
 106, 106
 
@@ -390,7 +390,7 @@ SURFACE-Top, SURFACE-Probe
 ** INITIAL CONDITIONS
 ************************************************************************
 *Initial conditions, type=temperature
-all_nodes, -6333.877232
+all_nodes, -5885.596866
 *Initial conditions, type=temperature
 extra_element, 0.0
 ** ----------------------------------------------------------------
