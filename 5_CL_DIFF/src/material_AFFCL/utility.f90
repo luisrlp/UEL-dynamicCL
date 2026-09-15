@@ -149,3 +149,19 @@ END DO
 RETURN
 END SUBROUTINE onem0
 !***************************************************************************
+
+SUBROUTINE tensorprod(a,b,c)
+!
+! This subroutine calculates the tensor product of two
+! 3 by 3 matrices [A] and [B] and stores the result in
+! the [3,3,3,3] tensor [C]
+!
+  use global
+
+real(8), INTENT(IN)      :: a(3,3)
+real(8), INTENT(IN)      :: b(3,3)
+real(8), INTENT(OUT)     :: c(3,3,3,3)
+
+INTEGER                  :: i,j,k,l
+
+END SUBROUTINE tensorprod

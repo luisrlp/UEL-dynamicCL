@@ -1,7 +1,5 @@
 SUBROUTINE contraction44(s,LT,rt,ndi)
 
-
-
 !>       DOUBLE CONTRACTION BETWEEN 4TH ORDER TENSORS
 !>      INPUT:
 !>       LT - RIGHT 4TH ORDER TENSOR

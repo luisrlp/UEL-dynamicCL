@@ -55,6 +55,10 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
                 lambdai,lambdaif,lambda0,lambda0f,&
                 l,r0,r0f,mu0str,beta,b0,etac,&
                 cbtau,DfDcb)
+        ! CALL fil_inext(fi,ffi,dwi,ddwi,&
+        !         lambdai,lambdaif,lambda0,lambda0f,&
+        !         l,r0,r0f,beta,b0,etac,&
+        !         cbtau,DfDcb)
             ! CALL filpce(lambdai, fi, dwi, ddwi)
     END IF
 

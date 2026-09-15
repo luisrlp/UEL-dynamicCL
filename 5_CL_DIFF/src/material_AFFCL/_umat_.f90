@@ -43,7 +43,6 @@ REAL(8), INTENT(OUT)     :: DSIGDMU(NDI,NDI), SPCUMODFAC(NDI,NDI)
 REAL(8), INTENT(OUT)     :: THETAF_TAU, DTHETAFDT, DTHETAFDMU, RMACRO! DPHIDMU, DPHIDOTDMU
 REAL(8), INTENT(OUT)     :: MFLUID, DMDMU, DMDJ, VMOL, CFMAX
 
-! cfmax can probably be defined at the element level
 REAL(8) :: THETAF_T
 ! DIFFUSION VARIABLES
 REAL(8) :: CHI, D, MU0, RGAS
@@ -68,12 +67,13 @@ DOUBLE PRECISION :: unit2(ndi,ndi),unit4(ndi,ndi,ndi,ndi),  &
 !     KINEMATICS
 DOUBLE PRECISION :: distgr(ndi,ndi),c(ndi,ndi),b(ndi,ndi),  &
     cbar(ndi,ndi),bbar(ndi,ndi),distgrinv(ndi,ndi),  &
-    ubar(ndi,ndi),vbar(ndi,ndi),rot(ndi,ndi), dfgrd1inv(ndi,ndi)
+    ubar(ndi,ndi),vbar(ndi,ndi),rot(ndi,ndi), dfgrd1inv(ndi,ndi), &
+    cinv(ndi,ndi), cbarinv(ndi,ndi)
 DOUBLE PRECISION :: det,detfe, detfs,cbari1,cbari2
 !     VOLUMETRIC CONTRIBUTION
 DOUBLE PRECISION :: pkvol(ndi,ndi),svol(ndi,ndi),  &
     cvol(ndi,ndi,ndi,ndi),cmvol(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: k,pv,ppv,ssev
+DOUBLE PRECISION :: k,pv,ppv,ssev,ppv_chem
 !     ISOCHORIC CONTRIBUTION
 DOUBLE PRECISION :: siso(ndi,ndi),pkiso(ndi,ndi),pk2(ndi,ndi),  &
     ciso(ndi,ndi,ndi,ndi),cmiso(ndi,ndi,ndi,ndi),  &
@@ -98,25 +98,17 @@ DOUBLE PRECISION :: cb(ndir), cb0, cbmax, thetab, thetaf0 !, cfmax
 DOUBLE PRECISION :: cb_tot, cb_tot_new, cf
 DOUBLE PRECISION :: cb_upper, machep, tol
 DOUBLE PRECISION :: Jc, f, df
-
-! INTEGER :: nterm,factor 
 !
 !     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)
 DOUBLE PRECISION :: cjr(ndi,ndi,ndi,ndi)
 !     CAUCHY STRESS AND ELASTICITY TENSOR
 DOUBLE PRECISION :: sigma(ndi,ndi),ddsigdde(ndi,ndi,ndi,ndi),  &
     ddpkdde(ndi,ndi,ndi,ndi)
+!     OTHER TANGENT AUX TENSORS
+DOUBLE PRECISION :: dpk2dthetaf(ndi,ndi), dthetafdc(ndi,ndi), dpk2voldcb(ndi,ndi), dPK2ficdcb(ndi,ndi), &
+                    dpk2isodcb(ndi,ndi), dpk2dcb(ndi,ndi), dcbdc(ndi,ndi), cvolchem(ndi,ndi,ndi,ndi), &
+                    dsigmadcb(ndi,ndi)
 DOUBLE PRECISION :: stest(ndi,ndi), ctest(ndi,ndi,ndi,ndi)
-
-! DECLARATIONS FOR RANDOM GENERATION
-INTEGER (kind=4) :: seed1, seed2
-INTEGER (kind=4) :: test, test_num
-INTEGER (kind=4) :: l, i, idx
-CHARACTER(len=100) :: phrase
-!REAL(kind=4) , allocatable :: etac_array(:), array(:)
-DOUBLE PRECISION :: etac_sdv(nsdv-1)
-!REAL(kind=4) :: l_bound, h_bound
-REAL(kind=4) :: mean, sd
 
 INTEGER :: I1, J1, K1, L1
 
@@ -149,6 +141,7 @@ cvol=zero
 k=zero
 pv=zero
 ppv=zero
+ppv_chem=zero
 ssev=zero
 !     ISOCHORIC
 siso=zero
@@ -277,6 +270,9 @@ CALL matinv3d(distgr,distgrinv,ndi)
 !     CAUCHY-GREEN DEFORMATION TENSORS
 CALL deformation(dfgrd1,c,b,ndi)
 CALL deformation(distgr,cbar,bbar,ndi)
+!     INVERSE OF CAUCHY-GREEN DEFORMATION TENSORS
+CALL matinv3d(c,cinv,ndi)
+CALL matinv3d(cbar,cbarinv,ndi)
 !     INVARIANTS OF DEVIATORIC DEFORMATION TENSORS
 CALL invariants(cbar,cbari1,cbari2,ndi)
 !     STRETCH TENSORS
@@ -388,7 +384,9 @@ CALL projlag(c,unit4,projl,ndi)
 !---- VOLUMETRIC ------------------------------------------------------
 !     STRAIN-ENERGY
 CALL vol(ssev,pv,ppv,k,det,Jc)
-
+! Add chemical contribution (Kuu Term 2)
+ppv_chem = - (k**two * VMOL**two * CFMAX) / (det * Jc**two) * DTHETAFDMU
+ppv = ppv + ppv_chem
 !---- ISOCHORIC ISOTROPIC ---------------------------------------------
 IF (phinet < one) THEN
 !     STRAIN-ENERGY
@@ -410,9 +408,9 @@ CALL erfi(efi,bb)
 !------------ AFFINE NETWORK --------------
 IF (phinet > zero) THEN
   ! write(*,*) 'Calling affclnetfic_discrete at t = ', time(1)
-  CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,filprops,  &
+  CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,unit2,filprops,  &
       affprops,efi,noel,det,prefdir,ndi,cb,dtime,cfmax,cbmax,chi,Keq,Koff0, &
-      thetaf_tau, cb_tot_new)
+      thetaf_tau, cb_tot_new, dPK2ficdcb, dcbdc)
 END IF
 
 ! Macroscopic reaction source (homogenized binding rate)
@@ -423,6 +421,33 @@ ELSE
 END IF
 ! write(*,*) 'cb_tot = ', cb_tot
 ! write(*,*) 'cb_tot_new = ', cb_tot_new
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! CHEMICAL CONTRIBUTIONS TO THE MECHANICAL TANGENT (Kuu)!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! ========= SECOND PIOLA-KIRCHHOFF STRESS TANGENT =========
+!!! 2ND TERM - Final pushed-forward expression directly added to ppv
+! dS/dTHETAF
+! dpk2dthetaf = - (k * vmol * cfmax) / Jc * cinv
+! dTHETAF/dC
+! dthetafdc = one / two * (k * vmol) / Jc * dthetafdmu * cinv
+!!! 3RD TERM
+!! 3.1
+! dSvol/dcb
+do I1 = 1, ndi
+  do J1 = 1, ndi
+    do K1 = 1, ndi
+      do L1 = 1, ndi
+        cvolchem(I1,J1,K1,L1) = (k * vmol) / (det * Jc) * unit2(I1,J1) * dcbdc(K1,L1)
+      end do
+    end do
+  end do
+end do
+! dSiso/dcb
+CALL pk2iso(dpk2isodcb,dPK2ficdcb,projl,det,ndi)
+! dS/dcb
+dpk2dcb = dpk2voldcb + dpk2isodcb
+!! 3.2 (computed in affclnetfic_discrete)
 
 !      PKNETFIC=PKNETFICNAF+PKNETFICAF
 snetfic=snetficnaf+snetficaf
@@ -498,7 +523,7 @@ CALL setjr(cjr,sigma,unit2,ndi)
 !----------------------------------------------------------------------
 
 !     ELASTICITY TENSOR
-ddsigdde=cvol+ciso ! +cjr
+ddsigdde=cvol+ciso+cvolchem ! +cjr
 
 !----------------------------------------------------------------------
 !------------------------- CROSS-COUPLINGS ----------------------------

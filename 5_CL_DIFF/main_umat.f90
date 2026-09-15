@@ -96,7 +96,10 @@ PROGRAM TEST_GENERAL_UMAT
     
     DO KINC = 1, NINC
 
+        write(*,*) DEF_MIN, DEF_MAX, KINC, NINC
         DEF = DEF_MIN + (DEF_MAX - DEF_MIN) * REAL(KINC) / REAL(NINC)
+
+        ! write(*,*) 'Increment: ', KINC, ' Time: ', TIME(1), ' Stretch: ', DEF
         
         DFGRD0 = DFGRD1
         

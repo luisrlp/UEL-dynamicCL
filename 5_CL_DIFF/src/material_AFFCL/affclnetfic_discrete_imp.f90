@@ -1,9 +1,9 @@
 ! SUBROUTINE affclnetfic_discrete(sfic,cfic,f,filprops,affprops,  &
 !           efi,noel,det,prefdir,ndi) ! (original)
 
-SUBROUTINE affclnetfic_discrete(sfic,cfic,f,filprops,affprops,  &
+SUBROUTINE affclnetfic_discrete(sfic,cfic,f,unit2,filprops,affprops,  &
   efi,noel,det,prefdir,ndi,cb,dtime,cfmax,cbmax,chi,Keq,Koff0, &
-  thetaf, cbtau_tot)
+  thetaf, cbtau_tot, dPK2ficdcb, dcbdc)
 
 
 
@@ -15,7 +15,10 @@ IMPLICIT NONE
 INTEGER, INTENT(IN)                      :: ndi
 DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
 DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: dPK2ficdcb(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: dcbdc(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN)             :: filprops(10)
 DOUBLE PRECISION, INTENT(IN)             :: affprops(5)
 DOUBLE PRECISION, INTENT(IN OUT)         :: efi
@@ -47,7 +50,9 @@ DOUBLE PRECISION :: cactin, Mactin, rhoactin
 DOUBLE PRECISION :: cbt_i, cbtau_i, thetab_i, Kon, Koff_i, R_i, dtime_sub, cb_sub
 INTEGER :: iter
 DOUBLE PRECISION :: cb_new, Res, cb_pert, dcb, r0f_p, l_p, r0_p
-DOUBLE PRECISION :: dummy_DfDcb
+DOUBLE PRECISION :: dummy_DfDcb, DfDcb, DdwDcb, Dr0Dcb, auxdwdcb, dHdlambda, dHdcb, dRiDcb, auxchem
+DOUBLE PRECISION :: dPK2filficdcb(ndi,ndi), pfdlambdadcfil(ndi,ndi), cfilficchem(ndi,ndi,ndi,ndi)
+! CHECK IF WE CAN DISCARD DUMMY_DFDCB
 
 
 ! INTEGRATION SCHEME
@@ -130,6 +135,9 @@ off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
     aa = zero
 
     cbtau_tot = zero
+    thetab_i = zero
+    dPK2ficdcb=zero
+    dcbdc=zero
 !----------------------------------------------------------------------
   
   ! preferred direction measures (macroscale measures)
@@ -191,7 +199,9 @@ do face = 1, face_num/2
         
         fi = zero
         dummy_DfDcb = zero
-
+        DfDcb = zero
+        DdwDcb = zero
+        dPK2filficdcb=zero
           ! ================= KINETICS (IMPLICIT NEWTON-RAPHSON) =================
         cbt_i = MAX(cb(node_num), 1.0d-10)
         cbtau_i = cbt_i  ! Initial guess is the old state
@@ -217,6 +227,8 @@ do face = 1, face_num/2
         CALL solveKinetics(cbtau_i, args, nargs, cbt_i)
 
         cb(node_num) = cbtau_i
+        thetab_i = cbtau_i / cbmax
+
         ! FINAL STATE UPDATE
         r0f = 1.6 * (1.0d3 * cb(node_num))**(-two/5.0d0)
         l = aratio * r0f
@@ -233,26 +245,49 @@ do face = 1, face_num/2
 
         fi = zero
         IF(lambdai .GE. 1.0d0) THEN 
-          CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),dummy_DfDcb)
+          ! CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),dummy_DfDcb)
+          CALL fil_inext(fi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,beta,b0,etac,cb(node_num),DfDcb)
+          koff_i = Koff0 * exp(dx / (kb * theta) * fi)
           IF(lambdaif .GE. 1.1d0) THEN 
             write(*,*) 'fi =', fi
             write(*,*) 'lambdaif =', lambdaif
           END IF
           CALL sigfilfic(sfilfic,rho,lambdai,dwi,mfi,ai,ndi)
           CALL csfilfic(cfilfic,rho,lambdai,dwi,ddwi,mfi,ai,ndi)
-
+          CALL csfilficchem(cfilficchem,rho,lambdai,mfi,ai,ndi)
+          ! Chemical contributions to the mechanical tangent (Kuu)
+          !! Term 3 - volumetric
+          ! kin_aux = 
+          !! Term 3.1
+          dr0dcb = - (two / 5.d0) * r0f / cb(node_num)
+          ddwdcb = lambda0 * (r0 * dfdcb + fi * dr0dcb)
+          auxdwdcb = two / 5.d0 * dwi / cb(node_num) + ddwdcb
+          !!! Leverage sigfilfic to get dSfic/Dcb for current direction
+          call sigfilfic(dPK2filficdcb,rho,lambdai,auxdwdcb,mf0i,ai,ndi)
+          !! Term 3.2
+          dHdlambda = dtime * thetab_i / (one - thetab_i) * koff_i * dx / (kb * theta) * ddwi / (lambda0 * r0)
+          call pfdlambdadc(pfdlambdadcfil,rho,lambdai,unit2,mfi,ai,det,ndi)
+          dRiDcb = - koff_i * (cbtau_i / (1 - thetab_i) * dx / (kb * theta) * DfDcb + 1 / (1 - thetab_i)**2) 
+          dHdcb = one - dRiDcb * dtime
+          auxchem = (dHdcb)**(-one) * dHdlambda
+          ! auxchem = aux * auxdwdcb * (dHdcb)**(-one) * dHdlambda
           DO j1=1,ndi
             DO k1=1,ndi
                 sfic(j1,k1) = sfic(j1,k1) + aux*sfilfic(j1,k1)
+                ! Kuu - 3.1
+                dPK2ficdcb(j1,k1) = dPK2ficdcb(j1,k1) + n * dPK2filficdcb(j1,k1)
+                ! Kuu - 3 - volumetric
+                dcbdC(j1,k1) = dcbdC(j1,k1) + lambdai**(-one) * auxchem * pfdlambdadcfil(j1,k1)
                 DO l1=1,ndi
                   DO m1=1,ndi
-                    cfic(j1,k1,l1,m1) = cfic(j1,k1,l1,m1) + aux*cfilfic(j1,k1,l1,m1)
+                    cfic(j1,k1,l1,m1) = cfic(j1,k1,l1,m1) + aux*cfilfic(j1,k1,l1,m1) &
+                    - aux*auxdwdcb*auxchem*cfilficchem(j1,k1,l1,m1)
                   END DO
                 END DO
             END DO
           END DO
-        END IF 
-         
+        END IF
+        
         ! Update total bound CL concentration for this integration point                                                       
         cbtau_tot = cbtau_tot + cb(node_num) * rho * ai
         ! ==============================================================   
