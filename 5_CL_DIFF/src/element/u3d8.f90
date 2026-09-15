@@ -53,8 +53,6 @@
          ! Initialize energy
          ENERGY = 0.0d0
 
-         write(*,*) 'Simulation has started!!!'
-
          if (.not. allocated(globalSdv)) then
             ! Allocate memory for the globalSdv's
             !

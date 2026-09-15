@@ -443,7 +443,7 @@ uvarm, le
 *Step, name=relaxation, nlgeom=YES
 ** Long time period for fluid to diffuse (e.g., 10,000 seconds)
 *Coupled temperature-displacement, deltmx=100.0
-0.01, 60.0, 1e-05, 1.
+0.01, 20.0, 1e-05, 0.1
 **
 ** BOUNDARY CONDITIONS
 ** (No new boundary conditions are defined here)

@@ -97,7 +97,7 @@ DOUBLE PRECISION :: R, Rfmax, Rbmax, Keq, Koff0, Kon0
 DOUBLE PRECISION :: cb(ndir), cb0, cbmax, thetab, thetaf0 !, cfmax
 DOUBLE PRECISION :: cb_tot, cb_tot_new, cf
 DOUBLE PRECISION :: cb_upper, machep, tol
-DOUBLE PRECISION :: Jc, f, df
+DOUBLE PRECISION :: Jc, f, df, dHdcb
 !
 !     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)
 DOUBLE PRECISION :: cjr(ndi,ndi,ndi,ndi)
@@ -179,6 +179,7 @@ cjr=zero
 !     TOTAL CAUCHY STRESS AND ELASTICITY TENSORS
 sigma=zero
 ddsigdde=zero
+cvolchem=zero
 !     FLUID FLUX
 jfluid=zero
 !----------------------------------------------------------------------
@@ -308,6 +309,7 @@ CALL projlag(c,unit4,projl,ndi)
 
       ! Evaluate tangent at converged root
       CALL thetafFunc(THETAF_TAU, f, df, ARGS, NARGS)
+      dHdcb = k * vmol**two / (RGAS * THETA) * (one + DLOG(det/Jc)) / Jc**two
       DTHETAFDMU = one / (RGAS * THETA * df)
 
       ! write(*,*) 'kinc = ', kinc
@@ -386,7 +388,10 @@ CALL projlag(c,unit4,projl,ndi)
 CALL vol(ssev,pv,ppv,k,det,Jc)
 ! Add chemical contribution (Kuu Term 2)
 ppv_chem = - (k**two * VMOL**two * CFMAX) / (det * Jc**two) * DTHETAFDMU
-ppv = ppv + ppv_chem
+ppv = ppv+ ppv_chem
+! write(*,*) 'DTHETAFDMU = ', DTHETAFDMU
+! write(*,*) 'ppv = ', ppv
+! write(*,*) 'ppv_chem = ', ppv_chem
 !---- ISOCHORIC ISOTROPIC ---------------------------------------------
 IF (phinet < one) THEN
 !     STRAIN-ENERGY
@@ -434,11 +439,15 @@ END IF
 !!! 3RD TERM
 !! 3.1
 ! dSvol/dcb
+write(*,*) 'J', det
+write(*,*) 'Jc', Jc
+write(*,*) '(k * vmol) / (det * Jc) = ', (k * vmol) / (det * Jc)
 do I1 = 1, ndi
   do J1 = 1, ndi
     do K1 = 1, ndi
       do L1 = 1, ndi
-        cvolchem(I1,J1,K1,L1) = (k * vmol) / (det * Jc) * unit2(I1,J1) * dcbdc(K1,L1)
+        cvolchem(I1,J1,K1,L1) = (k * vmol) / (det * Jc) * unit2(I1,J1) * dcbdc(K1,L1) &
+                                * (one - cfmax * dHdcb / df)
       end do
     end do
   end do
@@ -524,7 +533,9 @@ CALL setjr(cjr,sigma,unit2,ndi)
 
 !     ELASTICITY TENSOR
 ddsigdde=cvol+ciso+cvolchem ! +cjr
-
+! if (npt==1) then
+!   write(*,*) 'cvolchem / ddsigdde = ', cvolchem / ddsigdde
+! end if
 !----------------------------------------------------------------------
 !------------------------- CROSS-COUPLINGS ----------------------------
 !----------------------------------------------------------------------

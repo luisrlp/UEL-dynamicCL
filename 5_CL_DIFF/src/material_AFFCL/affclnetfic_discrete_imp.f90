@@ -271,6 +271,10 @@ do face = 1, face_num/2
           dHdcb = one - dRiDcb * dtime
           auxchem = (dHdcb)**(-one) * dHdlambda
           ! auxchem = aux * auxdwdcb * (dHdcb)**(-one) * dHdlambda
+          ! write(*,*) 'auxchem =', auxchem
+          ! write(*,*) 'auxdwdcb =', auxdwdcb
+          ! write(*,*) 'aux =', aux
+          ! write(*,*) 'auxs*cfilficchem / cfilfic', auxdwdcb*auxchem*cfilficchem / cfilfic
           DO j1=1,ndi
             DO k1=1,ndi
                 sfic(j1,k1) = sfic(j1,k1) + aux*sfilfic(j1,k1)
