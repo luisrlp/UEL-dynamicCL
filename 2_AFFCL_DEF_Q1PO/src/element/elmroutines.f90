@@ -42,7 +42,6 @@
       end subroutine xint2D1pt
       !
       !
-!************************************************************************
       subroutine xint2D4pt(xi,w,nInttPt)
       !
       ! This subroutine will get the integration point locations
@@ -521,7 +520,6 @@
 
       integer :: intpt, nInttPt
       real(8) :: xi_int(nInttPt, 3), sh(8), dshxi(8, 3)
-      real(8) :: d2shxi(8,3,3)
       real(8) :: xi, eta, zeta
       real(8), parameter :: zero = 0.0_8, one = 1.0_8, eighth = 1.0_8 / 8.0_8
 
@@ -565,59 +563,6 @@
       dshxi(8, 1) = -eighth * (one + eta) * (one + zeta)
       dshxi(8, 2) = eighth * (one - xi) * (one + zeta)
       dshxi(8, 3) = eighth * (one - xi) * (one + eta)
-
-      !
-      ! The second derivatives
-      !
-      d2shxi = zero
-      d2shxi(1,1,2) = eighth*(one - zeta)
-      d2shxi(1,2,1) = d2shxi(1,1,2)
-      d2shxi(1,1,3) = eighth*(one - eta)
-      d2shxi(1,3,1) = d2shxi(1,1,3)
-      d2shxi(1,2,3) = eighth*(one - xi)
-      d2shxi(1,3,2) = d2shxi(1,2,3)
-      d2shxi(2,1,2) = -eighth*(one - zeta)
-      d2shxi(2,2,1) = d2shxi(2,1,2)
-      d2shxi(2,1,3) = -eighth*(one - eta)
-      d2shxi(2,3,1) = d2shxi(2,1,3)
-      d2shxi(2,2,3) = eighth*(one + xi)
-      d2shxi(2,3,2) = d2shxi(2,2,3)
-      d2shxi(3,1,2) = eighth*(one - zeta)
-      d2shxi(3,2,1) = d2shxi(2,1,2)
-      d2shxi(3,1,3) = -eighth*(one + eta)
-      d2shxi(3,3,1) = d2shxi(2,1,3)
-      d2shxi(3,2,3) = -eighth*(one + xi)
-      d2shxi(3,3,2) = d2shxi(2,2,3)
-      d2shxi(4,1,2) = -eighth*(one - zeta)
-      d2shxi(4,2,1) = d2shxi(2,1,2)
-      d2shxi(4,1,3) = eighth*(one + eta)
-      d2shxi(4,3,1) = d2shxi(2,1,3)
-      d2shxi(4,2,3) = -eighth*(one - xi)
-      d2shxi(4,3,2) = d2shxi(2,2,3)
-      d2shxi(5,1,2) = eighth*(one + zeta)
-      d2shxi(5,2,1) = d2shxi(2,1,2)
-      d2shxi(5,1,3) = -eighth*(one - eta)
-      d2shxi(5,3,1) = d2shxi(2,1,3)
-      d2shxi(5,2,3) = -eighth*(one - xi)
-      d2shxi(5,3,2) = d2shxi(2,2,3)
-      d2shxi(6,1,2) = eighth*(one + zeta)
-      d2shxi(6,2,1) = d2shxi(2,1,2)
-      d2shxi(6,1,3) = eighth*(one - eta)
-      d2shxi(6,3,1) = d2shxi(2,1,3)
-      d2shxi(6,2,3) = -eighth*(one + xi)
-      d2shxi(6,3,2) = d2shxi(2,2,3)
-      d2shxi(7,1,2) = eighth*(one + zeta)
-      d2shxi(7,2,1) = d2shxi(2,1,2)
-      d2shxi(7,1,3) = eighth*(one + eta)
-      d2shxi(7,3,1) = d2shxi(2,1,3)
-      d2shxi(7,2,3) = eighth*(one + xi)
-      d2shxi(7,3,2) = d2shxi(2,2,3)
-      d2shxi(8,1,2) = -eighth*(one + zeta)
-      d2shxi(8,2,1) = d2shxi(2,1,2)
-      d2shxi(8,1,3) = -eighth*(one + eta)
-      d2shxi(8,3,1) = d2shxi(2,1,3)
-      d2shxi(8,2,3) = eighth*(one - xi)
-      d2shxi(8,3,2) = d2shxi(2,2,3)
 
       return
       end subroutine calcShape3DLinear
@@ -935,14 +880,12 @@
       call matInv3Dd(mapJ, mapJ_inv, detMapJ, stat)
       if (stat == 0) then
          write(*, *) 'Problem: detF.lt.zero in mapShape3D'
-         call exit
+         ! call exit
+         return
       end if
 
       ! Calculate first derivatives wrt x, y, z
       dsh = transpose(matmul(mapJ_inv, transpose(dshxi)))
-
-      ! The second derivatives may be calculated.
-      !
 
       return
       end subroutine mapShape3D

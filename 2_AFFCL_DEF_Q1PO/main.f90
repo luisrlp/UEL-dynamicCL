@@ -146,7 +146,7 @@ PROGRAM TEST
       PREDEF,NPREDF,LFLAGS,MLVARX,DDLMAG,MDLOAD,PNEWDT,JPROPS,   &
       NJPROP,PERIOD)
      
-      write(*,*) AMATRX
-      write(*,*) rhs
+      ! write(*,*) AMATRX
+      ! write(*,*) rhs
 
       END PROGRAM

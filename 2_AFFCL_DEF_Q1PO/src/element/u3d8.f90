@@ -19,25 +19,30 @@
                            JPROPS(NJPROP), NJPROP
 
          ! Local variables
-         real(8) :: u(NNODE, 3), du(NNODE, NDOFEL), thetaNew(NNODE), thetaOld(NNODE), &
+         integer, parameter :: nNodeG = 8
+         real(8) :: u(NNODEG, 3), du(NNODEG, NDOFEL), thetaNew(NNODE), thetaOld(NNODE), &
                   dtheta(NNODE), muNew(NNODE), muOld(NNODE), dMU(NNODE), uNew(NNODE, NDOFEL), &
-                  uOld(NNODE, NDOFEL), u_t(NNODE, NDOFEL), v(NNODE, 3), coordsC(MCRD, NNODE)
+                  uOld(NNODEG, NDOFEL), u_t(NNODE, NDOFEL), v(NNODE, 3), coordsC(MCRD, NNODEG)
          integer :: i, j, k, l, m, n, nInttPt, nDim, intpt, pOrder, face, nIntt, ii, jj, pe, stat, q, &
                   nInttV, nInttPtV, p, ngSdv, nlSdv, kk, lenJobName, lenOutDir, nInttS, faceFlag, &
                   nshr, ntens
-         real(8) :: statev(nsdv), prev_statev(nsdv), Iden(3, 3), Le, theta0, phi0, Ru(3 * NNODE, 1), Rc(NNODE, 1), &
-                  body(3), Kuu(3 * NNODE, 3 * NNODE), Kcc(NNODE, NNODE), sh0(NNODE), detMapJ0, &
-                  dshxi(NNODE, 3), dsh0(NNODE, 3), dshC0(NNODE, 3), detMapJ0C, Vmol, Fc_tau(3, 3), &
-                  Fc_t(3, 3), detFc_tau, detFc_t, w(nIntt), DmDmu, DmDJ, sh(NNODE), detMapJ, phi_t, &
-                  dsh(NNODE, 3), detMapJC, phiLmt, umeror, dshC(NNODE, 3), mu_tau, mu_t, dMUdX(3, 1), &
+         real(8) :: statev(nsdv), prev_statev(nsdv), Iden(3, 3), Le, theta0, phi0, Ru(3 * NNODEG, 1), Rc(NNODE, 1), &
+                  body(3), Kuu(3 * NNODEG, 3 * NNODEG), Kcc(NNODE, NNODE), sh0(NNODEG), detMapJ0, &
+                  dshxi(NNODEG, 3), dsh0(NNODEG, 3), dshC0(NNODEG, 3), detMapJ0C, Vmol, Fc_tau(3, 3), &
+                  Fc_t(3, 3), detFc_tau, detFc_t, w(nIntt), DmDmu, DmDJ, sh(NNODEG), detMapJ, phi_t, &
+                  dsh(NNODEG, 3), detMapJC, phiLmt, umeror, dshC(NNODEG, 3), mu_tau, mu_t, dMUdX(3, 1), &
                   dMUdt, F_tau(3, 3), F_t(3, 3), detF_tau, xi(nIntt, 3), detF, TR_tau(3, 3), T_tau(3, 3), &
                   xi0(nIntt, 3), Ff_t(3, 3), Ff_tau(3, 3), SpTanMod(3, 3, 3, 3), phi_tau, dPdt, DphiDmu, &
-                  DphidotDmu, Mfluid, Smat(6, 1), Bmat(6, 3 * NNODE), BodyForceRes(3 * NNODE, 1), flux, &
-                  Gmat(9, 3 * NNODE), G0mat(9, 3 * NNODE), Amat(9, 9), Qmat(9, 9), dA, xLocal(nInttS), &
+                  DphidotDmu, Mfluid, Smat(6, 1), Bmat(6, 3 * NNODEG), BodyForceRes(3 * NNODEG, 1), flux, &
+                  Gmat(9, 3 * NNODEG), G0mat(9, 3 * NNODE), Amat(9, 9), Qmat(9, 9), dA, xLocal(nInttS), &
                   yLocal(nInttS), zLocal(nInttS), wS(nInttS), Kuc(3 * NNODE, NNODE), Kcu(NNODE, 3 * NNODE), &
                   Nvec(1, NNODE), ResFac, AmatUC(6, 1), TanFac, AmatCU(3, 9), SpUCMod(3, 3), &
                   SpCUMod(3, 3, 3), SpCUModFac(3, 3), pi, detF_t, PNEWDT
+         real(8) :: Kgeo(3 * NNODE, 3 * NNODE), geo_scalar
+         integer :: rowA, colB
          character(len=256) :: jobName, outDir, fileName
+         real(8) :: p_ind
+         real(8) :: Rp, Kup(24,1), Kpu(1,24), Kpp(1,1)
 
          ! Get element parameters
          nlSdv = JPROPS(1) ! number of local sdv's per integ point
@@ -118,14 +123,18 @@
 
          ! Initialize the residual and tangent matrices to zero.
          Ru = 0.0d0
+         Rp = 0.0d0
          Kuu = 0.0d0
+         Kup = 0.0d0
+         Kpu = 0.0d0
+         Kpp = 0.0d0
 
          ! Body forces
          body(1:3) = 0.0d0
 
          ! Obtain nodal displacements
          k = 0
-         do i = 1, NNODE
+         do i = 1, 8
             do j = 1, nDim
                k = k + 1
                u(i, j) = Uall(k)
@@ -134,8 +143,11 @@
             end do
          end do
 
+         !!!
+         p_ind = Uall(25)
+
          ! Obtain current nodal coordinates
-         do i = 1, NNODE
+         do i = 1, 8
             do j = 1, nDim
                coordsC(j, i) = coords(j, i) + u(i, j)
             end do
@@ -147,7 +159,7 @@
                  (coordsC(2, 1) - coordsC(2, 7))**2 + &
                  (coordsC(3, 1) - coordsC(3, 7))**2)
          ! add some kind of flag here???
-         do i = 1, NNODE
+         do i = 1, 8
             do j = 1, nDim
                if (abs(du(i, j)) > 10.0d0 * Le) then
                   PNEWDT = 0.5d0
@@ -172,7 +184,7 @@
             ! Obtain shape functions and their local gradients at the element
             !  centroid, that means xi=eta=zeta=0.0, and nInttPt=1
             !
-            if (nNode == 8) then
+            if (nNodeG == 8) then
                call calcShape3DLinear(1, xi0, 1, sh0, dshxi)
             else
                write(*, *) 'Incorrect number of nodes: nNode.ne.8'
@@ -181,7 +193,7 @@
 
             ! Map shape functions from local to global reference coordinate system
             !
-            call mapShape3D(nNode, dshxi, coords, dsh0, detMapJ0, stat)
+            call mapShape3D(nNodeG, dshxi, coords, dsh0, detMapJ0, stat)
             if (stat == 0) then
                PNEWDT = 0.5
                return
@@ -189,7 +201,7 @@
 
             ! Map shape functions from local to global current coordinate system
             !
-            call mapShape3D(nNode, dshxi, coordsC, dshC0, detMapJ0C, stat)
+            call mapShape3D(nNodeG, dshxi, coordsC, dshC0, detMapJ0C, stat)
             if (stat == 0) then
                PNEWDT = 0.5
                return
@@ -199,21 +211,21 @@
             !  at the the beginning and end of the increment for use in 
             !  the `F-bar' method
             !
-            Fc_tau = Iden
-            Fc_t = Iden
-            do i = 1, nDim
-               do j = 1, nDim
-               do k = 1, nNode
-                  ! F at the end of increment
-                  Fc_tau(i, j) = Fc_tau(i, j) + dsh0(k, j) * u(k, i)
-                  ! F at the beginning of increment
-                  Fc_t(i, j) = Fc_t(i, j) + dsh0(k, j) * uOld(k, i)
-               end do
-               end do
-            end do
-            ! 
-            call mdet(Fc_tau, detFc_tau)
-            call mdet(Fc_t, detFc_t)
+            ! Fc_tau = Iden
+            ! Fc_t = Iden
+            ! do i = 1, nDim
+            !    do j = 1, nDim
+            !    do k = 1, nNode
+            !       ! F at the end of increment
+            !       Fc_tau(i, j) = Fc_tau(i, j) + dsh0(k, j) * u(k, i)
+            !       ! F at the beginning of increment
+            !       Fc_t(i, j) = Fc_t(i, j) + dsh0(k, j) * uOld(k, i)
+            !    end do
+            !    end do
+            ! end do
+            ! ! 
+            ! call mdet(Fc_tau, detFc_tau)
+            ! call mdet(Fc_t, detFc_t)
             !
             ! With the deformation gradient known at the element centroid
             !  we are now able to implement the `F-bar' method later
@@ -255,7 +267,7 @@
 
                ! Obtain shape functions and their local gradients
                !
-               if (nNode == 8) then
+               if (nNodeG == 8) then
                call calcShape3DLinear(nInttPt, xi, intpt, sh, dshxi)
                else
                write(*, *) 'Incorrect number of nodes: nNode.ne.8'
@@ -264,7 +276,7 @@
 
                ! Map shape functions from local to global reference coordinate system
                !
-               call mapShape3D(nNode, dshxi, coords, dsh, detMapJ, stat)
+               call mapShape3D(nNodeG, dshxi, coords, dsh, detMapJ, stat)
                if (stat == 0) then
                PNEWDT = 0.5
                return
@@ -272,7 +284,7 @@
 
                ! Map shape functions from local to global current coordinate system
                !
-               call mapShape3D(nNode, dshxi, coordsC, dshC, detMapJC, stat)
+               call mapShape3D(nNodeG, dshxi, coordsC, dshC, detMapJC, stat)
                if (stat == 0) then
                PNEWDT = 0.5
                return
@@ -286,7 +298,7 @@
                F_t = Iden
                do i = 1, nDim
                do j = 1, nDim
-                  do k = 1, nNode
+                  do k = 1, nNodeG
                   F_tau(i, j) = F_tau(i, j) + dsh(k, j) * u(k, i)
                   F_t(i, j) = F_t(i, j) + dsh(k, j) * uOld(k, i)
                   end do
@@ -297,13 +309,14 @@
                !  only when using the 8 node fully integrated linear
                !  element, do not use the `F-bar' method for any other element
                !
-               if ((nNode == 8) .and. (nIntt == 8)) then
-               call mdet(F_tau, detF_tau)
-               call mdet(F_t, detF_t)
-               F_tau = ((detFc_tau / detF_tau)**(1.0d0 / 3.0d0)) * F_tau
-               F_t = ((detFc_tau / detF_tau)**(1.0d0 / 3.0d0)) * F_t
-               endif
+               ! if ((nNode == 8) .and. (nIntt == 8)) then
+               ! call mdet(F_tau, detF_tau)
+               ! call mdet(F_t, detF_t)
+               ! F_tau = ((detFc_tau / detF_tau)**(1.0d0 / 3.0d0)) * F_tau
+               ! F_t = ((detFc_tau / detF_tau)**(1.0d0 / 3.0d0)) * F_t
+               ! endif
                call mdet(F_tau, detF)
+               call mdet(F_tau, detF_tau)
 
                !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
                !
@@ -325,7 +338,12 @@
                !  at the end of the increment
                !
                SVARS(1 + jj : nsdv + jj) = statev
-               jj = jj + nlSdv 
+               jj = jj + nlSdv
+
+               ! Add independent volumetric stress
+               do i = 1, 3
+                  T_tau(i,i) = T_tau(i,i) + p_ind
+               end do
          ! setup for the next intPt      
          ! Save the state variables at this integ point in the
          !  global array used for plotting field output
@@ -333,20 +351,20 @@
          globalSdv(jelem, intPt, 1:nsdv) = statev
 
          ! Time stepping algorithm based on the constitutive response
-         phiLmt = 0.005d0
-         phi_tau = statev(1)
-         phi_t = prev_statev(1)
-         umeror = abs((phi_tau - phi_t)/phiLmt)
-         ! write(*, *) 'umeror=', umeror
-         if (umeror <= 0.5d0) then
-            pnewdt = 1.5d0
-         elseif (umeror > 0.5d0 .and. umeror <= 0.8d0) then
-            pnewdt = 1.25d0
-         elseif (umeror > 0.8d0 .and. umeror <= 1.25d0) then
-            pnewdt = 0.75d0
-         else
-            pnewdt = 0.5d0
-         endif
+         ! phiLmt = 0.005d0
+         ! phi_tau = statev(1)
+         ! phi_t = prev_statev(1)
+         ! umeror = abs((phi_tau - phi_t)/phiLmt)
+         ! ! write(*, *) 'umeror=', umeror
+         ! if (umeror <= 0.5d0) then
+         !    pnewdt = 1.5d0
+         ! elseif (umeror > 0.5d0 .and. umeror <= 0.8d0) then
+         !    pnewdt = 1.25d0
+         ! elseif (umeror > 0.8d0 .and. umeror <= 1.25d0) then
+         !    pnewdt = 0.75d0
+         ! else
+         !    pnewdt = 0.5d0
+         ! endif
 
          ! Compute/update the displacement residual vector
          Smat(1, 1) = T_tau(1, 1)
@@ -357,7 +375,7 @@
          Smat(6, 1) = T_tau(1, 3)
 
          Bmat = 0.0d0
-         do kk = 1, nNode
+         do kk = 1, nNodeG
             Bmat(1, 1 + nDim * (kk - 1)) = dshC(kk, 1)
             Bmat(2, 2 + nDim * (kk - 1)) = dshC(kk, 2)
             Bmat(3, 3 + nDim * (kk - 1)) = dshC(kk, 3)
@@ -370,16 +388,20 @@
          end do
 
          BodyForceRes = 0.0d0
-         do kk = 1, nNode
+         do kk = 1, nNodeG
             BodyForceRes(1 + nDim * (kk - 1), 1) = sh(kk) * body(1)
             BodyForceRes(2 + nDim * (kk - 1), 1) = sh(kk) * body(2)
             BodyForceRes(3 + nDim * (kk - 1), 1) = sh(kk) * body(3)
          end do
 
+
          Ru = Ru + detmapJC * w(intpt) * &
             (-matmul(transpose(Bmat), Smat) + BodyForceRes)      ! Compute/update the displacement tangent matrix
-          Gmat = 0.0d0
-          do kk = 1, nNode
+          
+         Rp = Rp - detMapJ * w(intpt) * (detF - one - p_ind / PROPS(1))  ! Compute/update the pressure residual vector
+         
+         Gmat = 0.0d0
+          do kk = 1, nNodeG
             Gmat(1, 1 + nDim * (kk - 1)) = dshC(kk, 1)
             Gmat(2, 2 + nDim * (kk - 1)) = dshC(kk, 1)
             Gmat(3, 3 + nDim * (kk - 1)) = dshC(kk, 1)
@@ -391,18 +413,19 @@
             Gmat(9, 3 + nDim * (kk - 1)) = dshC(kk, 3)
           end do
 
-          G0mat = 0.0d0
-          do kk = 1, nNode
-            G0mat(1, 1 + nDim * (kk - 1)) = dshC0(kk, 1)
-            G0mat(2, 2 + nDim * (kk - 1)) = dshC0(kk, 1)
-            G0mat(3, 3 + nDim * (kk - 1)) = dshC0(kk, 1)
-            G0mat(4, 1 + nDim * (kk - 1)) = dshC0(kk, 2)
-            G0mat(5, 2 + nDim * (kk - 1)) = dshC0(kk, 2)
-            G0mat(6, 3 + nDim * (kk - 1)) = dshC0(kk, 2)
-            G0mat(7, 1 + nDim * (kk - 1)) = dshC0(kk, 3)
-            G0mat(8, 2 + nDim * (kk - 1)) = dshC0(kk, 3)
-            G0mat(9, 3 + nDim * (kk - 1)) = dshC0(kk, 3)
-          end do
+         ! For F-bar
+         !  G0mat = 0.0d0
+         !  do kk = 1, nNodeG
+         !    G0mat(1, 1 + nDim * (kk - 1)) = dshC0(kk, 1)
+         !    G0mat(2, 2 + nDim * (kk - 1)) = dshC0(kk, 1)
+         !    G0mat(3, 3 + nDim * (kk - 1)) = dshC0(kk, 1)
+         !    G0mat(4, 1 + nDim * (kk - 1)) = dshC0(kk, 2)
+         !    G0mat(5, 2 + nDim * (kk - 1)) = dshC0(kk, 2)
+         !    G0mat(6, 3 + nDim * (kk - 1)) = dshC0(kk, 2)
+         !    G0mat(7, 1 + nDim * (kk - 1)) = dshC0(kk, 3)
+         !    G0mat(8, 2 + nDim * (kk - 1)) = dshC0(kk, 3)
+         !    G0mat(9, 3 + nDim * (kk - 1)) = dshC0(kk, 3)
+         !  end do
 
           Amat = 0.0d0
           Amat(1, 1) = SpTanMod(1, 1, 1, 1)
@@ -487,45 +510,72 @@
           Amat(9, 8) = SpTanMod(3, 3, 2, 3)
           Amat(9, 9) = SpTanMod(3, 3, 3, 3)
 
+          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+          ! --------------------------------------------------------
+          ! INJECT GEOMETRIC STIFFNESS CONTRIBUTION INTO AMAT
+          ! --------------------------------------------------------
+          do i = 1, 3
+             do j = 1, 3
+                do l = 1, 3
+                   rowA = i + 3*(j-1)
+                   colB = i + 3*(l-1)
+                   Amat(rowA, colB) = Amat(rowA, colB) + T_tau(j, l)
+                end do
+             end do
+          end do
+          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+         
+          ! q matrix for the F-bar method
           Qmat = 0.0d0
-          Qmat(1, 1) = (1.0d0 / 3.0d0) * (Amat(1, 1) + Amat(1, 5) + Amat(1, 9)) - (2.0d0 / 3.0d0) * T_tau(1, 1)
-          Qmat(2, 1) = (1.0d0 / 3.0d0) * (Amat(2, 1) + Amat(2, 5) + Amat(2, 9)) - (2.0d0 / 3.0d0) * T_tau(2, 1)
-          Qmat(3, 1) = (1.0d0 / 3.0d0) * (Amat(3, 1) + Amat(3, 5) + Amat(3, 9)) - (2.0d0 / 3.0d0) * T_tau(3, 1)
-          Qmat(4, 1) = (1.0d0 / 3.0d0) * (Amat(4, 1) + Amat(4, 5) + Amat(4, 9)) - (2.0d0 / 3.0d0) * T_tau(1, 2)
-          Qmat(5, 1) = (1.0d0 / 3.0d0) * (Amat(5, 1) + Amat(5, 5) + Amat(5, 9)) - (2.0d0 / 3.0d0) * T_tau(2, 2)
-          Qmat(6, 1) = (1.0d0 / 3.0d0) * (Amat(6, 1) + Amat(6, 5) + Amat(6, 9)) - (2.0d0 / 3.0d0) * T_tau(3, 2)
-          Qmat(7, 1) = (1.0d0 / 3.0d0) * (Amat(7, 1) + Amat(7, 5) + Amat(7, 9)) - (2.0d0 / 3.0d0) * T_tau(1, 3)
-          Qmat(8, 1) = (1.0d0 / 3.0d0) * (Amat(8, 1) + Amat(8, 5) + Amat(8, 9)) - (2.0d0 / 3.0d0) * T_tau(2, 3)
-          Qmat(9, 1) = (1.0d0 / 3.0d0) * (Amat(9, 1) + Amat(9, 5) + Amat(9, 9)) - (2.0d0 / 3.0d0) * T_tau(3, 3)
-          Qmat(1, 5) = Qmat(1, 1)
-          Qmat(2, 5) = Qmat(2, 1)
-          Qmat(3, 5) = Qmat(3, 1)
-          Qmat(4, 5) = Qmat(4, 1)
-          Qmat(5, 5) = Qmat(5, 1)
-          Qmat(6, 5) = Qmat(6, 1)
-          Qmat(7, 5) = Qmat(7, 1)
-          Qmat(8, 5) = Qmat(8, 1)
-          Qmat(9, 5) = Qmat(9, 1)
-          Qmat(1, 9) = Qmat(1, 1)
-          Qmat(2, 9) = Qmat(2, 1)
-          Qmat(3, 9) = Qmat(3, 1)
-          Qmat(4, 9) = Qmat(4, 1)
-          Qmat(5, 9) = Qmat(5, 1)
-          Qmat(6, 9) = Qmat(6, 1)
-          Qmat(7, 9) = Qmat(7, 1)
-          Qmat(8, 9) = Qmat(8, 1)
-          Qmat(9, 9) = Qmat(9, 1)
+         !  Qmat(1, 1) = (1.0d0 / 3.0d0) * (Amat(1, 1) + Amat(1, 5) + Amat(1, 9)) - (2.0d0 / 3.0d0) * T_tau(1, 1)
+         !  Qmat(2, 1) = (1.0d0 / 3.0d0) * (Amat(2, 1) + Amat(2, 5) + Amat(2, 9)) - (2.0d0 / 3.0d0) * T_tau(2, 1)
+         !  Qmat(3, 1) = (1.0d0 / 3.0d0) * (Amat(3, 1) + Amat(3, 5) + Amat(3, 9)) - (2.0d0 / 3.0d0) * T_tau(3, 1)
+         !  Qmat(4, 1) = (1.0d0 / 3.0d0) * (Amat(4, 1) + Amat(4, 5) + Amat(4, 9)) - (2.0d0 / 3.0d0) * T_tau(1, 2)
+         !  Qmat(5, 1) = (1.0d0 / 3.0d0) * (Amat(5, 1) + Amat(5, 5) + Amat(5, 9)) - (2.0d0 / 3.0d0) * T_tau(2, 2)
+         !  Qmat(6, 1) = (1.0d0 / 3.0d0) * (Amat(6, 1) + Amat(6, 5) + Amat(6, 9)) - (2.0d0 / 3.0d0) * T_tau(3, 2)
+         !  Qmat(7, 1) = (1.0d0 / 3.0d0) * (Amat(7, 1) + Amat(7, 5) + Amat(7, 9)) - (2.0d0 / 3.0d0) * T_tau(1, 3)
+         !  Qmat(8, 1) = (1.0d0 / 3.0d0) * (Amat(8, 1) + Amat(8, 5) + Amat(8, 9)) - (2.0d0 / 3.0d0) * T_tau(2, 3)
+         !  Qmat(9, 1) = (1.0d0 / 3.0d0) * (Amat(9, 1) + Amat(9, 5) + Amat(9, 9)) - (2.0d0 / 3.0d0) * T_tau(3, 3)
+         !  Qmat(1, 5) = Qmat(1, 1)
+         !  Qmat(2, 5) = Qmat(2, 1)
+         !  Qmat(3, 5) = Qmat(3, 1)
+         !  Qmat(4, 5) = Qmat(4, 1)
+         !  Qmat(5, 5) = Qmat(5, 1)
+         !  Qmat(6, 5) = Qmat(6, 1)
+         !  Qmat(7, 5) = Qmat(7, 1)
+         !  Qmat(8, 5) = Qmat(8, 1)
+         !  Qmat(9, 5) = Qmat(9, 1)
+         !  Qmat(1, 9) = Qmat(1, 1)
+         !  Qmat(2, 9) = Qmat(2, 1)
+         !  Qmat(3, 9) = Qmat(3, 1)
+         !  Qmat(4, 9) = Qmat(4, 1)
+         !  Qmat(5, 9) = Qmat(5, 1)
+         !  Qmat(6, 9) = Qmat(6, 1)
+         !  Qmat(7, 9) = Qmat(7, 1)
+         !  Qmat(8, 9) = Qmat(8, 1)
+         !  Qmat(9, 9) = Qmat(9, 1)
 
-          if ((nNode == 8) .and. (nIntt == 8)) then
-            ! This is the tangent using the F-bar method with the 8 node fully integrated linear element
+          Kgeo = 0.0d0 
+         !  do i = 1, nNode
+         !    do j = 1, nNode
+         !      ! 1. Calculate the geometric scalar for this pair of nodes (gradient dot stress dot gradient)
+         !      geo_scalar = dshC(i,1)*T_tau(1,1)*dshC(j,1) + dshC(i,1)*T_tau(1,2)*dshC(j,2) + dshC(i,1)*T_tau(1,3)*dshC(j,3) &
+         !                 + dshC(i,2)*T_tau(2,1)*dshC(j,1) + dshC(i,2)*T_tau(2,2)*dshC(j,2) + dshC(i,2)*T_tau(2,3)*dshC(j,3) &
+         !                 + dshC(i,3)*T_tau(3,1)*dshC(j,1) + dshC(i,3)*T_tau(3,2)*dshC(j,2) + dshC(i,3)*T_tau(3,3)*dshC(j,3)
+              
+         !      ! 2. Add the scalar to the x, y, and z diagonal DOFs of this 3x3 block
+         !      Kgeo(1 + nDim*(i-1), 1 + nDim*(j-1)) = geo_scalar
+         !      Kgeo(2 + nDim*(i-1), 2 + nDim*(j-1)) = geo_scalar
+         !      Kgeo(3 + nDim*(i-1), 3 + nDim*(j-1)) = geo_scalar
+         !    end do
+         !  end do
+
             Kuu = Kuu + detMapJC * w(intpt) * &
-                 (matmul(matmul(transpose(Gmat), Amat), Gmat) + &
-                 matmul(transpose(Gmat), matmul(Qmat, (G0mat - Gmat))))
-          else
-            ! This is the tangent NOT using the F-bar method with all other elements
-            Kuu = Kuu + detMapJC * w(intpt) * &
-                 (matmul(matmul(transpose(Gmat), Amat), Gmat))
-          end if
+                 matmul(matmul(transpose(Gmat), Amat), Gmat) 
+
+            Kpp = Kpp + detMapJ * w(intpt) * (- one / PROPS(1))
+            Kup(:, 1) = Kup(:, 1) + detMapJC * w(intpt) * (Gmat(1, :) + Gmat(5, :) + Gmat(9, :))  ! (24x1)
+            Kpu(1, :) = Kpu(1, :) + detMapJC * w(intpt) * (Gmat(1, :) + Gmat(5, :) + Gmat(9, :))  ! (1x24)
          
       end do
       !
@@ -591,9 +641,9 @@
             !
             ! Modify the chemical potential residual, loop over nodes
             !
-            do n = 1, nNode
-               Rc(n, 1) = Rc(n, 1) - wS(ii) * dA * sh(n) * flux
-            end do 
+            ! do n = 1, nNode
+            !    Rc(n, 1) = Rc(n, 1) - wS(ii) * dA * sh(n) * flux
+            ! end do 
             !
             ! No change to the tangent matrix
             !
@@ -614,9 +664,16 @@
       ! Return Abaqus the RHS vector and the Stiffness matrix.
       !
       
-      call AssembleElement(nDim, nNode, nDofEl, &
-         Ru, Kuu, &
-         rhs, amatrx)
+      ! call AssembleElement(nDim, nNode, nDofEl, &
+      !    Ru, Kuu, &
+      !    rhs, amatrx)
+      RHS(1:24, 1) = Ru(1:24, 1)                                                           
+      AMATRX(1:24, 1:24) = Kuu(1:24, 1:24)                                                 
+                                                                                          
+      RHS(25, 1) = Rp                                                                      
+      AMATRX(1:24, 25) = Kup(1:24, 1)                                                      
+      AMATRX(25, 1:24) = Kpu(1, 1:24)                                                      
+      AMATRX(25, 25) = Kpp(1, 1)  
    !      write(*,*) rhs(:,1)
    !      write(*,*) amatrx     
       !

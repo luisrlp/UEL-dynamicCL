@@ -1,6 +1,6 @@
 1
 
-   Abaqus 2024                                  Date 21-Feb-2026   Time 02:02:05
+   Abaqus 2024                                  Date 18-Aug-2026   Time 14:30:12
    For use by Supplied by Team-SolidSQUAD under license from Dassault Systemes or its subsidiary.
 
 
@@ -18,7 +18,7 @@
                    used or reproduced only in accordance with the terms
                    of such license.
  
-                          On machine nexus 
+                          On machine turin 
                           you are authorized to run
                           Abaqus/Standard until 31-Dec-2055
 
@@ -68,7 +68,7 @@
 
 1
 
-   Abaqus 2024                                  Date 21-Feb-2026   Time 02:02:05
+   Abaqus 2024                                  Date 18-Aug-2026   Time 14:30:12
    For use by Supplied by Team-SolidSQUAD under license from Dassault Systemes or its subsidiary.
 
                                                                                      
@@ -187,13 +187,13 @@
 
 
      JOB TIME SUMMARY
-       USER TIME (SEC)      =     0.30    
-       SYSTEM TIME (SEC)    =     3.00E-02
-       TOTAL CPU TIME (SEC) =     0.33    
+       USER TIME (SEC)      =     0.10    
+       SYSTEM TIME (SEC)    =     1.00E-02
+       TOTAL CPU TIME (SEC) =     0.11    
        WALLCLOCK TIME (SEC) =            0
 1
 
-   Abaqus 2024                                  Date 21-Feb-2026   Time 02:02:07
+   Abaqus 2024                                  Date 18-Aug-2026   Time 14:30:13
    For use by Supplied by Team-SolidSQUAD under license from Dassault Systemes or its subsidiary.
 
      Sample UEL usage                                                                          STEP    1  INCREMENT    1
@@ -206,9 +206,9 @@
                                                                                           
 
      AUTOMATIC TIME CONTROL WITH -
-          A SUGGESTED INITIAL TIME INCREMENT OF                1.000E-03
+          A SUGGESTED INITIAL TIME INCREMENT OF                1.000E-04
           AND A TOTAL TIME PERIOD OF                           1.000E-02
-          THE MINIMUM TIME INCREMENT ALLOWED IS                1.000E-05
+          THE MINIMUM TIME INCREMENT ALLOWED IS                1.000E-07
           THE MAXIMUM TIME INCREMENT ALLOWED IS                1.000E-03
 
      LINEAR EQUATION SOLVER TYPE         DIRECT SPARSE
@@ -266,7 +266,7 @@
 
 
      JOB TIME SUMMARY
-       USER TIME (SEC)      =      1.4    
-       SYSTEM TIME (SEC)    =     0.10    
-       TOTAL CPU TIME (SEC) =      1.5    
+       USER TIME (SEC)      =     0.35    
+       SYSTEM TIME (SEC)    =     2.00E-02
+       TOTAL CPU TIME (SEC) =     0.37    
        WALLCLOCK TIME (SEC) =            1

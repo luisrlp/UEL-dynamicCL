@@ -197,23 +197,6 @@ nn       = props(13)
 bb        = props(14)
 ! affprops= props(13:14)
 
-! Pass this to subroutine
-!     CL CONCENTRATION
-! cabp = cactin*R
-! write(*,*) 'cabp = ', cabp
-!     FILAMENT END-TO-END DISTANCE
-! r0f = 1.6 * cabp**(-2.0/5.0)
-! write(*,*) 'r0f = ', r0f
-!     FILAMENT CONTOUR LENGTH
-! ll = a * r0f
-! write(*,*) 'll = ', ll
-!     FILAMENT DENSITY
-! na = 6.022e23
-! mactin = 42.0          ! [kDa]
-! rhoactin = 16.0        ! [MDa/microm]
-! nn = cactin/ll * na * mactin / rhoactin * 1.0e-24
-! write(*,*) 'nn = ', nn
-
 filprops = (/ll, r0f, r0c, etac, mu0, beta, b0, lambda0/)
 affprops = (/nn, bb/)
 
@@ -252,7 +235,8 @@ CALL projlag(c,unit4,projl,ndi)
 
 !---- VOLUMETRIC ------------------------------------------------------
 !     STRAIN-ENERGY
-CALL vol(ssev,pv,ppv,k,det)
+! Now handled by pressure dof
+! CALL vol(ssev,pv,ppv,k,det)
 
 !---- ISOCHORIC ISOTROPIC ---------------------------------------------
 IF (phi < one) THEN
@@ -299,11 +283,12 @@ cfic=(one-phi)*cisomatfic+cnetfic
 !-------------------------- STRESS MEASURES ---------------------------
 !----------------------------------------------------------------------
 !---- VOLUMETRIC ------------------------------------------------------
+! Now handled by pressure dof
 !      PK2 STRESS
 ! CALL pk2vol(pkvol,pv,c,ndi)
-CALL pk2vol(pkvol,pv,c,ndi,det)
+! CALL pk2vol(pkvol,pv,c,ndi,det)
 !      CAUCHY STRESS
-CALL sigvol(svol,pv,unit2,ndi)
+! CALL sigvol(svol,pv,unit2,ndi)
 !---- ISOCHORIC -------------------------------------------------------
 !      PK2 STRESS
 CALL pk2iso(pkiso,pkfic,projl,det,ndi)
@@ -315,9 +300,9 @@ CALL sigiso(siso,sfic,proje,ndi)
 !      CALL SPECTRAL(SACTISO,SACTVL,SACTVC)
 !---- VOLUMETRIC + ISOCHORIC ------------------------------------------
 !      PK2 STRESS
-pk2 = pkvol + pkiso
+pk2 = pkiso !+ pkvol
 !      CAUCHY STRESS
-sigma = svol + siso
+sigma = siso !+ svol 
 
 !----------------------------------------------------------------------
 !-------------------- MATERIAL ELASTICITY TENSOR ----------------------
@@ -340,8 +325,8 @@ sigma = svol + siso
 !----------------------------------------------------------------------
 
 !---- VOLUMETRIC ------------------------------------------------------
-
-CALL setvol(cvol,pv,ppv,unit2,unit4s,ndi)
+! Now handled by pressure dof
+! CALL setvol(cvol,pv,ppv,unit2,unit4s,ndi)
 
 !---- ISOCHORIC -------------------------------------------------------
 
@@ -354,7 +339,7 @@ CALL setjr(cjr,sigma,unit2,ndi)
 !----------------------------------------------------------------------
 
 !     ELASTICITY TENSOR
-ddsigdde=cvol+ciso+cjr
+ddsigdde=ciso !+cvol+cjr
 
 
 !----------------------------------------------------------------------

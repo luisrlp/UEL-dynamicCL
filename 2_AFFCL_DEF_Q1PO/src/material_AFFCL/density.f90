@@ -19,7 +19,7 @@ pi=four*ATAN(one)
 aux1=SQRT(bb/(two*pi))
 aux2=DEXP(bb*(COS(two*ang)+one))
 rho=four*aux1*aux2*(erfi**(-one))
-!      RHO=RHO*((FOUR*PI)**(-ONE)
+RHO=RHO*((FOUR*PI)**(-ONE))
 
 RETURN
 END SUBROUTINE density
