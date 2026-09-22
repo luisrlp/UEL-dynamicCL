@@ -1,6 +1,6 @@
 1
 
-   Abaqus 2024                                  Date 18-Aug-2026   Time 14:30:12
+   Abaqus 2024                                  Date 22-Sep-2026   Time 13:13:55
    For use by Supplied by Team-SolidSQUAD under license from Dassault Systemes or its subsidiary.
 
 
@@ -68,7 +68,7 @@
 
 1
 
-   Abaqus 2024                                  Date 18-Aug-2026   Time 14:30:12
+   Abaqus 2024                                  Date 22-Sep-2026   Time 13:13:55
    For use by Supplied by Team-SolidSQUAD under license from Dassault Systemes or its subsidiary.
 
                                                                                      
@@ -132,10 +132,6 @@
   *Boundary
   *Boundary
   *Boundary
-  *Boundary
-  *Boundary
-  *Boundary
-  *Boundary
   *uel property, elset=main_mesh
   *Output, field, time marks=no
   *element output, elset=dummy_mesh
@@ -151,8 +147,6 @@
   *Boundary
   *Boundary
   *Boundary
-  *Boundary
-  *Boundary
   *Output, field, time marks=no
   *node output, nset=all_nodes
   *element output, elset=dummy_mesh
@@ -161,8 +155,6 @@
  ***WARNING: THE *ELEMENT OUTPUT OPTION IS NOT SUPPORTED FOR USER ELEMENTS
   *Step, name=static1, nlgeom=Yes, inc=10000
   *Static
-  *Boundary
-  *Boundary
   *Boundary
   *Boundary
   *Boundary
@@ -187,13 +179,13 @@
 
 
      JOB TIME SUMMARY
-       USER TIME (SEC)      =     0.10    
-       SYSTEM TIME (SEC)    =     1.00E-02
+       USER TIME (SEC)      =     9.00E-02
+       SYSTEM TIME (SEC)    =     2.00E-02
        TOTAL CPU TIME (SEC) =     0.11    
        WALLCLOCK TIME (SEC) =            0
 1
 
-   Abaqus 2024                                  Date 18-Aug-2026   Time 14:30:13
+   Abaqus 2024                                  Date 22-Sep-2026   Time 13:13:56
    For use by Supplied by Team-SolidSQUAD under license from Dassault Systemes or its subsidiary.
 
      Sample UEL usage                                                                          STEP    1  INCREMENT    1
@@ -266,7 +258,7 @@
 
 
      JOB TIME SUMMARY
-       USER TIME (SEC)      =     0.35    
+       USER TIME (SEC)      =     0.18    
        SYSTEM TIME (SEC)    =     2.00E-02
-       TOTAL CPU TIME (SEC) =     0.37    
-       WALLCLOCK TIME (SEC) =            1
+       TOTAL CPU TIME (SEC) =     0.20    
+       WALLCLOCK TIME (SEC) =            0

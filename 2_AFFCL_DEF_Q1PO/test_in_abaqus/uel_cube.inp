@@ -33,14 +33,7 @@ Sample UEL usage
 ***********************************
 ** Declaration for hybrid element (could use U4 instead if both standard and hybrid elements were used simultaneously)
 *User Element, type=U3, Nodes=9, Coordinates=3, Properties=14, Iproperties=2, Variables=56, Unsymm
-1, 1, 2, 3
-2, 1, 2, 3
-3, 1, 2, 3
-4, 1, 2, 3
-5, 1, 2, 3
-6, 1, 2, 3
-7, 1, 2, 3
-8, 1, 2, 3
+1,2,3
 9, 8
 *Element, type=U3, elset=main_mesh
 1, 5, 6, 8, 7, 1, 2, 4, 3, 9
@@ -143,15 +136,15 @@ Sample UEL usage
 ** ----------------------------------------------------------------
 **     UNIAXIAL BCS
 ** ----------------------------------------------------------------
-**INCLUDE, file=bcs_uni.inp
+** *INCLUDE, file=bcs_uni.inp
 ** ----------------------------------------------------------------
 **     BIAXIAL BCS
 ** ----------------------------------------------------------------
-*INCLUDE, file=bcs_bi.inp
+**INCLUDE, file=bcs_bi.inp
 ** ----------------------------------------------------------------
 **     SHEAR BCS
 ** ----------------------------------------------------------------
-**INCLUDE, file=bcs_sh.inp
+*INCLUDE, file=bcs_sh.inp
 ** ----------------------------------------------------------------
 ** ----------------------------------------------------------------
 ** OUTPUT

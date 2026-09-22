@@ -229,34 +229,40 @@ Sample UEL usage
 ** ----------------------------------------------------------------
 **     BIAXIAL BCS
 ** ----------------------------------------------------------------
-*Amplitude,name=amp
-0., 0., 1., 0.8, 2., 0., 3., 0.9
-4., 0., 5., 1., 6., 0.
-*** BOUNDARY CONDITIONS
-** Type: Displacement/Rotation
-*Boundary
-Set-1, YSYMM
-** Name: BC-1 Type: Symmetry/Antisymmetry/Encastre
-*Boundary
-Set-3, ZSYMM
-** Name: BC-2 Type: Symmetry/Antisymmetry/Encastre
-*Boundary
-Set-4, XSYMM
-*Boundary
-Set-2, 2,2, 0.5
-*Boundary
-Set-7, 1,1, 0.5
-**
-** LOADS
-**
-** Name: Load1   Type: Surface traction
-**Cload
-**Set-2, 2, 0.6
-**Set-7, 1, 0.6
+**INCLUDE, file=bcs_bi.inp
 ** ----------------------------------------------------------------
 **     SHEAR BCS
 ** ----------------------------------------------------------------
-**INCLUDE, file=bcs_sh.inp
+** ** BOUNDARY CONDITIONS
+*Boundary
+Set-3, ZSYMM
+*Boundary
+Set-1, 1,2,0.0
+*Boundary
+Set-2, 1,1, .3
+Set-2, 2,2, .0
+** *Cload
+** Set-2, 1, 10.
+** *Boundary
+** 1, 2,3
+** 2, 1,3
+** 3, 2,3
+** 4, 1,3
+** 5, 2,3
+** 6, 1,3
+** 7, 2,3
+** 8, 1,3
+**
+** ----------------------------------------------------------------
+** LOADS
+**
+** Name: Load-1   Type: Surface traction
+**Dsload
+**Surf, TRSHR, 2, 1., 0., 0.
+**Cload
+**Set-8, 1, 1.0
+**Set-8, 2, 1.0
+** ----------------------------------------------------------------
 ** ----------------------------------------------------------------
 ** ----------------------------------------------------------------
 ** OUTPUT

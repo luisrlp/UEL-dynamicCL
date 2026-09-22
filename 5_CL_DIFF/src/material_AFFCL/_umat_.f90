@@ -439,19 +439,19 @@ END IF
 !!! 3RD TERM
 !! 3.1
 ! dSvol/dcb
-write(*,*) 'J', det
-write(*,*) 'Jc', Jc
-write(*,*) '(k * vmol) / (det * Jc) = ', (k * vmol) / (det * Jc)
-do I1 = 1, ndi
-  do J1 = 1, ndi
-    do K1 = 1, ndi
-      do L1 = 1, ndi
-        cvolchem(I1,J1,K1,L1) = (k * vmol) / (det * Jc) * unit2(I1,J1) * dcbdc(K1,L1) &
-                                * (one - cfmax * dHdcb / df)
-      end do
-    end do
-  end do
-end do
+! write(*,*) 'cfmax =', cfmax
+! write(*,*) 'dHdcb =', dHdcb
+! write(*,*) 'df =', df
+! do I1 = 1, ndi
+!   do J1 = 1, ndi
+!     do K1 = 1, ndi
+!       do L1 = 1, ndi
+!         cvolchem(I1,J1,K1,L1) = (k * vmol) / (det * Jc) * unit2(I1,J1) * dcbdc(K1,L1) &
+!                                 * (one - cfmax * dHdcb / df)
+!       end do
+!     end do
+!   end do
+! end do
 ! dSiso/dcb
 CALL pk2iso(dpk2isodcb,dPK2ficdcb,projl,det,ndi)
 ! dS/dcb
@@ -532,7 +532,7 @@ CALL setjr(cjr,sigma,unit2,ndi)
 !----------------------------------------------------------------------
 
 !     ELASTICITY TENSOR
-ddsigdde=cvol+ciso+cvolchem ! +cjr
+ddsigdde=cvol+ciso ! +cvolchem ! +cjr
 ! if (npt==1) then
 !   write(*,*) 'cvolchem / ddsigdde = ', cvolchem / ddsigdde
 ! end if

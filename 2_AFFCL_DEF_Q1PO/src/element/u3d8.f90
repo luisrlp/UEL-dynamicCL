@@ -344,6 +344,9 @@
                do i = 1, 3
                   T_tau(i,i) = T_tau(i,i) + p_ind
                end do
+               statev(2) = T_tau(1, 1)
+               statev(3) = T_tau(2, 2)
+               statev(4) = T_tau(3, 3)
          ! setup for the next intPt      
          ! Save the state variables at this integ point in the
          !  global array used for plotting field output

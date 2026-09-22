@@ -1,6 +1,6 @@
 1
 
-   Abaqus 2024                                  Date 18-Aug-2026   Time 14:30:12
+   Abaqus 2024                                  Date 22-Sep-2026   Time 12:51:38
    For use by Supplied by Team-SolidSQUAD under license from Dassault Systemes or its subsidiary.
 
 
@@ -68,7 +68,7 @@
 
 1
 
-   Abaqus 2024                                  Date 18-Aug-2026   Time 14:30:12
+   Abaqus 2024                                  Date 22-Sep-2026   Time 12:51:39
    For use by Supplied by Team-SolidSQUAD under license from Dassault Systemes or its subsidiary.
 
                                                                                      
@@ -81,16 +81,6 @@
                      
                      ***COMMENT: STARTING PARAMETER SUBSTITUTION
      LINE     5      
-                     ***WARNING: PARAMETER 'initMU' APPEARS IN A COMMENT LINE, BUT IT IS NOT DEFINED.
-                     
-                     ***WARNING: PARAMETER 'tRamp' APPEARS IN A COMMENT LINE, BUT IT IS NOT DEFINED.
-                     
-     LINE    10      ***WARNING: PARAMETER 'mu0' APPEARS IN A COMMENT LINE, BUT IT IS NOT DEFINED.
-                     
-                     ***WARNING: PARAMETER 'tf' APPEARS IN A COMMENT LINE, BUT IT IS NOT DEFINED.
-                     
-                     ***WARNING: SUBSTITUTION OF PARAMETERS FAILED
-     LINE    15      
                      ***COMMENT: EVALUATION AND SUBSTITUTION OF PARAMETERS COMPLETED
                     --------------------------------------------------------------------------------
                         5   10   15   20   25   30   35   40   45   50   55   60   65   70   75   80
@@ -102,7 +92,7 @@
    ***************************
 
 
-  *User Element, type=U3,Nodes=8,Coordinates=3,Properties=14,Iproperties=2,Variables=56,Unsymm
+  *User Element, type=U3, Nodes=9, Coordinates=3, Properties=14, Iproperties=2, Variables=56, Unsymm
   *Heading
           Sample UEL usage                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
   *Element, type=U3, elset=main_mesh
@@ -112,7 +102,7 @@
   *User output variables
   *elastic
   *Solid section, elset=dummy_mesh, material=dummy_material
-  *User Element, type=U3,Nodes=8,Coordinates=3,Properties=14,Iproperties=2,Variables=56,Unsymm
+  *User Element, type=U3, Nodes=9, Coordinates=3, Properties=14, Iproperties=2, Variables=56, Unsymm
   *Solid section, elset=dummy_mesh, material=dummy_material
   *Hourglass stiffness
 
@@ -132,10 +122,6 @@
   *Boundary
   *Boundary
   *Boundary
-  *Boundary
-  *Boundary
-  *Boundary
-  *Boundary
   *uel property, elset=main_mesh
   *Output, field, time marks=no
   *element output, elset=dummy_mesh
@@ -148,21 +134,28 @@
   *Step, name=static1, nlgeom=Yes, inc=10000
   *Step, name=static1, nlgeom=Yes, inc=10000
   *Static
-  *Boundary
-  *Boundary
+
+ ***WARNING: UNLESS THE *ADAPTIVE MESH OPTION IS USED IN A *STATIC ANALYSIS: 
+             ACOUSTIC ELEMENTS AND THEIR *TIE CONSTRAINTS ARE IGNORED; LARGE 
+             SOLID MEDIUM MOTIONS MAY IMPOSE DISTORTIONS ON ACOUSTIC ELEMENTS 
+             ON THE STRUCTURAL/ACOUSTIC BOUNDARY; GAPS BETWEEN THE ACOUSTIC AND 
+             THE SOLID MEDIA MAY FORM; COUPLING EFFECTS ARE TREATED USING THE 
+             ORIGINAL, UNDEFORMED GEOMETRY. USE THE *ADAPTIVE MESH OPTION TO 
+             ADJUST THE ACOUSTIC MESH IF THIS BEHAVIOR IS OF CONCERN.
   *Boundary
   *Boundary
   *Boundary
   *Output, field, time marks=no
   *node output, nset=all_nodes
+  *node output, nset=press_node
   *element output, elset=dummy_mesh
   *End Step
+
+ ***WARNING: OUTPUT REQUEST POR IS NOT AVAILABLE FOR THIS TYPE OF ANALYSIS
 
  ***WARNING: THE *ELEMENT OUTPUT OPTION IS NOT SUPPORTED FOR USER ELEMENTS
   *Step, name=static1, nlgeom=Yes, inc=10000
   *Static
-  *Boundary
-  *Boundary
   *Boundary
   *Boundary
   *Boundary
@@ -174,9 +167,9 @@
 
 
           NUMBER OF ELEMENTS IS                                     2
-          NUMBER OF NODES IS                                        8
-          NUMBER OF NODES DEFINED BY THE USER                       8
-          TOTAL NUMBER OF VARIABLES IN THE MODEL                   24
+          NUMBER OF NODES IS                                        9
+          NUMBER OF NODES DEFINED BY THE USER                       9
+          TOTAL NUMBER OF VARIABLES IN THE MODEL                   25
           (DEGREES OF FREEDOM PLUS MAX NO. OF ANY LAGRANGE MULTIPLIER
            VARIABLES. INCLUDE *PRINT,SOLVE=YES TO GET THE ACTUAL NUMBER.)
 
@@ -188,12 +181,12 @@
 
      JOB TIME SUMMARY
        USER TIME (SEC)      =     0.10    
-       SYSTEM TIME (SEC)    =     1.00E-02
-       TOTAL CPU TIME (SEC) =     0.11    
-       WALLCLOCK TIME (SEC) =            0
+       SYSTEM TIME (SEC)    =     2.00E-02
+       TOTAL CPU TIME (SEC) =     0.12    
+       WALLCLOCK TIME (SEC) =            3
 1
 
-   Abaqus 2024                                  Date 18-Aug-2026   Time 14:30:13
+   Abaqus 2024                                  Date 22-Sep-2026   Time 12:51:42
    For use by Supplied by Team-SolidSQUAD under license from Dassault Systemes or its subsidiary.
 
      Sample UEL usage                                                                          STEP    1  INCREMENT    1
@@ -223,7 +216,7 @@
               OPERATIONS           REQUIRED          MINIMIZE I/O
              PER ITERATION           (MB)               (MB)
   
-     1          9.25E+03               17                 24
+     1          1.04E+04               17                 24
   
  NOTE:
       (1) SINCE ABAQUS DOES NOT PRE-ALLOCATE MEMORY AND ONLY ALLOCATES MEMORY AS NEEDED DURING THE ANALYSIS,
@@ -261,12 +254,13 @@
 
 
                               ANALYSIS COMPLETE
-                              WITH      2 WARNING MESSAGES ON THE DAT FILE
+                              WITH      4 WARNING MESSAGES ON THE DAT FILE
+                              AND      16 WARNING MESSAGES ON THE MSG FILE
 
 
 
      JOB TIME SUMMARY
-       USER TIME (SEC)      =     0.35    
+       USER TIME (SEC)      =     0.19    
        SYSTEM TIME (SEC)    =     2.00E-02
-       TOTAL CPU TIME (SEC) =     0.37    
-       WALLCLOCK TIME (SEC) =            1
+       TOTAL CPU TIME (SEC) =     0.21    
+       WALLCLOCK TIME (SEC) =            0

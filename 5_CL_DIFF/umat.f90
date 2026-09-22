@@ -10311,9 +10311,8 @@ END IF
 !!! 3RD TERM
 !! 3.1
 ! dSvol/dcb
-write(*,*) 'J', det
-write(*,*) 'Jc', Jc
-write(*,*) '(k * vmol) / (det * Jc) = ', (k * vmol) / (det * Jc)
+write(*,*) 'cfmax * dHdcb =', cfmax * dHdcb
+write(*,*) 'df =', df
 do I1 = 1, ndi
   do J1 = 1, ndi
     do K1 = 1, ndi
