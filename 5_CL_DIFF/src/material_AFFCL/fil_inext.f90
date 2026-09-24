@@ -25,14 +25,9 @@ DOUBLE PRECISION, INTENT(IN OUT)         :: b0
 DOUBLE PRECISION, INTENT(IN OUT)         :: etac
 DOUBLE PRECISION, INTENT(IN OUT)         :: cb
 DOUBLE PRECISION :: aratio, r0c
-DOUBLE PRECISION :: a,b,machep,t
 DOUBLE PRECISION :: pi, num_ddw, den_ddw
 DOUBLE PRECISION :: aux00,aux01,aux02,aux03,aux04,aux05
 
-a=zero
-b=1.0E09
-machep=2.2204E-16
-t=1.0E-14 ! 1.0E-6
 f=zero
 pi=four*ATAN(one)
 
@@ -47,11 +42,11 @@ ddw = num_ddw / den_ddw
 
 ! Force derivative wrt cb
 r0c = r0 - r0f
-aux00 = two / 5.d0 * cb ** (- two / 5.d0)
+aux00 = two / 5.d0 * cb**(-one)
 aux01 = 2 * f
 aux02 = etac * r0c / r0f * (lambdai - 1)
 aux03 = b0 * pi * pi / (r0f * aratio)**2
-aux04 = (a - lambdaf) * beta
+aux04 = (aratio - lambdaf) * beta
 aux05 = (f + aux03) / aux04
 DfDcb = aux00 * (aux01 + aux02 * aux05)
 

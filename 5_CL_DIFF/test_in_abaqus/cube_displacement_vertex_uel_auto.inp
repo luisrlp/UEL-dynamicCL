@@ -3497,11 +3497,11 @@
 *elastic
 1.e-20
 *Conductivity
-1.e-20
+1.0
 *Density
-1.e-20
+1.0
 *Specific heat
-1.e-20
+1.0
 *Initial conditions, type=temperature
 all_nodes, <INITMU>
 *Step, name=Loading, nlgeom=YES, inc=10000

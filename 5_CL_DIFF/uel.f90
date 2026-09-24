@@ -4080,14 +4080,9 @@ DOUBLE PRECISION, INTENT(IN OUT)         :: b0
 DOUBLE PRECISION, INTENT(IN OUT)         :: etac
 DOUBLE PRECISION, INTENT(IN OUT)         :: cb
 DOUBLE PRECISION :: aratio, r0c
-DOUBLE PRECISION :: a,b,machep,t
 DOUBLE PRECISION :: pi, num_ddw, den_ddw
 DOUBLE PRECISION :: aux00,aux01,aux02,aux03,aux04,aux05
 
-a=zero
-b=1.0E09
-machep=2.2204E-16
-t=1.0E-14 ! 1.0E-6
 f=zero
 pi=four*ATAN(one)
 
@@ -4102,11 +4097,11 @@ ddw = num_ddw / den_ddw
 
 ! Force derivative wrt cb
 r0c = r0 - r0f
-aux00 = two / 5.d0 * cb ** (- two / 5.d0)
+aux00 = two / 5.d0 * cb**(-one)
 aux01 = 2 * f
 aux02 = etac * r0c / r0f * (lambdai - 1)
 aux03 = b0 * pi * pi / (r0f * aratio)**2
-aux04 = (a - lambdaf) * beta
+aux04 = (aratio - lambdaf) * beta
 aux05 = (f + aux03) / aux04
 DfDcb = aux00 * (aux01 + aux02 * aux05)
 
@@ -10959,11 +10954,11 @@ cb_tot  = statev(4)
 RETURN
 
 END SUBROUTINE sdvread
-    SUBROUTINE sdvwrite(det, statev, sigma, cf, dmudx, Vmol, jfluid, cb, cb_tot)                                           
+    SUBROUTINE sdvwrite(det, statev, sigma, thetaf, dmudx, Vmol, jfluid, cb, cb_tot)                                           
     !>    WRITE ALL STATE VARIABLES TO STATEV AT END OF INCREMENT                                                       
     !>
     !>    STATEV layout (defined in global.f90):
-    !>      Slot  1       : cf  (cf)
+    !>      Slot  1       : thetaf  (thetaf)
     !>      Slot  2       : det      (Jacobian J)
     !>      Slot  3       : c        (fluid content)
     !>      Slots 4-9     : sigma    (Cauchy stress, 6 components Voigt)
@@ -10975,7 +10970,7 @@ END SUBROUTINE sdvread
   
     DOUBLE PRECISION, INTENT(IN)  :: det
     DOUBLE PRECISION, INTENT(IN)  :: sigma(6)
-    DOUBLE PRECISION, INTENT(IN)  :: cf
+    DOUBLE PRECISION, INTENT(IN)  :: thetaf
     DOUBLE PRECISION, INTENT(IN)  :: dmudx(3,1), jfluid(3,1)
     DOUBLE PRECISION, INTENT(IN)  :: Vmol
     DOUBLE PRECISION, INTENT(IN)  :: cb(ndir), cb_tot
@@ -10984,9 +10979,9 @@ END SUBROUTINE sdvread
     INTEGER :: idir
   
     ! --- Macroscopic quantities (slots 1-15, fixed layout) ---
-    statev(1)     = cf
+    statev(1)     = thetaf
     statev(2)     = det
-    statev(3)     = cf + cb_tot  ! fluid content c
+    statev(3)     = thetaf + cb_tot  ! fluid content c
     statev(4)     = cb_tot
     statev(5:10)   = sigma(1:6)        ! Cauchy stress (Voigt)
     statev(11:13) = -dmudx(1:3,1)    ! chemical potential gradient
@@ -13436,7 +13431,7 @@ IF (STATEV(1) == 0.0d0) THEN
   CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq)
   ! write(*,*) 'cb0 = ', cb0
   thetaf0 = (cabp - cb0) / cfmax
-  write(*,*) 'thetaf0 = ', thetaf0
+  ! write(*,*) 'thetaf0 = ', thetaf0
   CALL initialize(statev,thetaf0,vmol,cb0)
 END IF
 !        READ STATEV
@@ -13757,7 +13752,7 @@ CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(det,statev,stress,thetaf_tau*cfmax,dmudx,Vmol,jfluid,cb,cb_tot_new)
+CALL sdvwrite(det,statev,stress,thetaf_tau,dmudx,Vmol,jfluid,cb,cb_tot_new)
 ! CALL sdvwrite(det,etac_sdv,statev)
 !     END DO
 !----------------------------------------------------------------------

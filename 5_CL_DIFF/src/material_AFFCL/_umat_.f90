@@ -255,7 +255,7 @@ IF (STATEV(1) == 0.0d0) THEN
   CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq)
   ! write(*,*) 'cb0 = ', cb0
   thetaf0 = (cabp - cb0) / cfmax
-  write(*,*) 'thetaf0 = ', thetaf0
+  ! write(*,*) 'thetaf0 = ', thetaf0
   CALL initialize(statev,thetaf0,vmol,cb0)
 END IF
 !        READ STATEV
@@ -576,7 +576,7 @@ CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(det,statev,stress,thetaf_tau*cfmax,dmudx,Vmol,jfluid,cb,cb_tot_new)
+CALL sdvwrite(det,statev,stress,thetaf_tau,dmudx,Vmol,jfluid,cb,cb_tot_new)
 ! CALL sdvwrite(det,etac_sdv,statev)
 !     END DO
 !----------------------------------------------------------------------
