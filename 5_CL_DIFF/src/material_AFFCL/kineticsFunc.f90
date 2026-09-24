@@ -12,7 +12,7 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
                                                                                                                 
     DOUBLE PRECISION                 :: r0f, etac, r0, r0c, fi, ffi, dwi, ddwi, l, mu0str, beta, b0 
     DOUBLE PRECISION                 :: cfmax, cbmax, dx_kT, dt, kon, koff0, koff, thetab, Ri
-    DOUBLE PRECISION                 :: lambdai, lambdaif, lambda0, lambda0f, lambdaic, thetaf, cbt                                                           
+    DOUBLE PRECISION                 :: lambdai, lambdaif, lambda0, lambda0f, lambdaic, thetaf, cbt, det                                                          
     DOUBLE PRECISION                 :: DfDcb,DRiDcb, aratio
     
     Ri = zero
@@ -34,6 +34,7 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
     koff0   = args(14)
     thetaf  = args(15)
     cbt     = args(16)
+    det     = args(17)
 
     r0f = 1.6 * (cbtau*1.d3)**(- two / 5.d0)
     l = aratio * r0f
@@ -68,7 +69,21 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
 
     ! Reaction rate and residual                                                                         
     Ri = kon * cfmax * thetaf / (1 - thetaf) - koff * cbmax * thetab / (1 - thetab)
-    f = cbtau - cbt - Ri * dt                                                      
+    f = cbtau - cbt - Ri * dt
+    ! Check if any component of the residual is NaN or Inf
+    if (abs(f) > 1.0d050) then
+        write(*,*) 'Error: kinetics residual is NaN or Inf in kineticsFunc'
+        write(*,*) 'cbtau =', cbtau
+        write(*,*) 'cbt =', cbt
+        write(*,*) 'Ri =', Ri
+        write(*,*) 'koff =', koff
+        write(*,*) 'fi=', fi
+        write(*,*) 'lambdaif =', lambdaif
+        write(*,*) 'r0f =', r0f
+        write(*,*) 'dx_kT =', dx_kT
+        write(*,*) 'det =', det
+        write(*,*) 'dt =', dt
+    end if
                                                                                                                 
     ! Residual derivative
     dRiDcb = - koff * (cbtau / (1 - thetab) * dx_kT * DfDcb + 1 / (1 - thetab)**2) 

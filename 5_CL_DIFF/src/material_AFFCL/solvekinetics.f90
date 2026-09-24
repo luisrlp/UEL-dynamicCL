@@ -41,16 +41,22 @@ subroutine solveKinetics(root, args, nargs, rootOld)
         write(*,*) 'fl=', fl
         write(*,*) 'fh=', fh
         write(*,*) 'rootOld=', rootOld
-        write(*,*) 'mu =', args(1)
-        write(*,*) 'mu0=', args(2)
-        write(*,*) 'Rgas=', args(3)
-        write(*,*) 'theta=', args(4)
-        write(*,*) 'chi=', args(5)
-        write(*,*) 'Vmol=', args(6)
-        write(*,*) 'Kbulk=', args(7)
-        write(*,*) 'detF=', args(8)
-        write(*,*) 'cb=', args(9)
+        write(*,*) 'lambdai =', args(1)
+        write(*,*) 'lambda0=', args(2)
+        write(*,*) 'aratio=', args(3)
+        write(*,*) 'etac=', args(4)
+        write(*,*) 'mu0str=', args(5)
+        write(*,*) 'beta=', args(6)
+        write(*,*) 'b0=', args(7)
+        write(*,*) 'r0c=', args(8)
+        write(*,*) 'cbmax=', args(9)
         write(*,*) 'cfmax=', args(10)
+        write(*,*) 'dx/kb/theta=', args(11)
+        write(*,*) 'dtime=', args(12)
+        write(*,*) 'kon=', args(13)
+        write(*,*) 'Koff0=', args(14)
+        write(*,*) 'thetaf=', args(15)
+        write(*,*) 'cbt_i=', args(16)
         call exit
         return
     end if

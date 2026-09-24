@@ -575,7 +575,7 @@ CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(det,statev,stress,thetaf_tau,dmudx,Vmol,jfluid,cb,cb_tot_new)
+CALL sdvwrite(det,statev,stress,thetaf_tau*cfmax,dmudx,Vmol,jfluid,cb,cb_tot_new)
 ! CALL sdvwrite(det,etac_sdv,statev)
 !     END DO
 !----------------------------------------------------------------------

@@ -36,7 +36,7 @@ DOUBLE PRECISION, INTENT(OUT)            :: cbtau_tot
 DOUBLE PRECISION, INTENT(IN OUT)         :: cb(ndir)
 
 INTEGER :: i1,j1,k1,l1,m1, im1, isub, n_sub
-INTEGER, PARAMETER :: nargs = 16
+INTEGER, PARAMETER :: nargs = 17
 DOUBLE PRECISION :: args(nargs)
 DOUBLE PRECISION :: sfilfic(ndi,ndi), cfilfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
@@ -223,6 +223,7 @@ do face = 1, face_num/2
         args(14) = Koff0
         args(15) = thetaf
         args(16) = cbt_i
+        args(17) = det
 
         CALL solveKinetics(cbtau_i, args, nargs, cbt_i)
 
@@ -248,7 +249,7 @@ do face = 1, face_num/2
           ! CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),dummy_DfDcb)
           CALL fil_inext(fi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,beta,b0,etac,cb(node_num),DfDcb)
           koff_i = Koff0 * exp(dx / (kb * theta) * fi)
-          IF(lambdaif .GE. 1.1d0) THEN 
+          IF(lambdaif .GE. 1.18d0) THEN 
             write(*,*) 'fi =', fi
             write(*,*) 'lambdaif =', lambdaif
           END IF

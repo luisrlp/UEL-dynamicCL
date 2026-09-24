@@ -199,6 +199,6 @@ if __name__ == '__main__':
         print(f"Error: {odbPath} does not exist!")
         sys.exit(0)
         
-    # add_vector_fields(JobID)
+    add_vector_fields(JobID)
 
-    extract_cb_history_node1(JobID)
+    # extract_cb_history_node1(JobID)

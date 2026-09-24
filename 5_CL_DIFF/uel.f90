@@ -3047,7 +3047,7 @@ DOUBLE PRECISION, INTENT(OUT)            :: cbtau_tot
 DOUBLE PRECISION, INTENT(IN OUT)         :: cb(ndir)
 
 INTEGER :: i1,j1,k1,l1,m1, im1, isub, n_sub
-INTEGER, PARAMETER :: nargs = 16
+INTEGER, PARAMETER :: nargs = 17
 DOUBLE PRECISION :: args(nargs)
 DOUBLE PRECISION :: sfilfic(ndi,ndi), cfilfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
@@ -3234,6 +3234,7 @@ do face = 1, face_num/2
         args(14) = Koff0
         args(15) = thetaf
         args(16) = cbt_i
+        args(17) = det
 
         CALL solveKinetics(cbtau_i, args, nargs, cbt_i)
 
@@ -3259,7 +3260,7 @@ do face = 1, face_num/2
           ! CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),dummy_DfDcb)
           CALL fil_inext(fi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,beta,b0,etac,cb(node_num),DfDcb)
           koff_i = Koff0 * exp(dx / (kb * theta) * fi)
-          IF(lambdaif .GE. 1.1d0) THEN 
+          IF(lambdaif .GE. 1.18d0) THEN 
             write(*,*) 'fi =', fi
             write(*,*) 'lambdaif =', lambdaif
           END IF
@@ -4610,7 +4611,7 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
                                                                                                                 
     DOUBLE PRECISION                 :: r0f, etac, r0, r0c, fi, ffi, dwi, ddwi, l, mu0str, beta, b0 
     DOUBLE PRECISION                 :: cfmax, cbmax, dx_kT, dt, kon, koff0, koff, thetab, Ri
-    DOUBLE PRECISION                 :: lambdai, lambdaif, lambda0, lambda0f, lambdaic, thetaf, cbt                                                           
+    DOUBLE PRECISION                 :: lambdai, lambdaif, lambda0, lambda0f, lambdaic, thetaf, cbt, det                                                          
     DOUBLE PRECISION                 :: DfDcb,DRiDcb, aratio
     
     Ri = zero
@@ -4632,6 +4633,7 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
     koff0   = args(14)
     thetaf  = args(15)
     cbt     = args(16)
+    det     = args(17)
 
     r0f = 1.6 * (cbtau*1.d3)**(- two / 5.d0)
     l = aratio * r0f
@@ -4666,7 +4668,21 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
 
     ! Reaction rate and residual                                                                         
     Ri = kon * cfmax * thetaf / (1 - thetaf) - koff * cbmax * thetab / (1 - thetab)
-    f = cbtau - cbt - Ri * dt                                                      
+    f = cbtau - cbt - Ri * dt
+    ! Check if any component of the residual is NaN or Inf
+    if (abs(f) > 1.0d050) then
+        write(*,*) 'Error: kinetics residual is NaN or Inf in kineticsFunc'
+        write(*,*) 'cbtau =', cbtau
+        write(*,*) 'cbt =', cbt
+        write(*,*) 'Ri =', Ri
+        write(*,*) 'koff =', koff
+        write(*,*) 'fi=', fi
+        write(*,*) 'lambdaif =', lambdaif
+        write(*,*) 'r0f =', r0f
+        write(*,*) 'dx_kT =', dx_kT
+        write(*,*) 'det =', det
+        write(*,*) 'dt =', dt
+    end if
                                                                                                                 
     ! Residual derivative
     dRiDcb = - koff * (cbtau / (1 - thetab) * dx_kT * DfDcb + 1 / (1 - thetab)**2) 
@@ -10946,11 +10962,11 @@ cb_tot  = statev(4)
 RETURN
 
 END SUBROUTINE sdvread
-    SUBROUTINE sdvwrite(det, statev, sigma, phi_tau, dmudx, Vmol, jfluid, cb, cb_tot)                                           
+    SUBROUTINE sdvwrite(det, statev, sigma, cf, dmudx, Vmol, jfluid, cb, cb_tot)                                           
     !>    WRITE ALL STATE VARIABLES TO STATEV AT END OF INCREMENT                                                       
     !>
     !>    STATEV layout (defined in global.f90):
-    !>      Slot  1       : phi_tau  (polymer volume fraction)
+    !>      Slot  1       : cf  (cf)
     !>      Slot  2       : det      (Jacobian J)
     !>      Slot  3       : c        (fluid content)
     !>      Slots 4-9     : sigma    (Cauchy stress, 6 components Voigt)
@@ -10962,7 +10978,7 @@ END SUBROUTINE sdvread
   
     DOUBLE PRECISION, INTENT(IN)  :: det
     DOUBLE PRECISION, INTENT(IN)  :: sigma(6)
-    DOUBLE PRECISION, INTENT(IN)  :: phi_tau
+    DOUBLE PRECISION, INTENT(IN)  :: cf
     DOUBLE PRECISION, INTENT(IN)  :: dmudx(3,1), jfluid(3,1)
     DOUBLE PRECISION, INTENT(IN)  :: Vmol
     DOUBLE PRECISION, INTENT(IN)  :: cb(ndir), cb_tot
@@ -10971,9 +10987,9 @@ END SUBROUTINE sdvread
     INTEGER :: idir
   
     ! --- Macroscopic quantities (slots 1-15, fixed layout) ---
-    statev(1)     = phi_tau
+    statev(1)     = cf
     statev(2)     = det
-    statev(3)     = (1.0d0 - phi_tau) / (Vmol * phi_tau * det)  ! fluid content c
+    statev(3)     = cf + cb_tot  ! fluid content c
     statev(4)     = cb_tot
     statev(5:10)   = sigma(1:6)        ! Cauchy stress (Voigt)
     statev(11:13) = -dmudx(1:3,1)    ! chemical potential gradient
@@ -11289,16 +11305,22 @@ subroutine solveKinetics(root, args, nargs, rootOld)
         write(*,*) 'fl=', fl
         write(*,*) 'fh=', fh
         write(*,*) 'rootOld=', rootOld
-        write(*,*) 'mu =', args(1)
-        write(*,*) 'mu0=', args(2)
-        write(*,*) 'Rgas=', args(3)
-        write(*,*) 'theta=', args(4)
-        write(*,*) 'chi=', args(5)
-        write(*,*) 'Vmol=', args(6)
-        write(*,*) 'Kbulk=', args(7)
-        write(*,*) 'detF=', args(8)
-        write(*,*) 'cb=', args(9)
+        write(*,*) 'lambdai =', args(1)
+        write(*,*) 'lambda0=', args(2)
+        write(*,*) 'aratio=', args(3)
+        write(*,*) 'etac=', args(4)
+        write(*,*) 'mu0str=', args(5)
+        write(*,*) 'beta=', args(6)
+        write(*,*) 'b0=', args(7)
+        write(*,*) 'r0c=', args(8)
+        write(*,*) 'cbmax=', args(9)
         write(*,*) 'cfmax=', args(10)
+        write(*,*) 'dx/kb/theta=', args(11)
+        write(*,*) 'dtime=', args(12)
+        write(*,*) 'kon=', args(13)
+        write(*,*) 'Koff0=', args(14)
+        write(*,*) 'thetaf=', args(15)
+        write(*,*) 'cbt_i=', args(16)
         call exit
         return
     end if
@@ -13737,7 +13759,7 @@ CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(det,statev,stress,thetaf_tau,dmudx,Vmol,jfluid,cb,cb_tot_new)
+CALL sdvwrite(det,statev,stress,thetaf_tau*cfmax,dmudx,Vmol,jfluid,cb,cb_tot_new)
 ! CALL sdvwrite(det,etac_sdv,statev)
 !     END DO
 !----------------------------------------------------------------------
