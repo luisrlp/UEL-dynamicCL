@@ -52,14 +52,11 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
             lambdaif=lambdai ! False for a filament attached to a stiff crosslinker (etac = 1), only valid for etac = 0 (???)
             lambdaic=zero ! False for a stiff crosslinker (etac = 1), only valid for etac = 0 (???)
         END IF
-        CALL fil(fi,ffi,dwi,ddwi,&
-                lambdai,lambdaif,lambda0,lambda0f,&
-                l,r0,r0f,mu0str,beta,b0,etac,&
-                cbtau,DfDcb)
-        ! CALL fil_inext(fi,ffi,dwi,ddwi,&
+        ! CALL fil(fi,ffi,dwi,ddwi,&
         !         lambdai,lambdaif,lambda0,lambda0f,&
-        !         l,r0,r0f,beta,b0,etac,&
+        !         l,r0,r0f,mu0str,beta,b0,etac,&
         !         cbtau,DfDcb)
+          CALL fil_inext(fi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,beta,b0,etac,cbtau,DfDcb)
             ! CALL filpce(lambdai, fi, dwi, ddwi)
     END IF
 
