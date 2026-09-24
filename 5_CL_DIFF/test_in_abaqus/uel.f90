@@ -4715,14 +4715,11 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
             lambdaif=lambdai ! False for a filament attached to a stiff crosslinker (etac = 1), only valid for etac = 0 (???)
             lambdaic=zero ! False for a stiff crosslinker (etac = 1), only valid for etac = 0 (???)
         END IF
-        CALL fil(fi,ffi,dwi,ddwi,&
-                lambdai,lambdaif,lambda0,lambda0f,&
-                l,r0,r0f,mu0str,beta,b0,etac,&
-                cbtau,DfDcb)
-        ! CALL fil_inext(fi,ffi,dwi,ddwi,&
+        ! CALL fil(fi,ffi,dwi,ddwi,&
         !         lambdai,lambdaif,lambda0,lambda0f,&
-        !         l,r0,r0f,beta,b0,etac,&
+        !         l,r0,r0f,mu0str,beta,b0,etac,&
         !         cbtau,DfDcb)
+          CALL fil_inext(fi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,beta,b0,etac,cbtau,DfDcb)
             ! CALL filpce(lambdai, fi, dwi, ddwi)
     END IF
 
@@ -13503,6 +13500,7 @@ IF (STATEV(1) == 0.0d0) THEN
   CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq)
   ! write(*,*) 'cb0 = ', cb0
   thetaf0 = (cabp - cb0) / cfmax
+  write(*,*) 'thetaf0 = ', thetaf0
   CALL initialize(statev,thetaf0,vmol,cb0)
 END IF
 !        READ STATEV

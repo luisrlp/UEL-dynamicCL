@@ -255,6 +255,7 @@ IF (STATEV(1) == 0.0d0) THEN
   CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq)
   ! write(*,*) 'cb0 = ', cb0
   thetaf0 = (cabp - cb0) / cfmax
+  write(*,*) 'thetaf0 = ', thetaf0
   CALL initialize(statev,thetaf0,vmol,cb0)
 END IF
 !        READ STATEV

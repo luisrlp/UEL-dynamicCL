@@ -3493,7 +3493,7 @@
 **
 0.5,16.0,298.0,0.005,1e-06,1.0,0.0095,0.1,
 **
-0.25,0.25,0.1,10.0,0.0,0.15,0.05,0.25,
+0.25,0.25,0.1,0.1,0.0,0.15,0.05,0.25,
 ** nlSdv ngSdv
 106, 106
 
@@ -3506,11 +3506,11 @@
 *elastic
 1.e-20
 *Conductivity
-1.0
+1.e-20
 *Density
-1.0
+1.e-20
 *Specific heat
-1.0
+1.e-20
 *Initial conditions, type=temperature
 all_nodes, -2002.850426
 *Step, name=Loading, nlgeom=YES, inc=10000
