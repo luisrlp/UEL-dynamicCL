@@ -3277,7 +3277,7 @@ do face = 1, face_num/2
           !!! Leverage sigfilfic to get dSfic/Dcb for current direction
           call sigfilfic(dPK2filficdcb,rho,lambdai,auxdwdcb,mf0i,ai,ndi)
           !! Term 3.2
-          dHdlambda = dtime * thetab_i / (one - thetab_i) * koff_i * dx / (kb * theta) * ddwi / (lambda0 * r0)
+          dHdlambda = dtime * thetab_i * cbmax / (one - thetab_i) * koff_i * dx / (kb * theta) * ddwi / (lambda0 * r0)
           call pfdlambdadc(pfdlambdadcfil,rho,lambdai,unit2,mfi,ai,det,ndi)
           dRiDcb = - koff_i * (cbtau_i / (1 - thetab_i) * dx / (kb * theta) * DfDcb + 1 / (1 - thetab_i)**2) 
           dHdcb = one - dRiDcb * dtime
@@ -4502,13 +4502,13 @@ END DO
 RETURN
 
 END SUBROUTINE indexx
-SUBROUTINE initialize(statev, thetaf_t, Vmol, cb0)
+SUBROUTINE initialize(statev, thetaf_t, Vmol, cb0, cfmax)
 use global
 IMPLICIT NONE
 
 !      DOUBLE PRECISION TIME(2),KSTEP
 INTEGER :: pos1, i
-DOUBLE PRECISION, INTENT(IN)             :: thetaf_t, Vmol, cb0
+DOUBLE PRECISION, INTENT(IN)             :: thetaf_t, Vmol, cb0, cfmax
 DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
 
 
@@ -4518,7 +4518,7 @@ statev(pos1)=thetaf_t
 !       DETERMINANT
 statev(pos1+1)=one
 !      CL CONTENT
-statev(pos1+2) = (1.0d0 - thetaf_t) / (Vmol * thetaf_t)
+statev(pos1+2) = thetaf_t * cfmax + cb0
 !      TOTAL CB
 statev(pos1+3) = cb0
 !       STRESSES and CL FLUX
@@ -10954,7 +10954,7 @@ cb_tot  = statev(4)
 RETURN
 
 END SUBROUTINE sdvread
-    SUBROUTINE sdvwrite(det, statev, sigma, thetaf, dmudx, Vmol, jfluid, cb, cb_tot)                                           
+    SUBROUTINE sdvwrite(det, statev, sigma, thetaf, dmudx, Vmol, jfluid, cb, cb_tot, cfmax)                                           
     !>    WRITE ALL STATE VARIABLES TO STATEV AT END OF INCREMENT                                                       
     !>
     !>    STATEV layout (defined in global.f90):
@@ -10974,6 +10974,7 @@ END SUBROUTINE sdvread
     DOUBLE PRECISION, INTENT(IN)  :: dmudx(3,1), jfluid(3,1)
     DOUBLE PRECISION, INTENT(IN)  :: Vmol
     DOUBLE PRECISION, INTENT(IN)  :: cb(ndir), cb_tot
+    DOUBLE PRECISION, INTENT(IN)  :: cfmax
     DOUBLE PRECISION, INTENT(OUT) :: statev(nsdv)
   
     INTEGER :: idir
@@ -10981,7 +10982,7 @@ END SUBROUTINE sdvread
     ! --- Macroscopic quantities (slots 1-15, fixed layout) ---
     statev(1)     = thetaf
     statev(2)     = det
-    statev(3)     = thetaf + cb_tot  ! fluid content c
+    statev(3)     = thetaf * cfmax + cb_tot  ! fluid content c
     statev(4)     = cb_tot
     statev(5:10)   = sigma(1:6)        ! Cauchy stress (Voigt)
     statev(11:13) = -dmudx(1:3,1)    ! chemical potential gradient
@@ -13432,7 +13433,7 @@ IF (STATEV(1) == 0.0d0) THEN
   ! write(*,*) 'cb0 = ', cb0
   thetaf0 = (cabp - cb0) / cfmax
   ! write(*,*) 'thetaf0 = ', thetaf0
-  CALL initialize(statev,thetaf0,vmol,cb0)
+  CALL initialize(statev,thetaf0,vmol,cb0,cfmax)
 END IF
 !        READ STATEV
 CALL sdvread(statev, thetaf_t, cb, cb_tot)
@@ -13500,15 +13501,17 @@ CALL projlag(c,unit4,projl,ndi)
       END IF
 
 
-      ! Fluid mobility and permeability
-      MFLUID = D * cf * (1.0d0 - THETAF_TAU)
+      ! Fluid mobility: m = D/(RT) * cf * (1 - thetaf)
+      !   D is the Fickian diffusion coefficient; the 1/(RT) (Einstein relation)
+      !   gives D_eff = m * dmu/dcf = D * [1 - 2*chi*thetaf*(1-thetaf)] ~ D
+      MFLUID = D / (RGAS * THETA) * cf * (1.0d0 - THETAF_TAU)
 
       ! Mobility tangents
-      DMDMU = D * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) * DTHETAFDMU
+      DMDMU = D / (RGAS * THETA) * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) * DTHETAFDMU
       ! dm/dJ via Implicit Function Theorem on H(THETAF_TAU, mu, J) = 0:
       !   dthetaf/dJ = (k*Vmol) / (RT * Jc * det * df)
       !   dm/dJ = dm/dthetaf * dthetaf/dJ
-      DMDJ  = D * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) &
+      DMDJ  = D / (RGAS * THETA) * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) &
             * (k * VMOL) / (RGAS * THETA * Jc * det * df)
 
       ! Fluid flux vector (for visualization/SVARS)
@@ -13752,7 +13755,7 @@ CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(det,statev,stress,thetaf_tau,dmudx,Vmol,jfluid,cb,cb_tot_new)
+CALL sdvwrite(det,statev,stress,thetaf_tau,dmudx,Vmol,jfluid,cb,cb_tot_new,cfmax)
 ! CALL sdvwrite(det,etac_sdv,statev)
 !     END DO
 !----------------------------------------------------------------------

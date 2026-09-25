@@ -29,7 +29,7 @@ ref_point_y = top_face_y + initial_gap + indenter_radius
 
 # UEL Parameters
 uel_variables = 848
-dummy_variables = 108
+dummy_variables = 106
 num_properties = 24
 
 # ID Management (Increase these if you use a very dense mesh)
@@ -145,6 +145,15 @@ for n_id, (x, y, z) in top_nodes.items():
         free_flux_nodes.append(n_id)
 
 uel_block = f"""
+*Node, nset=extra_element
+99992, 0.0,0.0,0.0
+99993, 0.0001,0.0,0.0
+99994, 0.0001,0.0001,0.0
+99995, 0.0,0.0001,0.0
+99996, 0.0,0.0,0.0001
+99997, 0.0001,0.0,0.0001
+99998, 0.0001,0.0001,0.0001
+99999, 0.0,0.0001,0.0001
 ** ==============================================================================
 ** 1. UEL DEFINITION (MAIN MESH)
 ** ==============================================================================
@@ -156,10 +165,13 @@ for el in element_lines:
     uel_block += el
 
 uel_block += f"""
+** EXTRA ELEMENT
+*Element,type=C3D8T,elset=extra_element
+99999, 99992,99993,99994,99995,99996,99997,99998,99999
 ** ==============================================================================
-** 2. C3D8T DEFINITION (DUMMY MESH FOR VISUALIZATION)
+** 2. C3D8 DEFINITION (DUMMY MESH FOR VISUALIZATION)
 ** ==============================================================================
-*Element, type=C3D8T, elset=dummy_mesh
+*Element, type=C3D8, elset=dummy_mesh
 """
 for el in element_lines:
     parts = el.split(',')
@@ -242,15 +254,12 @@ SURFACE-Top, SURFACE-Probe
 ** ==============================================================================
 *include, input=properties.inp
 *INCLUDE, file=sec_uel_cube.inp
-
+*Solid section, elset=extra_element, material=extra_material
 *Solid section, elset=dummy_mesh, material=dummy_material
 *Hourglass stiffness
 250.0
-
-*Material, name=dummy_material
-*User output variables
-{dummy_variables}
-*elastic
+*Material, name=extra_material
+*Elastic
 1.e-20
 *Conductivity
 1.0
@@ -258,10 +267,16 @@ SURFACE-Top, SURFACE-Probe
 1.0
 *Specific heat
 1.0
-
+*Material, name=dummy_material
+*elastic
+1.e-20
+*User output variables
+{dummy_variables}
 ** ==============================================================================
 ** 6. INITIAL CONDITIONS
 ** ==============================================================================
+*Initial conditions, type=temperature
+extra_element, 0.0
 *Initial conditions, type=temperature
 all_nodes, <INITMU>
 """
@@ -273,13 +288,15 @@ U, NT, RF
 U, RF
 *Element Output, elset=dummy_mesh
 UVARM, LE
+*node output, nset=extra_element
+u
 *End Step
 """
 
 uel_block += f"""
 *Step, name=Indentation, nlgeom=YES, inc=10000
 *Coupled Temperature-displacement, creep=none, deltmx=10.0
-{dtime_indent}, {t_indent}, 1e-15, 0.05
+{dtime_indent}, {t_indent}, 1e-15, 0.02
 *Boundary
 ** Fix the bottom of the gel
 bottom_nodes, YSYMM
@@ -289,6 +306,10 @@ if indenter_position == "vertex":
     uel_block += """** Apply Quarter Symmetry boundary conditions for vertex indentation
 xmax_nodes, XSYMM
 zmax_nodes, ZSYMM
+** Extra Element Fix
+*Boundary
+extra_element, encastre
+extra_element, 11, 11, 0.0
 """
 
 uel_block += f"""** Indenter Constraints
@@ -330,7 +351,7 @@ if t_withdraw > 0.0:
     uel_block += f"""
 *Step, name=Withdraw, nlgeom=YES, inc=10000
 *Coupled Temperature-displacement, creep=none, deltmx=10.0
-{dtime_withdraw}, {t_withdraw}, 1e-15, 0.1
+{dtime_withdraw}, {t_withdraw}, 1e-15, 0.02
 *Boundary
 IndenterRef, 2, 2, 0.0
 """ + output_block

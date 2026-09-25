@@ -119,14 +119,34 @@ else:
 load_node = find_closest_node(top_nodes, load_target_coords)
 
 uel_block = f"""
+*Node, nset=extra_element
+99992, 0.0,0.0,0.0
+99993, 0.0001,0.0,0.0
+99994, 0.0001,0.0001,0.0
+99995, 0.0,0.0001,0.0
+99996, 0.0,0.0,0.0001
+99997, 0.0001,0.0,0.0001
+99998, 0.0001,0.0001,0.0001
+99999, 0.0,0.0001,0.0001
+** ==============================================================================
+** 1. UEL DEFINITION (MAIN MESH)
 ** ==============================================================================
 *User Element, type=U3, Nodes=8, Coordinates=3, Properties={num_properties}, Iproperties=2, Variables={uel_variables}, Unsymm
 1, 2, 3, 11
 *Element, type=U3, elset=main_mesh
 """
-for el in element_lines: uel_block += el
+for el in element_lines: 
+    uel_block += el
 
-uel_block += "\n*Element, type=C3D8T, elset=dummy_mesh\n"
+uel_block += f"""
+** EXTRA ELEMENT
+*Element,type=C3D8T,elset=extra_element
+99999, 99992,99993,99994,99995,99996,99997,99998,99999
+** ==============================================================================
+** 2. C3D8 DEFINITION (DUMMY MESH FOR VISUALIZATION)
+** ==============================================================================
+*Element, type=C3D8, elset=dummy_mesh
+"""
 for el in element_lines:
     parts = el.split(',')
     if len(parts) > 1:
@@ -167,15 +187,17 @@ if side_boundary_condition == "open":
 uel_block += write_nset("open_chem_nodes", list(open_chem_nodes))
 
 uel_block += f"""
+** ==============================================================================
+** 5. PROPERTIES AND SIMULATION STEPS
+** ==============================================================================
 *include, input=properties.inp
 *INCLUDE, file=sec_uel_cube.inp
+*Solid section, elset=extra_element, material=extra_material
 *Solid section, elset=dummy_mesh, material=dummy_material
 *Hourglass stiffness
 250.0
-*Material, name=dummy_material
-*User output variables
-{dummy_variables}
-*elastic
+*Material, name=extra_material
+*Elastic
 1.e-20
 *Conductivity
 1.0
@@ -183,6 +205,16 @@ uel_block += f"""
 1.0
 *Specific heat
 1.0
+*Material, name=dummy_material
+*elastic
+1.e-20
+*User output variables
+{dummy_variables}
+** ==============================================================================
+** 6. INITIAL CONDITIONS
+** ==============================================================================
+*Initial conditions, type=temperature
+extra_element, 0.0
 *Initial conditions, type=temperature
 all_nodes, <INITMU>
 """
@@ -201,6 +233,7 @@ def get_support_bcs():
     if load_position == "vertex" and apply_vertex_symmetry:
         lines += "xmax_nodes, XSYMM\n"
         lines += "zmax_nodes, ZSYMM\n"
+    lines += "*Boundary\nextra_element, encastre\nextra_element, 11, 11, 0.0\n"
     return lines
 
 def write_step(name, dtime, t, max_inc, value, is_first=False):
@@ -228,6 +261,8 @@ def write_step(name, dtime, t, max_inc, value, is_first=False):
 U, NT, RF
 *Element Output, elset=dummy_mesh
 UVARM, LE
+*node output, nset=extra_element
+u
 *End Step
 """
     return step

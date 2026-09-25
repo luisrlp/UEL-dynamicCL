@@ -1359,6 +1359,15 @@
   977,  978,  979, 1090, 1091, 1092, 1093, 1094, 1095, 1096, 1097, 1098, 1099, 1100, 1211, 1212
  1213, 1214, 1215, 1216, 1217, 1218, 1219, 1220, 1221
 **
+*Node, nset=extra_element
+99992, 0.0,0.0,0.0
+99993, 0.0001,0.0,0.0
+99994, 0.0001,0.0001,0.0
+99995, 0.0,0.0001,0.0
+99996, 0.0,0.0,0.0001
+99997, 0.0001,0.0,0.0001
+99998, 0.0001,0.0001,0.0001
+99999, 0.0,0.0001,0.0001
 ** ==============================================================================
 ** 1. UEL DEFINITION (MAIN MESH)
 ** ==============================================================================
@@ -2367,10 +2376,13 @@
 1000, 1319, 1320, 1331, 1330, 1198, 1199, 1210, 1209
 *System
 **
+** EXTRA ELEMENT
+*Element,type=C3D8T,elset=extra_element
+99999, 99992,99993,99994,99995,99996,99997,99998,99999
 ** ==============================================================================
-** 2. C3D8T DEFINITION (DUMMY MESH FOR VISUALIZATION)
+** 2. C3D8 DEFINITION (DUMMY MESH FOR VISUALIZATION)
 ** ==============================================================================
-*Element, type=C3D8T, elset=dummy_mesh
+*Element, type=C3D8, elset=dummy_mesh
 100001,  122,  123,  134,  133,    1,    2,   13,   12
 100002,  123,  124,  135,  134,    2,    3,   14,   13
 100003,  124,  125,  136,  135,    3,    4,   15,   14
@@ -3633,15 +3645,12 @@ SURFACE-Top, SURFACE-Probe
 ** ==============================================================================
 *include, input=properties.inp
 *INCLUDE, file=sec_uel_cube.inp
-**
+*Solid section, elset=extra_element, material=extra_material
 *Solid section, elset=dummy_mesh, material=dummy_material
 *Hourglass stiffness
 250.0
-**
-*Material, name=dummy_material
-*User output variables
-108
-*elastic
+*Material, name=extra_material
+*Elastic
 1.e-20
 *Conductivity
 1.0
@@ -3649,22 +3658,32 @@ SURFACE-Top, SURFACE-Probe
 1.0
 *Specific heat
 1.0
-**
+*Material, name=dummy_material
+*elastic
+1.e-20
+*User output variables
+106
 ** ==============================================================================
 ** 6. INITIAL CONDITIONS
 ** ==============================================================================
+*Initial conditions, type=temperature
+extra_element, 0.0
 *Initial conditions, type=temperature
 all_nodes, <INITMU>
 **
 *Step, name=Indentation, nlgeom=YES, inc=10000
 *Coupled Temperature-displacement, creep=none, deltmx=10.0
-0.001, 1.0, 1e-15, 0.05
+0.001, 1.0, 1e-15, 0.02
 *Boundary
 ** Fix the bottom of the gel
 bottom_nodes, YSYMM
 ** Apply Quarter Symmetry boundary conditions for vertex indentation
 xmax_nodes, XSYMM
 zmax_nodes, ZSYMM
+** Extra Element Fix
+*Boundary
+extra_element, encastre
+extra_element, 11, 11, 0.0
 ** Indenter Constraints
 IndenterRef, 1, 1
 IndenterRef, 3, 3
@@ -3679,6 +3698,8 @@ U, NT, RF
 U, RF
 *Element Output, elset=dummy_mesh
 UVARM, LE
+*node output, nset=extra_element
+u
 *End Step
 **
 *Step, name=Hold, nlgeom=YES, inc=10000
@@ -3693,11 +3714,13 @@ U, NT, RF
 U, RF
 *Element Output, elset=dummy_mesh
 UVARM, LE
+*node output, nset=extra_element
+u
 *End Step
 **
 *Step, name=Withdraw, nlgeom=YES, inc=10000
 *Coupled Temperature-displacement, creep=none, deltmx=10.0
-0.0001, 1.0, 1e-15, 0.1
+0.0001, 1.0, 1e-15, 0.02
 *Boundary
 IndenterRef, 2, 2, 0.0
 *Output, field, time marks=no
@@ -3707,6 +3730,8 @@ U, NT, RF
 U, RF
 *Element Output, elset=dummy_mesh
 UVARM, LE
+*node output, nset=extra_element
+u
 *End Step
 **
 *Step, name=Relax, nlgeom=YES, inc=10000
@@ -3721,5 +3746,7 @@ U, NT, RF
 U, RF
 *Element Output, elset=dummy_mesh
 UVARM, LE
+*node output, nset=extra_element
+u
 *End Step
 **

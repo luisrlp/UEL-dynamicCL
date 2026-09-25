@@ -1,4 +1,4 @@
-    SUBROUTINE sdvwrite(det, statev, sigma, thetaf, dmudx, Vmol, jfluid, cb, cb_tot)                                           
+    SUBROUTINE sdvwrite(det, statev, sigma, thetaf, dmudx, Vmol, jfluid, cb, cb_tot, cfmax)                                           
     !>    WRITE ALL STATE VARIABLES TO STATEV AT END OF INCREMENT                                                       
     !>
     !>    STATEV layout (defined in global.f90):
@@ -18,6 +18,7 @@
     DOUBLE PRECISION, INTENT(IN)  :: dmudx(3,1), jfluid(3,1)
     DOUBLE PRECISION, INTENT(IN)  :: Vmol
     DOUBLE PRECISION, INTENT(IN)  :: cb(ndir), cb_tot
+    DOUBLE PRECISION, INTENT(IN)  :: cfmax
     DOUBLE PRECISION, INTENT(OUT) :: statev(nsdv)
   
     INTEGER :: idir
@@ -25,7 +26,7 @@
     ! --- Macroscopic quantities (slots 1-15, fixed layout) ---
     statev(1)     = thetaf
     statev(2)     = det
-    statev(3)     = thetaf + cb_tot  ! fluid content c
+    statev(3)     = thetaf * cfmax + cb_tot  ! fluid content c
     statev(4)     = cb_tot
     statev(5:10)   = sigma(1:6)        ! Cauchy stress (Voigt)
     statev(11:13) = -dmudx(1:3,1)    ! chemical potential gradient

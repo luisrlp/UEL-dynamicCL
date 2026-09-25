@@ -1340,6 +1340,17 @@
    1331,           0.,           0.,           0.
 *System
 **
+*Node, nset=extra_element
+99992, 0.0,0.0,0.0
+99993, 0.0001,0.0,0.0
+99994, 0.0001,0.0001,0.0
+99995, 0.0,0.0001,0.0
+99996, 0.0,0.0,0.0001
+99997, 0.0001,0.0,0.0001
+99998, 0.0001,0.0001,0.0001
+99999, 0.0,0.0001,0.0001
+** ==============================================================================
+** 1. UEL DEFINITION (MAIN MESH)
 ** ==============================================================================
 *User Element, type=U3, Nodes=8, Coordinates=3, Properties=24, Iproperties=2, Variables=848, Unsymm
 1, 2, 3, 11
@@ -2345,7 +2356,13 @@
  999, 1318, 1319, 1330, 1329, 1197, 1198, 1209, 1208
 1000, 1319, 1320, 1331, 1330, 1198, 1199, 1210, 1209
 **
-*Element, type=C3D8T, elset=dummy_mesh
+** EXTRA ELEMENT
+*Element,type=C3D8T,elset=extra_element
+99999, 99992,99993,99994,99995,99996,99997,99998,99999
+** ==============================================================================
+** 2. C3D8 DEFINITION (DUMMY MESH FOR VISUALIZATION)
+** ==============================================================================
+*Element, type=C3D8, elset=dummy_mesh
 100001,  122,  123,  134,  133,    1,    2,   13,   12
 100002,  123,  124,  135,  134,    2,    3,   14,   13
 100003,  124,  125,  136,  135,    3,    4,   15,   14
@@ -3486,15 +3503,17 @@
 1087, 1088, 1089, 1200, 1201, 1202, 1203, 1204, 1205, 1206, 1207, 1208, 1209, 1210, 1321, 1322
 1323, 1324, 1325, 1326, 1327, 1328, 1329, 1330, 1331
 **
+** ==============================================================================
+** 5. PROPERTIES AND SIMULATION STEPS
+** ==============================================================================
 *include, input=properties.inp
 *INCLUDE, file=sec_uel_cube.inp
+*Solid section, elset=extra_element, material=extra_material
 *Solid section, elset=dummy_mesh, material=dummy_material
 *Hourglass stiffness
 250.0
-*Material, name=dummy_material
-*User output variables
-108
-*elastic
+*Material, name=extra_material
+*Elastic
 1.e-20
 *Conductivity
 1.0
@@ -3502,6 +3521,16 @@
 1.0
 *Specific heat
 1.0
+*Material, name=dummy_material
+*elastic
+1.e-20
+*User output variables
+108
+** ==============================================================================
+** 6. INITIAL CONDITIONS
+** ==============================================================================
+*Initial conditions, type=temperature
+extra_element, 0.0
 *Initial conditions, type=temperature
 all_nodes, <INITMU>
 *Step, name=Loading, nlgeom=YES, inc=10000
@@ -3511,12 +3540,17 @@ all_nodes, <INITMU>
 bottom_nodes, 1, 3, 0.0
 xmax_nodes, XSYMM
 zmax_nodes, ZSYMM
+*Boundary
+extra_element, encastre
+extra_element, 11, 11, 0.0
 1, 2, 2, -0.2
 *Output, field, time marks=no
 *Node Output, nset=all_nodes
 U, NT, RF
 *Element Output, elset=dummy_mesh
 UVARM, LE
+*node output, nset=extra_element
+u
 *End Step
 *Step, name=Hold, nlgeom=YES, inc=10000
 *Coupled Temperature-displacement, creep=none, deltmx=10.0
@@ -3528,6 +3562,8 @@ UVARM, LE
 U, NT, RF
 *Element Output, elset=dummy_mesh
 UVARM, LE
+*node output, nset=extra_element
+u
 *End Step
 *Step, name=Unloading, nlgeom=YES, inc=10000
 *Coupled Temperature-displacement, creep=none, deltmx=10.0
@@ -3539,6 +3575,8 @@ UVARM, LE
 U, NT, RF
 *Element Output, elset=dummy_mesh
 UVARM, LE
+*node output, nset=extra_element
+u
 *End Step
 *Step, name=Relax, nlgeom=YES, inc=10000
 *Coupled Temperature-displacement, creep=none, deltmx=10.0
@@ -3550,5 +3588,7 @@ UVARM, LE
 U, NT, RF
 *Element Output, elset=dummy_mesh
 UVARM, LE
+*node output, nset=extra_element
+u
 *End Step
 **

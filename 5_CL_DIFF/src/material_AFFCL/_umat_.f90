@@ -256,7 +256,7 @@ IF (STATEV(1) == 0.0d0) THEN
   ! write(*,*) 'cb0 = ', cb0
   thetaf0 = (cabp - cb0) / cfmax
   ! write(*,*) 'thetaf0 = ', thetaf0
-  CALL initialize(statev,thetaf0,vmol,cb0)
+  CALL initialize(statev,thetaf0,vmol,cb0,cfmax)
 END IF
 !        READ STATEV
 CALL sdvread(statev, thetaf_t, cb, cb_tot)
@@ -324,15 +324,17 @@ CALL projlag(c,unit4,projl,ndi)
       END IF
 
 
-      ! Fluid mobility and permeability
-      MFLUID = D * cf * (1.0d0 - THETAF_TAU)
+      ! Fluid mobility: m = D/(RT) * cf * (1 - thetaf)
+      !   D is the Fickian diffusion coefficient; the 1/(RT) (Einstein relation)
+      !   gives D_eff = m * dmu/dcf = D * [1 - 2*chi*thetaf*(1-thetaf)] ~ D
+      MFLUID = D / (RGAS * THETA) * cf * (1.0d0 - THETAF_TAU)
 
       ! Mobility tangents
-      DMDMU = D * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) * DTHETAFDMU
+      DMDMU = D / (RGAS * THETA) * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) * DTHETAFDMU
       ! dm/dJ via Implicit Function Theorem on H(THETAF_TAU, mu, J) = 0:
       !   dthetaf/dJ = (k*Vmol) / (RT * Jc * det * df)
       !   dm/dJ = dm/dthetaf * dthetaf/dJ
-      DMDJ  = D * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) &
+      DMDJ  = D / (RGAS * THETA) * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) &
             * (k * VMOL) / (RGAS * THETA * Jc * det * df)
 
       ! Fluid flux vector (for visualization/SVARS)
@@ -576,7 +578,7 @@ CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(det,statev,stress,thetaf_tau,dmudx,Vmol,jfluid,cb,cb_tot_new)
+CALL sdvwrite(det,statev,stress,thetaf_tau,dmudx,Vmol,jfluid,cb,cb_tot_new,cfmax)
 ! CALL sdvwrite(det,etac_sdv,statev)
 !     END DO
 !----------------------------------------------------------------------

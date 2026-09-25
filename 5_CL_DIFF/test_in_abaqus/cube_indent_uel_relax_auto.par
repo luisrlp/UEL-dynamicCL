@@ -1,4 +1,30 @@
 *parameter
+** density = 0.0005 <ABAQUS comment>
+** K = 1000.0 <ABAQUS comment>
+** C10 = 0.0 <ABAQUS comment>
+** C01 = 0.0 <ABAQUS comment>
+** PHINET = 1.0 <ABAQUS comment>
+** a = 1.2 <ABAQUS comment>
+** R0C = 0.014 <ABAQUS comment>
+** ETAC = 0.666667 <ABAQUS comment>
+** MU0STRETCH = 38600000000000.0 <ABAQUS comment>
+** BETA = 0.5 <ABAQUS comment>
+** LP = 16.0 <ABAQUS comment>
+** THETA = 25.0 + 273.0 <ABAQUS comment>
+** DX = 0.005 <ABAQUS comment>
+** BB = 0.000001 <ABAQUS comment>
+** LAMBDA0 = 1.0 <ABAQUS comment>
+** CACTIN = 0.0095 <ABAQUS comment>
+** R = 0.1 <ABAQUS comment>
+** RFMAX = 0.5 <ABAQUS comment>
+** RBMAX = 0.25 <ABAQUS comment>
+** CHI = 0.1 <ABAQUS comment>
+** D = 0.1 <ABAQUS comment>
+** MU0 = 0.0 <ABAQUS comment>
+** VMOL = 0.15 <ABAQUS comment>
+** KOFF0 = 0.05 <ABAQUS comment>
+** KEQ = 0.25 <ABAQUS comment>
+******************************************************************************* <ABAQUS comment>
 density = 0.0005 <= 0.0005>
 K = 1000.0 <= 1000.0>
 C10 = 0.0 <= 0.0>
@@ -11,18 +37,18 @@ MU0STRETCH = 38600000000000.0 <= 38600000000000.0>
 BETA = 0.5 <= 0.5>
 LP = 16.0 <= 16.0>
 THETA = 25.0 + 273.0 <= 298.0>
-DX = 0.1 <= 0.1>
+DX = 0.005 <= 0.005>
 BB = 0.000001 <= 1e-06>
 LAMBDA0 = 1.0 <= 1.0>
 CACTIN = 0.0095 <= 0.0095>
 R = 0.1 <= 0.1>
-RFMAX = 0.5 <= 0.5>
+RFMAX = 0.25 <= 0.25>
 RBMAX = 0.25 <= 0.25>
 CHI = 0.1 <= 0.1>
-D = 0.1 <= 0.1>
+D = 0.01 <= 0.01>
 MU0 = 0.0 <= 0.0>
 VMOL = 0.15 <= 0.15>
 KOFF0 = 0.05 <= 0.05>
 KEQ = 0.25 <= 0.25>
 ******************************************************************************* <ABAQUS comment>
-INITMU = -4027.285737 <= -4027.285737>
+INITMU = -2002.850426 <= -2002.850426>

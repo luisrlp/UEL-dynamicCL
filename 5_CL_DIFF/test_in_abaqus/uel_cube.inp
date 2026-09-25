@@ -22,7 +22,7 @@ Sample UEL usage
 ** ----------------------------------------------------------------
 ** Variables = nlSdv * n_GP
 ** DOF 11 is the chemical potential
-*User Element, type=U3,Nodes=8,Coordinates=3,Properties=21,Iproperties=2,Variables=64,Unsymm
+*User Element, type=U3,Nodes=8,Coordinates=3,Properties=24,Iproperties=2,Variables=848,Unsymm
 1,2,3,11
 ** MESH
 *Element, type=U3, elset=main_mesh
@@ -113,7 +113,7 @@ Sample UEL usage
 ** Must match ngSdv
 ** !!!!!!!!!!!!!!!!!
 *User output variables
-8
+106
 *elastic
 1.e-20
 **

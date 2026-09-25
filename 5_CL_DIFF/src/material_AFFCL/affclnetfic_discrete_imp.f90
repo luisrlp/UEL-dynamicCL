@@ -266,7 +266,7 @@ do face = 1, face_num/2
           !!! Leverage sigfilfic to get dSfic/Dcb for current direction
           call sigfilfic(dPK2filficdcb,rho,lambdai,auxdwdcb,mf0i,ai,ndi)
           !! Term 3.2
-          dHdlambda = dtime * thetab_i / (one - thetab_i) * koff_i * dx / (kb * theta) * ddwi / (lambda0 * r0)
+          dHdlambda = dtime * thetab_i * cbmax / (one - thetab_i) * koff_i * dx / (kb * theta) * ddwi / (lambda0 * r0)
           call pfdlambdadc(pfdlambdadcfil,rho,lambdai,unit2,mfi,ai,det,ndi)
           dRiDcb = - koff_i * (cbtau_i / (1 - thetab_i) * dx / (kb * theta) * DfDcb + 1 / (1 - thetab_i)**2) 
           dHdcb = one - dRiDcb * dtime
