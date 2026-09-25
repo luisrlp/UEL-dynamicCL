@@ -5,6 +5,8 @@ literature/
 mathematica_nbs/
 workplan/
 python_scripts/
+reports/
+research_notes/
 
 # =========================
 # Specific Files to Ignore
