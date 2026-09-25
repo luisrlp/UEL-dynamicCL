@@ -26,11 +26,11 @@ DOUBLE PRECISION, INTENT(IN OUT)         :: beta
 DOUBLE PRECISION, INTENT(IN OUT)         :: b0
 DOUBLE PRECISION, INTENT(IN OUT)         :: etac
 DOUBLE PRECISION, INTENT(IN OUT)         :: cb
-DOUBLE PRECISION :: aratio, r0c
+! DOUBLE PRECISION :: aratio, r0c
 DOUBLE PRECISION :: a,b,machep,t
 DOUBLE PRECISION :: aux, pi,alpha
 DOUBLE PRECISION :: aux0,aux1,aux2,aux3,aux4,aux5,aux6,y
-DOUBLE PRECISION :: aux00,aux01,aux02,aux03,aux04,aux05
+! DOUBLE PRECISION :: aux00,aux01,aux02,aux03,aux04,aux05
 
 a=zero
 b=1.0E09
@@ -70,15 +70,31 @@ dw=lambda0*(r0)*f
 ddw=aux4*((one+y*aux5*aux6)**(-one))
 
 ! Force derivative wrt cb
-aratio=ll/r0f
-r0c = r0 - r0f
-aux00 = two / 5.d0 * cb ** (- two / 5.d0)
-aux01 = 2 * f
-aux02 = etac * r0c / r0f * (lambdai - 1)
-aux03 = b0 * pi * pi / (r0f * aratio)**2
-aux04 = (a - lambdaf) * beta
-aux05 = (f + aux03) / aux04
-DfDcb = aux00 * (aux01 + aux02 * aux05)
+! aratio=ll/r0f
+! r0c = r0 - r0f
+! aux00 = two / 5.d0 * cb ** (- two / 5.d0)
+! aux01 = 2 * f
+! aux02 = etac * r0c / r0f * (lambdai - 1)
+! aux03 = b0 * pi * pi / (r0f * aratio)**2
+! aux04 = (a - lambdaf) * beta
+! aux05 = (f + aux03) / aux04
+! DfDcb = aux00 * (aux01 + aux02 * aux05)
+
+DfDcb = (2*(-(B0*etac*ll*lambda0f*(-1 + lambdai)*mu0**2*(r0 - r0f)) - B0*etac*ll*(-1 + &
+lambda0)*lambdaf*mu0**2*(r0 - r0f) + B0*ll*mu0*(lambda0f*lambdaf*mu0 - (((f + &
+mu0)/mu0)**beta*(2*f + mu0)*Pi**(2*beta))/((f*ll**2*(f + &
+mu0))/(B0*mu0) + Pi**2)**beta)*r0f - a*r0f*(2*beta*f*ll**2*(f + &
+mu0)*((f + mu0)/mu0)**beta*(2*f + mu0)*Pi**(2*beta)*((f*ll**2*(f + &
+mu0))/(B0*mu0) + Pi**2)**(-1 - beta)*(ll - r0f) + B0*lambda0f*lambdaf*mu0**2*r0f &
+- (B0*mu0*((f + mu0)/mu0)**beta*(2*f + &
+mu0)*Pi**(2*beta)*r0f)/((f*ll**2*(f + mu0))/(B0*mu0) + &
+Pi**2)**beta)))/(5.*B0*cb*ll**2*(-mu0 - (beta*ll*((f + &
+mu0)/mu0)**beta*(2*f + mu0)**2*Pi**(2*beta)*((f*ll**2*(f + &
+mu0))/(B0*mu0) + Pi**2)**(-1 - beta)*(ll - r0f))/B0 + (2*mu0*((f + &
+mu0)/mu0)**beta*Pi**(2*beta)*(ll - r0f))/(ll*((f*ll**2*(f + &
+mu0))/(B0*mu0) + Pi**2)**beta) + (beta*((f + mu0)/mu0)**(-1 + &
+beta)*(2*f + mu0)*Pi**(2*beta)*(ll - r0f))/(ll*((f*ll**2*(f + &
+mu0))/(B0*mu0) + Pi**2)**beta)))
 
 RETURN
 END SUBROUTINE fil
