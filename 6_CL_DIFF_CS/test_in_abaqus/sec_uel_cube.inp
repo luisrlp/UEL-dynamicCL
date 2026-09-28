@@ -1,0 +1,11 @@
+**
+**
+*uel property, elset=main_mesh
+<K>,<C10>,<C01>,<PHINET>,<a>,<R0C>,<ETAC>,<MU0STRETCH>,
+**
+<BETA>,<LP>,<THETA>,<DX>,<BB>,<LAMBDA0>,<CACTIN>,<R>,
+**
+<RFMAX>,<RBMAX>,<CHI>,<D>,<MU0>,<VMOL>,<KOFF0>,<KEQ>,
+** nlSdv ngSdv
+106, 106
+

@@ -1,0 +1,10 @@
+*Solid Section, elset=main_element, material=UD
+*Material, name=UD
+*User Material, constants=8
+<D1>,<C10>,<C01>,<K1>,<K2>,<K1>,<K2>,<KDISP>
+*DEPVAR
+4,
+1, DET, "DET"
+2, A, "A1.A2"
+3, EK1, "fiber strain E1"
+4, EK2, "fiber strain E2"
