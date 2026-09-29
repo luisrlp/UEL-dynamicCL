@@ -26,6 +26,10 @@ MU0 = 0.0
 VMOL = 0.15
 KOFF0 = 0.05
 KEQ = 0.25
+# Catch pathway (props 25-26). Not used here: KEQ is defined with the total unloaded
+# off-rate (KOFF0 + KCATCH0), so the initial equilibrium and INITMU depend only on KEQ.
+KCATCH0 = 0.0
+DXC = 0.005
 
 
 # Baseline

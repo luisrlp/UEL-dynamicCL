@@ -151,7 +151,7 @@
 ** ----------------------------------------------------------------
 ** USER ELEMENT DEFINITION
 ** ----------------------------------------------------------------
-*User Element, type=U3,Nodes=8,Coordinates=3,Properties=24,Iproperties=2,Variables=848,Unsymm
+*User Element, type=U3,Nodes=8,Coordinates=3,Properties=26,Iproperties=2,Variables=848,Unsymm
 1,2,3,11
 ** ----------------------------------------------------------------
 ** MESH

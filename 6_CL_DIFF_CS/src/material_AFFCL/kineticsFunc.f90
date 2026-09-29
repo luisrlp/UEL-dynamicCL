@@ -1,17 +1,20 @@
-subroutine kineticsFunc(cbtau, f, df, args, nargs)
-    ! This subroutine serves as the function we would like to solve for                                         
-    ! the bound crosslinker volume fraction (cbtau = cf/cfmax)                                                  
-    ! by finding cbtau such that f = 0                                                                         
-    use global                                                                                                        
-    implicit none                                                                                               
-                                                                                                                
-    integer, intent(in)              :: nargs                                                                   
-    DOUBLE PRECISION, intent(in out) :: cbtau                                                                   
-    DOUBLE PRECISION, intent(out)    :: f, df                                                                    
+subroutine kineticsFunc(cbtau, f, df, dHdl, args, nargs)
+    ! This subroutine serves as the function we would like to solve for
+    ! the bound crosslinker volume fraction (cbtau = cf/cfmax)
+    ! by finding cbtau such that f = 0
+    ! Outputs: f = H (Backward-Euler residual), df = dH/dcb, dHdl = dH/dlambda_i (at fixed cb),
+    ! the latter used for the consistent tangent (sub-step sensitivity dcb/dlambda_i)
+    use global
+    implicit none
+
+    integer, intent(in)              :: nargs
+    DOUBLE PRECISION, intent(in out) :: cbtau
+    DOUBLE PRECISION, intent(out)    :: f, df, dHdl
     DOUBLE PRECISION, intent(in)     :: args(nargs)                                                              
                                                                                                                 
     DOUBLE PRECISION                 :: r0f, etac, r0, r0c, fi, ffi, dwi, ddwi, l, mu0str, beta, b0 
     DOUBLE PRECISION                 :: cfmax, cbmax, dx_kT, dt, kon, koff0, koff, thetab, Ri
+    DOUBLE PRECISION                 :: kcatch0, dxc_kT, dkoffdf
     DOUBLE PRECISION                 :: lambdai, lambdaif, lambda0, lambda0f, lambdaic, thetaf, cbt, det                                                          
     DOUBLE PRECISION                 :: DfDcb,DRiDcb, aratio
     
@@ -35,6 +38,8 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
     thetaf  = args(15)
     cbt     = args(16)
     det     = args(17)
+    kcatch0 = args(18)
+    dxc_kT  = args(19)
 
     r0f = 1.6 * (cbtau*1.d3)**(- two / 5.d0)
     l = aratio * r0f
@@ -43,6 +48,7 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
     IF (lambdai.LE.one) then
         fi = 0.0
         DfDcb = 0.0
+        ddwi = zero
     ELSE
         IF((etac > zero).AND.(etac .LE. one))THEN
             lambdaif=etac*(r0/r0f)*(lambdai-one)+one
@@ -60,15 +66,16 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
             ! CALL filpce(lambdai, fi, dwi, ddwi)
     END IF
 
-    ! Unbinding rate
-    koff = koff0 * exp(dx_kT * fi)
+    ! Unbinding rate (catch-slip) and its force derivative
+    CALL koffcs(koff, dkoffdf, fi, koff0, kcatch0, dx_kT, dxc_kT)
     thetab = cbtau / cbmax
 
     ! Reaction rate and residual                                                                         
     Ri = kon * cfmax * thetaf / (1 - thetaf) - koff * cbmax * thetab / (1 - thetab)
     f = cbtau - cbt - Ri * dt
-    ! Check if any component of the residual is NaN or Inf
-    if (abs(f) > 1.0d050) then
+    ! Check if the residual is NaN or Inf. Large finite values are legitimate with the
+    ! extensible filament and the catch-slip law (koff is capped by koffcs, not bounded by locking)
+    if (.not. (abs(f) < huge(f))) then
         write(*,*) 'Error: kinetics residual is NaN or Inf in kineticsFunc'
         write(*,*) 'cbtau =', cbtau
         write(*,*) 'cbt =', cbt
@@ -83,8 +90,11 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
     end if
                                                                                                                 
     ! Residual derivative
-    dRiDcb = - koff * (cbtau / (1 - thetab) * dx_kT * DfDcb + 1 / (1 - thetab)**2) 
+    dRiDcb = - (dkoffdf * cbtau / (1 - thetab) * DfDcb + koff / (1 - thetab)**2)
     df = one - dRiDcb * dt
-    
+
+    ! Residual derivative wrt lambda_i at fixed cb: df/dlambda_i = ddwi / (lambda0 * r0), since dwi = lambda0 * r0 * fi
+    dHdl = dt * cbmax * thetab / (1 - thetab) * dkoffdf * ddwi / (lambda0 * r0)
+
 end subroutine kineticsFunc
 

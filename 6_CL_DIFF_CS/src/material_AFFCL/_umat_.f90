@@ -83,7 +83,7 @@ DOUBLE PRECISION :: c10,c01,sseiso,diso(5),pkmatfic(ndi,ndi),  &
     smatfic(ndi,ndi),sisomatfic(ndi,ndi), cmisomatfic(ndi,ndi,ndi,ndi),  &
     cisomatfic(ndi,ndi,ndi,ndi)
 !     FILAMENTS NETWORK CONTRIBUTION
-DOUBLE PRECISION :: filprops(10), affprops(5) ! affprops(6)
+DOUBLE PRECISION :: filprops(10), affprops(5), chemprops(10) ! affprops(6)
 DOUBLE PRECISION :: cactin,cabp,ll,lambda0,mu0str,beta,nn,b0,bb
 DOUBLE PRECISION :: phinet,r0,r0c,r0f,a,p,etac,na,mactin,rhoactin
 DOUBLE PRECISION :: pknetfic(ndi,ndi),cmnetfic(ndi,ndi,ndi,ndi)
@@ -92,9 +92,9 @@ DOUBLE PRECISION :: pknetficaf(ndi,ndi),pknetficnaf(ndi,ndi)
 DOUBLE PRECISION :: snetficaf(ndi,ndi),snetficnaf(ndi,ndi)
 DOUBLE PRECISION :: cmnetficaf(ndi,ndi,ndi,ndi), cmnetficnaf(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: cnetficaf(ndi,ndi,ndi,ndi), cnetficnaf(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: efi, kb, dx, Lp, theta
-DOUBLE PRECISION :: R, Rfmax, Rbmax, Keq, Koff0, Kon0
-DOUBLE PRECISION :: cb(ndir), cb0, cbmax, thetab, thetaf0 !, cfmax
+DOUBLE PRECISION :: efi, kb, dx, dxc, Lp, theta
+DOUBLE PRECISION :: R, Rfmax, Rbmax, Keq, Koff0, Kon0, Kcatch0
+DOUBLE PRECISION :: cb(ndir), cb0, cbmax, thetab, thetaf0
 DOUBLE PRECISION :: cb_tot, cb_tot_new, cf
 DOUBLE PRECISION :: cb_upper, machep, tol
 DOUBLE PRECISION :: Jc, f, df, dHdcb
@@ -222,6 +222,8 @@ MU0    = PROPS(21)
 VMOL   = PROPS(22)
 Koff0  = PROPS(23)
 Keq    = PROPS(24)
+Kcatch0 = PROPS(25)
+dxc     = PROPS(26)
 
 !Other parameters (Check which of these will be actually needed in the UMAT and not only in the AFFCL subroutine)
 kb = 1.380649e-5      
@@ -230,23 +232,23 @@ rgas = 8.314462618
 Mactin = 42.0e-3       ! [MDa]
 rhoactin = 16.0        ! [MDa/microm]
 NA = 6.022e5           ! [1/amol]
-Kon0 = Koff0 * Keq
-
-filprops = (/a, r0c, etac, mu0str, beta, Lp, theta, dx, kb, NA/)
-affprops = (/bb, lambda0, cactin, Mactin, rhoactin/)
-
-
-
-!     CL CONCENTRATION
-!!! THIS NEEDS TO BE CHANGED AFTER DIFFUSION IS IMPLEMENTED IN UEL
-cabp = cactin*R  ! <-- Placeholder: Replace with true UEL cR later!
+Kon0 = (Koff0 + Kcatch0) * Keq
 ! Maximum allowable CL concentration
 cfmax = Rfmax * cactin
 cbmax = Rbmax * cactin
 
+filprops = (/a, r0c, etac, mu0str, beta, Lp, theta, dx, kb, NA/)
+affprops = (/bb, lambda0, cactin, Mactin, rhoactin/)
+chemprops = (/cbmax, cfmax, CHI, D, MU0, VMOL, Koff0, Keq, Kcatch0, dxc/)
+
+
+
+
 !        STATE VARIABLES AND CHEMICAL PARAMETERS
 ! IF ((kinc <= 1).AND.(kstep == 1)) THEN
 IF (STATEV(1) == 0.0d0) THEN
+!     CL CONCENTRATION
+  cabp = cactin*R 
 ! Initial bound and free CL concentrations
   cb_upper = MIN(cabp, cbmax)
   machep = 2.22d-16
@@ -417,8 +419,8 @@ CALL erfi(efi,bb)
 IF (phinet > zero) THEN
   ! write(*,*) 'Calling affclnetfic_discrete at t = ', time(1)
   CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,unit2,filprops,  &
-      affprops,efi,noel,det,prefdir,ndi,cb,dtime,cfmax,cbmax,chi,Keq,Koff0, &
-      thetaf_tau, cb_tot_new, dPK2ficdcb, dcbdc)
+      affprops,efi,noel,det,prefdir,ndi,cb,dtime,chemprops, &
+      thetaf_tau, cb_tot_new, dPK2ficdcb, dcbdc, pnewdt)
 END IF
 
 ! Macroscopic reaction source (homogenized binding rate)

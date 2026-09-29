@@ -50,9 +50,8 @@ DOUBLE PRECISION :: cactin, Mactin, rhoactin
 DOUBLE PRECISION :: cbt_i, cbtau_i, thetab_i, Kon, Koff_i, R_i, dtime_sub, cb_sub
 INTEGER :: iter
 DOUBLE PRECISION :: cb_new, Res, cb_pert, dcb, r0f_p, l_p, r0_p
-DOUBLE PRECISION :: dummy_DfDcb, DfDcb, DdwDcb, Dr0Dcb, auxdwdcb, dHdlambda, dHdcb, dRiDcb, auxchem
+DOUBLE PRECISION :: DfDcb, DdwDcb, Dr0Dcb, auxdwdcb, dHdlambda, dHdcb, dRiDcb, auxchem
 DOUBLE PRECISION :: dPK2filficdcb(ndi,ndi), pfdlambdadcfil(ndi,ndi), cfilficchem(ndi,ndi,ndi,ndi)
-! CHECK IF WE CAN DISCARD DUMMY_DFDCB
 
 
 ! INTEGRATION SCHEME
@@ -198,7 +197,6 @@ do face = 1, face_num/2
         CALL density(rho,ang,bdisp,efi)
         
         fi = zero
-        dummy_DfDcb = zero
         DfDcb = zero
         DdwDcb = zero
         dPK2filficdcb=zero
@@ -246,7 +244,7 @@ do face = 1, face_num/2
 
         fi = zero
         IF(lambdai .GE. 1.0d0) THEN 
-          CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),dummy_DfDcb)
+          CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),DfDcb)
           !CALL fil_inext(fi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,beta,b0,etac,cb(node_num),DfDcb)
           koff_i = Koff0 * exp(dx / (kb * theta) * fi)
           IF(lambdaif .GE. 1.18d0) THEN 

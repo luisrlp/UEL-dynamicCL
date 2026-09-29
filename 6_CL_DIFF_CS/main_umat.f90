@@ -72,6 +72,8 @@ PROGRAM TEST_GENERAL_UMAT
     PROPS(22) = 0.15d0    ! VMOL
     PROPS(23) = 0.05D0    ! Koff0
     PROPS(24) = 0.25D0    ! Keq
+    PROPS(25) = 0.0D0     ! Kcatch0
+    PROPS(26) = 0.1D0     ! dxc
     
     VMOL = PROPS(22)
     THETA = PROPS(11)

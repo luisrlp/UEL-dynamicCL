@@ -14,7 +14,7 @@ PROGRAM TEST
       JELEM,NDLOAD,JDLTYP,NPREDF,LFLAGS,MLVARX,MDLOAD,JPROPS,NJPROP
 
       ! 8 nodes x 4 DOFs/node (3 disp + 1 chem potential) = 32
-      PARAMETER (NDOFEL=32, MLVARX=32, NRHS=1,NSVARS=8*NSDV,NPROPS=24)
+      PARAMETER (NDOFEL=32, MLVARX=32, NRHS=1,NSVARS=8*NSDV,NPROPS=26)
       PARAMETER (NJPROP=2, MCRD=3,NNODE=8, JTYPE=3)
       PARAMETER (JELEM=1, NDLOAD=0,MDLOAD=0,NPREDF=1)
 
@@ -33,6 +33,10 @@ PROGRAM TEST
       REAL(8) :: CURRENT_TIME = 0.0d0
       REAL(8) :: TOTAL_TIME
       REAL(8) :: D_SHEAR
+      ! Initial chemical equilibrium (as _umat_.f90 / get_initmu.py)
+      REAL(8) :: CR_EQ, CB0_EQ, THETAF0_EQ, JC_EQ, INITMU
+      REAL(8), PARAMETER :: RGAS_EQ = 8.314462618d0
+      INTEGER :: INODE
 
       ! Initialize LFLAGS
       LFLAGS(1) = 1
@@ -71,6 +75,8 @@ PROGRAM TEST
       PROPS(22) = 0.15d0     ! VMOL: Molar volume
       PROPS(23) = 0.05d0     ! Koff0: Baseline off-rate
       PROPS(24) = 0.25d0     ! Keq: Equilibrium constant
+      PROPS(25) = 0.0d0      ! Kcatch0: Baseline catch off-rate
+      PROPS(26) = 0.001d0    ! dxc: CL catch reactive distance
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! JPROPS: integer properties (must match U3D8 expectations)
       JPROPS(1) = NSDV       ! nlSdv: local SDVs per integration point
@@ -133,6 +139,21 @@ PROGRAM TEST
 
       ! Global Initialization
       Uall = 0.d0
+
+      ! Chemical potential DOFs (4th DOF of each node) at the initial equilibrium INITMU, so that
+      ! thetaf starts at its equilibrium value (mu = 0 would impose thetaf ~ 0.5 and drive binding)
+      CR_EQ = PROPS(15) * PROPS(16)
+      CALL pullchem(CB0_EQ, 0.d0, MIN(CR_EQ, PROPS(18)*PROPS(15)), 2.22d-16, 1.0d-12, &
+                    CR_EQ, PROPS(17)*PROPS(15), PROPS(18)*PROPS(15), PROPS(19), PROPS(24))
+      THETAF0_EQ = (CR_EQ - CB0_EQ) / (PROPS(17)*PROPS(15))
+      JC_EQ = 1.d0 + PROPS(22) * CR_EQ
+      INITMU = PROPS(21) + RGAS_EQ * PROPS(11) * ( LOG(THETAF0_EQ / (1.d0 - THETAF0_EQ)) &
+               + PROPS(19) * (1.d0 - 2.d0*THETAF0_EQ) &
+               - (PROPS(1) * PROPS(22) / (RGAS_EQ * PROPS(11))) * (LOG(1.d0/JC_EQ) / JC_EQ) )
+      DO INODE = 1, NNODE
+          Uall(4*INODE) = INITMU
+      END DO
+      print *, "Initial equilibrium: cb0 = ", CB0_EQ, " thetaf0 = ", THETAF0_EQ, " INITMU = ", INITMU
       svars = 0.d0
       Vel    = 0.d0
       Accn   = 0.d0
@@ -166,7 +187,8 @@ PROGRAM TEST
           DTIME = DT_INIT
           
           ! Check if we need to switch from shear to relaxation step
-          IF ((CURRENT_TIME >= T_SHEAR) .AND. (KSTEP == 1)) THEN
+          ! Tolerance: accumulated DTIME can fall short of T_SHEAR by round-off (10 x 0.1 < 1.0)
+          IF ((CURRENT_TIME >= T_SHEAR - 1.d-8) .AND. (KSTEP == 1)) THEN
               KSTEP = 2
               KINC = 1
           END IF
@@ -197,11 +219,14 @@ PROGRAM TEST
           AMATRX = 0.d0
 
           ! CALL UEL to advance state over DTIME
+          PNEWDT = 1.0d0
           CALL UEL(RHS,AMATRX,SVARS,ENERGY,NDOFEL,NRHS,NSVARS,       &
           PROPS,NPROPS,coords,MCRD,NNODE,Uall,DUall,Vel,Accn,JTYPE,  &
           TIME,DTIME,KSTEP,KINC,JELEM,PARAMS,NDLOAD,JDLTYP,ADLMAG,   &
           PREDEF,NPREDF,LFLAGS,MLVARX,DDLMAG,MDLOAD,PNEWDT,JPROPS,   &
           NJPROP,PERIOD)
+          ! This driver does not repeat increments: only report a requested cut-back
+          IF (PNEWDT < 1.d0) print *, "WARNING: UEL requested PNEWDT = ", PNEWDT, " at t = ", TIME(2)
          
           ! RHS holds the residual forces. In a displacement-controlled test,
           ! the residual force at the top nodes corresponds to the reaction force.

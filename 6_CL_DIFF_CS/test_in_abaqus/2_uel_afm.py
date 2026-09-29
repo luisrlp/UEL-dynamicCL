@@ -30,7 +30,7 @@ ref_point_y = top_face_y + initial_gap + indenter_radius
 # UEL Parameters
 uel_variables = 848
 dummy_variables = 106
-num_properties = 24
+num_properties = 26
 
 # ID Management (Increase these if you use a very dense mesh)
 dummy_element_offset = 100000
