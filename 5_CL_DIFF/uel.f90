@@ -3061,9 +3061,8 @@ DOUBLE PRECISION :: cactin, Mactin, rhoactin
 DOUBLE PRECISION :: cbt_i, cbtau_i, thetab_i, Kon, Koff_i, R_i, dtime_sub, cb_sub
 INTEGER :: iter
 DOUBLE PRECISION :: cb_new, Res, cb_pert, dcb, r0f_p, l_p, r0_p
-DOUBLE PRECISION :: dummy_DfDcb, DfDcb, DdwDcb, Dr0Dcb, auxdwdcb, dHdlambda, dHdcb, dRiDcb, auxchem
+DOUBLE PRECISION :: DfDcb, DdwDcb, Dr0Dcb, auxdwdcb, dHdlambda, dHdcb, dRiDcb, auxchem
 DOUBLE PRECISION :: dPK2filficdcb(ndi,ndi), pfdlambdadcfil(ndi,ndi), cfilficchem(ndi,ndi,ndi,ndi)
-! CHECK IF WE CAN DISCARD DUMMY_DFDCB
 
 
 ! INTEGRATION SCHEME
@@ -3209,7 +3208,6 @@ do face = 1, face_num/2
         CALL density(rho,ang,bdisp,efi)
         
         fi = zero
-        dummy_DfDcb = zero
         DfDcb = zero
         DdwDcb = zero
         dPK2filficdcb=zero
@@ -3257,7 +3255,7 @@ do face = 1, face_num/2
 
         fi = zero
         IF(lambdai .GE. 1.0d0) THEN 
-          CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),dummy_DfDcb)
+          CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),DfDcb)
           !CALL fil_inext(fi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,beta,b0,etac,cb(node_num),DfDcb)
           koff_i = Koff0 * exp(dx / (kb * theta) * fi)
           IF(lambdaif .GE. 1.18d0) THEN 
@@ -4040,21 +4038,10 @@ dw=lambda0*(r0)*f
 ! dw = pi*pi*r0*b0/(ll*ll)*(((ll/r0-1)/(ll/r0-lambda))**TWO - one)
 ddw=aux4*((one+y*aux5*aux6)**(-one))
 
-! Force derivative wrt cb
-! aratio=ll/r0f
-! r0c = r0 - r0f
-! aux00 = two / 5.d0 * cb ** (- two / 5.d0)
-! aux01 = 2 * f
-! aux02 = etac * r0c / r0f * (lambdai - 1)
-! aux03 = b0 * pi * pi / (r0f * aratio)**2
-! aux04 = (a - lambdaf) * beta
-! aux05 = (f + aux03) / aux04
-! DfDcb = aux00 * (aux01 + aux02 * aux05)
-
 DfDcb = (2*(-(B0*etac*ll*lambda0f*(-1 + lambdai)*mu0**2*(r0 - r0f)) - B0*etac*ll*(-1 + &
 lambda0)*lambdaf*mu0**2*(r0 - r0f) + B0*ll*mu0*(lambda0f*lambdaf*mu0 - (((f + &
 mu0)/mu0)**beta*(2*f + mu0)*Pi**(2*beta))/((f*ll**2*(f + &
-mu0))/(B0*mu0) + Pi**2)**beta)*r0f - a*r0f*(2*beta*f*ll**2*(f + &
+mu0))/(B0*mu0) + Pi**2)**beta)*r0f - ll*(2*beta*f*ll**2*(f + &
 mu0)*((f + mu0)/mu0)**beta*(2*f + mu0)*Pi**(2*beta)*((f*ll**2*(f + &
 mu0))/(B0*mu0) + Pi**2)**(-1 - beta)*(ll - r0f) + B0*lambda0f*lambdaf*mu0**2*r0f &
 - (B0*mu0*((f + mu0)/mu0)**beta*(2*f + &

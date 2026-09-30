@@ -1,36 +1,63 @@
 *parameter
+** density = 0.0005 <ABAQUS comment>
+** K = 1000.0 <ABAQUS comment>
+** C10 = 0.0 <ABAQUS comment>
+** C01 = 0.0 <ABAQUS comment>
+** PHINET = 1.0 <ABAQUS comment>
+** a = 1.2 <ABAQUS comment>
+** R0C = 0.014 <ABAQUS comment>
+** ETAC = 0.666667 <ABAQUS comment>
+** MU0STRETCH = 38600000000000.0 <ABAQUS comment>
+** BETA = 0.5 <ABAQUS comment>
+** LP = 16.0 <ABAQUS comment>
+** THETA = 25.0 + 273.0 <ABAQUS comment>
+** DX = 0.005 <ABAQUS comment>
+** BB = 0.000001 <ABAQUS comment>
+** LAMBDA0 = 1.0 <ABAQUS comment>
+** CACTIN = 0.0095 <ABAQUS comment>
+** R = 0.1 <ABAQUS comment>
+** RFMAX = 0.5 <ABAQUS comment>
+** RBMAX = 0.25 <ABAQUS comment>
+** CHI = 0.1 <ABAQUS comment>
+** D = 0.1 <ABAQUS comment>
+** MU0 = 0.0 <ABAQUS comment>
+** VMOL = 0.15 <ABAQUS comment>
+** KOFF0 = 0.05 <ABAQUS comment>
+** KEQ = 0.25 <ABAQUS comment>
+** KCATCH0 = 0.0 <ABAQUS comment>
+** DXC = 0.005 <ABAQUS comment>
+******************************************************************************* <ABAQUS comment>
 density = 0.0005 <= 0.0005>
 K = 1000.0 <= 1000.0>
 C10 = 0.0 <= 0.0>
 C01 = 0.0 <= 0.0>
 PHINET = 1.0 <= 1.0>
-L = 1.96 <= 1.96>
-R0F = 1.63 <= 1.63>
+a = 1.2 <= 1.2>
 R0C = 0.014 <= 0.014>
-ETA = 0.5 <= 0.5>
+ETAC = 0.666667 <= 0.666667>
 MU0STRETCH = 38600.0 <= 38600.0>
 BETA = 0.5 <= 0.5>
 LP = 16.0 <= 16.0>
-LAMBDA0 = 1.0 <= 1.0>
-NA = 7.66 <= 7.66>
-BDISP = 0.001 <= 0.001>
-******************************************************************************* <ABAQUS comment>
-PHI0 = 0.999 <= 0.999>
-MU0 = 0.0 <= 0.0>
 THETA = 25.0 + 273.0 <= 298.0>
-THETA0 = 25.0 + 273.0 <= 298.0>
-INITMU = -14382.975 <= -14382.975>
-TSWELL = 3600.0*0.25 <= 900.0>
-TSTRETCH = 3600.0*0.25 <= 900.0>
-TRAMP = 3600*0.5 <= 1800.0>
-TF = 3600 <= 3600>
+DX = 0.005 <= 0.005>
+BB = 0.000001 <= 1e-06>
+LAMBDA0 = 1.0 <= 1.0>
+CACTIN = 0.0095 <= 0.0095>
+R = 0.1 <= 0.1>
+RFMAX = 0.25 <= 0.25>
+RBMAX = 0.25 <= 0.25>
 CHI = 0.1 <= 0.1>
-D = 5.E-9 <= 5e-09>
-** D = 1.e-20 <ABAQUS comment>
-VMOL = 1.E-4 <= 0.0001>
-RGAS = 8.3145 <= 8.3145>
+D = 0.01 <= 0.01>
+MU0 = 0.0 <= 0.0>
+VMOL = 0.15 <= 0.15>
+KOFF0 = 0.05 <= 0.05>
+KEQ = 0.25 <= 0.25>
+KCATCH0 = 0.00 <= 0.0>
+DXC = 0.005 <= 0.005>
+******************************************************************************* <ABAQUS comment>
+INITMU = -2002.850426 <= -2002.850426>
 *Amplitude, name=chemProfile
-0.0,<INITMU = -14382.975>,<TF = 3600>,<MU0 = 0.0>
+0.0,<INITMU = -2002.850426>,<TF = ???>,<MU0 = 0.0>
 ** *Amplitude, name=chemProfile1, definition=decay
 ** <mu0 = ???>,<initMU = ???>,0.0,60.0
 ** *Time points, Name=outTimes
@@ -68,13 +95,17 @@ RGAS = 8.3145 <= 8.3145>
 ************************************************************************
 ** STEP 1: SWELLING (DIFFUSION ONLY)
 ************************************************************************
+*Coupled temperature-displacement, deltmx=100.0
+0.1, <TSWELL = ???>, 1.e-6, 100.0
+
+** 1. Chemical Boundary Condition (Ramping up to swell)
 *End Step
 ************************************************************************
 ** STEP 2: STRETCHING (DEFORMATION ONLY)
 ************************************************************************
 ** *Step, Name=Stretch, nlgeom=yes, inc=50000
 ** *Coupled temperature-displacement, deltmx=100.0
-** 0.1, <TSTRETCH = 900.0>, 1.e-6, 300.0
+** 0.1, <TSTRETCH = ???>, 1.e-6, 300.0
 
 ** ** 1. Chemical Boundary Condition (Holding constant!)
 ** ** By redefining it without an amplitude, Abaqus holds it at <mu0 = ???> 

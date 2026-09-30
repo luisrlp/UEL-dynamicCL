@@ -39,7 +39,7 @@ t_relax = 10.0;     dtime_relax = 0.001;     max_inc_relax = 0.5
 
 # UEL Parameters
 uel_variables = 848
-dummy_variables = 108
+dummy_variables = 106
 num_properties = 26
 
 # ==============================================================================

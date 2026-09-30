@@ -6,8 +6,6 @@
 <BETA>,<LP>,<THETA>,<DX>,<BB>,<LAMBDA0>,<CACTIN>,<R>,
 **
 <RFMAX>,<RBMAX>,<CHI>,<D>,<MU0>,<VMOL>,<KOFF0>,<KEQ>,
-**
-<KCATCH0>,<DXC>
-** nlSdv ngSdv
-106, 106
+**               nlSdv ngSdv
+<KCATCH0>,<DXC>, 106, 106
 

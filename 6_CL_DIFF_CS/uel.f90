@@ -3013,8 +3013,8 @@ end subroutine UEL
 !           efi,noel,det,prefdir,ndi) ! (original)
 
 SUBROUTINE affclnetfic_discrete(sfic,cfic,f,unit2,filprops,affprops,  &
-  efi,noel,det,prefdir,ndi,cb,dtime,cfmax,cbmax,chi,Keq,Koff0, &
-  thetaf, cbtau_tot, dPK2ficdcb, dcbdc)
+  efi,noel,det,prefdir,ndi,cb,dtime,chemprops, &
+  thetaf, cbtau_tot, dPK2ficdcb, dcbdc, pnewdt)
 
 
 
@@ -3028,26 +3028,23 @@ DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
 DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION, INTENT(OUT)            :: dPK2ficdcb(ndi,ndi)
 DOUBLE PRECISION, INTENT(OUT)            :: dcbdc(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: pnewdt
 DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN)             :: filprops(10)
 DOUBLE PRECISION, INTENT(IN)             :: affprops(5)
+DOUBLE PRECISION, INTENT(IN)             :: chemprops(10)
 DOUBLE PRECISION, INTENT(IN OUT)         :: efi
 INTEGER, INTENT(IN OUT)                  :: noel
 DOUBLE PRECISION, INTENT(IN OUT)         :: det
 
 DOUBLE PRECISION, INTENT(IN)             :: dtime
-DOUBLE PRECISION, INTENT(IN)             :: cfmax
-DOUBLE PRECISION, INTENT(IN)             :: cbmax
-DOUBLE PRECISION, INTENT(IN)             :: CHI
-DOUBLE PRECISION, INTENT(IN)             :: Keq
-DOUBLE PRECISION, INTENT(IN)             :: Koff0
 DOUBLE PRECISION, INTENT(IN)             :: thetaf
 DOUBLE PRECISION, INTENT(OUT)            :: cbtau_tot
 DOUBLE PRECISION, INTENT(IN OUT)         :: cb(ndir)
 
 INTEGER :: i1,j1,k1,l1,m1, im1, isub, n_sub
-INTEGER, PARAMETER :: nargs = 17
+INTEGER, PARAMETER :: nargs = 19
 DOUBLE PRECISION :: args(nargs)
 DOUBLE PRECISION :: sfilfic(ndi,ndi), cfilfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
@@ -3056,15 +3053,28 @@ DOUBLE PRECISION :: l,Lp,r0f,r0,mu0str,b0,beta,lambda0,lambda0f,rho,n,fi,ffi,ara
 DOUBLE PRECISION :: r0c,etac,lambdaif
 DOUBLE PRECISION :: bdisp,ang, frac(4)
 DOUBLE PRECISION :: prefdir(nelem,4), pd(3),lambda_pref,prefdir0(3)
-DOUBLE PRECISION :: dx,kb,theta,na
-DOUBLE PRECISION :: cactin, Mactin, rhoactin
+DOUBLE PRECISION :: dx,dxc,kb,theta,na
+DOUBLE PRECISION :: cactin, Mactin, rhoactin, cbmax, cfmax, chi, D, MU0, VMOL, Koff0, Keq, Kcatch0
 DOUBLE PRECISION :: cbt_i, cbtau_i, thetab_i, Kon, Koff_i, R_i, dtime_sub, cb_sub
 INTEGER :: iter
 DOUBLE PRECISION :: cb_new, Res, cb_pert, dcb, r0f_p, l_p, r0_p
-DOUBLE PRECISION :: dummy_DfDcb, DfDcb, DdwDcb, Dr0Dcb, auxdwdcb, dHdlambda, dHdcb, dRiDcb, auxchem
+DOUBLE PRECISION :: DfDcb, DdwDcb, Dr0Dcb, auxdwdcb, dHdlambda, dHdcb, dRiDcb, auxchem, dKoffDf_i
+DOUBLE PRECISION :: dHdcb_i, dHdl_i, sens_i, dHdcb_min, kh_i, gerr_i, cbx_i, Hx_i, dHdcbx_i, dHdlx_i
+LOGICAL :: conv_i, atb_i, ok_i, hard_i
+INTEGER :: nhard, nacc, nsub_max
+! Kinetics sub-stepping (per direction). The whole increment is tried first (n_sub = 1); it is
+! repeated from the start-of-increment state with n_sub = 2, 4, ... <= MAX_SUBSTEPS sub-steps of
+! dtime/n_sub if, in any sub-step, the solve does not converge, dH/dcb at the root < DH_MIN
+! (uniqueness of the Backward-Euler root being lost), or the estimated Backward-Euler error
+! exceeds DCB_MAX*max(min(cb_start, cb_end), CB_SCALE*cbmax) (accuracy, relative to the smaller
+! of the two values). Error estimate (exact order for linear kinetics):
+! err = |cb change| * min(kh/2, 1/kh), with kh = dt_sub*|dR/dcb| = |dH/dcb - 1| the sub-step
+! length over the kinetic time scale, evaluated at the start and at the end of the sub-step
+! (larger factor used): slow kinetics (kh << 1) err ~ |dcb|*kh/2; fast kinetics (kh >> 1,
+! quasi-equilibrium, e.g. complete unbinding) err ~ |dcb|/kh -> 0.
+DOUBLE PRECISION, PARAMETER :: DH_MIN = 0.1d0, DCB_MAX = 0.1d0, CB_SCALE = 1.0d-3
+INTEGER, PARAMETER :: MAX_SUBSTEPS = 64
 DOUBLE PRECISION :: dPK2filficdcb(ndi,ndi), pfdlambdadcfil(ndi,ndi), cfilficchem(ndi,ndi,ndi,ndi)
-! CHECK IF WE CAN DISCARD DUMMY_DFDCB
-
 
 ! INTEGRATION SCHEME
   integer, parameter :: nfacedir = 2
@@ -3134,21 +3144,37 @@ off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
   lambda0  = affprops(2)                                                                                                                                                           
   cactin   = affprops(3)                                                                                              
   Mactin   = affprops(4)                                                                                            
-  rhoactin = affprops(5)  
-  
-    ! aux=n*(det**(-one))
-    cfic=zero
-    sfic=zero
-  
-    ! rho=one
-    r0=r0f+r0c
-  
-    aa = zero
+  rhoactin = affprops(5)
+  !     CHEMICAL
+  cbmax    = chemprops(1)
+  cfmax    = chemprops(2)
+  CHI      = chemprops(3)
+  D        = chemprops(4)
+  MU0      = chemprops(5)
+  VMOL     = chemprops(6)
+  Koff0    = chemprops(7)
+  Keq      = chemprops(8)
+  Kcatch0  = chemprops(9)
+  dxc      = chemprops(10)
 
-    cbtau_tot = zero
-    thetab_i = zero
-    dPK2ficdcb=zero
-    dcbdc=zero
+  ! aux=n*(det**(-one))
+  cfic=zero
+  sfic=zero
+
+  ! rho=one
+  r0=r0f+r0c
+
+  aa = zero
+
+  cbtau_tot = zero
+  thetab_i = zero
+  dPK2ficdcb=zero
+  dcbdc=zero
+  ! Kinetics diagnostics over all directions (unresolved directions, max sub-steps, min dH/dcb)
+  nhard = 0
+  nacc = 0
+  nsub_max = 1
+  dHdcb_min = huge(one)
 !----------------------------------------------------------------------
   
   ! preferred direction measures (macroscale measures)
@@ -3209,14 +3235,13 @@ do face = 1, face_num/2
         CALL density(rho,ang,bdisp,efi)
         
         fi = zero
-        dummy_DfDcb = zero
         DfDcb = zero
         DdwDcb = zero
         dPK2filficdcb=zero
           ! ================= KINETICS (IMPLICIT NEWTON-RAPHSON) =================
         cbt_i = MAX(cb(node_num), 1.0d-10)
         cbtau_i = cbt_i  ! Initial guess is the old state
-        kon = Koff0 * Keq * exp(CHI * (1.0d0 - 2.0d0 * thetaf))
+        kon = (Koff0 + Kcatch0) * Keq * exp(CHI * (1.0d0 - 2.0d0 * thetaf))
 
         args(1)  = lambdai
         args(2)  = lambda0
@@ -3235,8 +3260,58 @@ do face = 1, face_num/2
         args(15) = thetaf
         args(16) = cbt_i
         args(17) = det
+        args(18) = Kcatch0
+        args(19) = dxc / (kb * theta)
 
-        CALL solveKinetics(cbtau_i, args, nargs, cbt_i)
+        ! Backward-Euler kinetics with automatic sub-stepping (lambdai and thetaf held at their
+        ! end-of-increment values, so every sub-step is Backward Euler; n_sub = 1 is the plain step).
+        ! Consistent tangent: sub-step k solves H_k(cb_k, cb_k-1, lambda) = 0, hence the sensitivity
+        !   sens = dcb/dlambda_i:  sens_k = (sens_k-1 - dH_k/dlambda) / (dH_k/dcb),  sens_0 = 0
+        ! (for n_sub = 1: sens = -dHdlambda/dHdcb).
+        n_sub = 1
+        DO
+          cb_sub = cbt_i
+          sens_i = zero
+          ok_i = .TRUE.
+          hard_i = .FALSE.
+          args(12) = dtime / DBLE(n_sub)
+          DO isub = 1, n_sub
+            args(16) = cb_sub
+            CALL solveKinetics(cb_new, args, nargs, cb_sub, conv_i, atb_i, dHdcb_i, dHdl_i)
+            IF (dHdcb_i /= zero) sens_i = (sens_i - dHdl_i) / dHdcb_i
+            ! Hard failures (no converged root, or uniqueness being lost)
+            IF ((.NOT. conv_i) .OR. (dHdcb_i < DH_MIN)) THEN
+              ok_i = .FALSE.
+              hard_i = .TRUE.
+            END IF
+            ! Error factor g(kh) = min(kh/2, 1/kh) at the end (root) and at the start of the
+            ! sub-step; the larger one is used (strongly nonlinear kinetics, e.g. fast transients)
+            kh_i = ABS(dHdcb_i - one)
+            gerr_i = MIN(half * kh_i, one / MAX(kh_i, 1.0d-300))
+            cbx_i = cb_sub
+            CALL kineticsFunc(cbx_i, Hx_i, dHdcbx_i, dHdlx_i, args, nargs)
+            kh_i = ABS(dHdcbx_i - one)
+            gerr_i = MAX(gerr_i, MIN(half * kh_i, one / MAX(kh_i, 1.0d-300)))
+            IF (ABS(cb_new - cb_sub) * gerr_i &
+                > DCB_MAX * MAX(MIN(cb_sub, cb_new), CB_SCALE * cbmax)) ok_i = .FALSE.
+            dHdcb_min = MIN(dHdcb_min, dHdcb_i)
+            cb_sub = cb_new
+            ! Abandon this attempt and refine (the last attempt is always completed)
+            IF ((.NOT. ok_i) .AND. (n_sub < MAX_SUBSTEPS)) EXIT
+          END DO
+          IF (ok_i .OR. (n_sub >= MAX_SUBSTEPS)) EXIT
+          n_sub = 2 * n_sub
+        END DO
+        ! Not resolved with MAX_SUBSTEPS: hard failure (-> PNEWDT cut-back) or accuracy only (warning)
+        IF (.NOT. ok_i) THEN
+          IF (hard_i) THEN
+            nhard = nhard + 1
+          ELSE
+            nacc = nacc + 1
+          END IF
+        END IF
+        nsub_max = MAX(nsub_max, n_sub)
+        cbtau_i = cb_sub
 
         cb(node_num) = cbtau_i
         thetab_i = cbtau_i / cbmax
@@ -3257,13 +3332,8 @@ do face = 1, face_num/2
 
         fi = zero
         IF(lambdai .GE. 1.0d0) THEN 
-          CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),dummy_DfDcb)
+          CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),DfDcb)
           !CALL fil_inext(fi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,beta,b0,etac,cb(node_num),DfDcb)
-          koff_i = Koff0 * exp(dx / (kb * theta) * fi)
-          IF(lambdaif .GE. 1.18d0) THEN 
-            write(*,*) 'fi =', fi
-            write(*,*) 'lambdaif =', lambdaif
-          END IF
           CALL sigfilfic(sfilfic,rho,lambdai,dwi,mfi,ai,ndi)
           CALL csfilfic(cfilfic,rho,lambdai,dwi,ddwi,mfi,ai,ndi)
           CALL csfilficchem(cfilficchem,rho,lambdai,mfi,ai,ndi)
@@ -3277,11 +3347,10 @@ do face = 1, face_num/2
           !!! Leverage sigfilfic to get dSfic/Dcb for current direction
           call sigfilfic(dPK2filficdcb,rho,lambdai,auxdwdcb,mf0i,ai,ndi)
           !! Term 3.2
-          dHdlambda = dtime * thetab_i * cbmax / (one - thetab_i) * koff_i * dx / (kb * theta) * ddwi / (lambda0 * r0)
           call pfdlambdadc(pfdlambdadcfil,rho,lambdai,unit2,mfi,ai,det,ndi)
-          dRiDcb = - koff_i * (cbtau_i / (1 - thetab_i) * dx / (kb * theta) * DfDcb + 1 / (1 - thetab_i)**2) 
-          dHdcb = one - dRiDcb * dtime
-          auxchem = (dHdcb)**(-one) * dHdlambda
+          ! auxchem = -dcb/dlambda_i from the sub-step sensitivity recursion
+          ! (n_sub = 1: auxchem = dHdlambda/dHdcb, as before)
+          auxchem = - sens_i
           ! auxchem = aux * auxdwdcb * (dHdcb)**(-one) * dHdlambda
           ! write(*,*) 'auxchem =', auxchem
           ! write(*,*) 'auxdwdcb =', auxdwdcb
@@ -3316,6 +3385,21 @@ do face = 1, face_num/2
     end do
   end do
   end do
+
+  ! Directions whose kinetics were not resolved with MAX_SUBSTEPS sub-steps:
+  !  - hard failure (no converged root or dH/dcb < DH_MIN): ask Abaqus to repeat the increment
+  !    with a smaller time increment (dH/dcb = 1 + dt*(...) recovers as dt decreases);
+  !  - accuracy check only: the result is kept (the per-sub-step error estimate is conservative),
+  !    and a warning is written. PNEWDT < 1 would discard an otherwise converged increment.
+  IF (nhard > 0) THEN
+    pnewdt = MIN(pnewdt, half)
+    write(*,*) 'WARNING: local kinetics failed (not converged or dH/dcb <', DH_MIN, ') with', MAX_SUBSTEPS, &
+               'sub-steps in', nhard, 'directions. noel =', noel, ' min dH/dcb =', dHdcb_min, ' -> PNEWDT =', pnewdt
+  END IF
+  IF (nacc > 0) THEN
+    write(*,*) 'WARNING: kinetics accuracy check not met with', MAX_SUBSTEPS, 'sub-steps in', nacc, &
+               'directions (result kept). noel =', noel
+  END IF
 !
 !  Discard allocated memory.
 !
@@ -4001,6 +4085,7 @@ DOUBLE PRECISION, INTENT(IN OUT)         :: cb
 DOUBLE PRECISION :: a,b,machep,t
 DOUBLE PRECISION :: aux, pi,alpha
 DOUBLE PRECISION :: aux0,aux1,aux2,aux3,aux4,aux5,aux6,y
+DOUBLE PRECISION :: tt,dGdf,dGdcb,dlfdcb
 ! DOUBLE PRECISION :: aux00,aux01,aux02,aux03,aux04,aux05
 
 a=zero
@@ -4040,32 +4125,15 @@ dw=lambda0*(r0)*f
 ! dw = pi*pi*r0*b0/(ll*ll)*(((ll/r0-1)/(ll/r0-lambda))**TWO - one)
 ddw=aux4*((one+y*aux5*aux6)**(-one))
 
-! Force derivative wrt cb
-! aratio=ll/r0f
-! r0c = r0 - r0f
-! aux00 = two / 5.d0 * cb ** (- two / 5.d0)
-! aux01 = 2 * f
-! aux02 = etac * r0c / r0f * (lambdai - 1)
-! aux03 = b0 * pi * pi / (r0f * aratio)**2
-! aux04 = (a - lambdaf) * beta
-! aux05 = (f + aux03) / aux04
-! DfDcb = aux00 * (aux01 + aux02 * aux05)
-
-DfDcb = (2*(-(B0*etac*ll*lambda0f*(-1 + lambdai)*mu0**2*(r0 - r0f)) - B0*etac*ll*(-1 + &
-lambda0)*lambdaf*mu0**2*(r0 - r0f) + B0*ll*mu0*(lambda0f*lambdaf*mu0 - (((f + &
-mu0)/mu0)**beta*(2*f + mu0)*Pi**(2*beta))/((f*ll**2*(f + &
-mu0))/(B0*mu0) + Pi**2)**beta)*r0f - a*r0f*(2*beta*f*ll**2*(f + &
-mu0)*((f + mu0)/mu0)**beta*(2*f + mu0)*Pi**(2*beta)*((f*ll**2*(f + &
-mu0))/(B0*mu0) + Pi**2)**(-1 - beta)*(ll - r0f) + B0*lambda0f*lambdaf*mu0**2*r0f &
-- (B0*mu0*((f + mu0)/mu0)**beta*(2*f + &
-mu0)*Pi**(2*beta)*r0f)/((f*ll**2*(f + mu0))/(B0*mu0) + &
-Pi**2)**beta)))/(5.*B0*cb*ll**2*(-mu0 - (beta*ll*((f + &
-mu0)/mu0)**beta*(2*f + mu0)**2*Pi**(2*beta)*((f*ll**2*(f + &
-mu0))/(B0*mu0) + Pi**2)**(-1 - beta)*(ll - r0f))/B0 + (2*mu0*((f + &
-mu0)/mu0)**beta*Pi**(2*beta)*(ll - r0f))/(ll*((f*ll**2*(f + &
-mu0))/(B0*mu0) + Pi**2)**beta) + (beta*((f + mu0)/mu0)**(-1 + &
-beta)*(2*f + mu0)*Pi**(2*beta)*(ll - r0f))/(ll*((f*ll**2*(f + &
-mu0))/(B0*mu0) + Pi**2)**beta)))
+! Force derivative wrt cb: implicit function theorem on G(f, cb) = 0 (Eq. 80), DfDcb = -dG/dcb / dG/df
+!   G = lambdaf*lambda0f*r0f/ll - (1 + f/mu0 - aux6*tt),   tt = aux2*aux5 = (1+2f/mu0)(1+f/mu0)^beta (pi^2/D)^beta
+!   D = pi^2*aux1,  L = a*r0f  =>  r0f/ll and aux6 do not depend on cb,  dL/dcb = -2/5 L/cb
+tt = aux2*aux5
+dGdf = -one/mu0 + aux6*tt*(beta/(mu0 + f) + two/(mu0 + two*f) - beta*aux2*ll*ll/(pi*pi*b0*aux1))
+dlfdcb = two/5.d0*etac*(r0 - r0f)/r0f/cb
+dGdcb = r0f/ll*dlfdcb*(lambda0f*(lambdai - one) + lambdaf*(lambda0 - one)) &
+      + four/5.d0*aux6*beta*tt*(aux1 - one)/(aux1*cb)
+DfDcb = -dGdcb/dGdf
 
 RETURN
 END SUBROUTINE fil
@@ -4608,20 +4676,23 @@ diso(5)=zero
 
 RETURN
 END SUBROUTINE isomat
-subroutine kineticsFunc(cbtau, f, df, args, nargs)
-    ! This subroutine serves as the function we would like to solve for                                         
-    ! the bound crosslinker volume fraction (cbtau = cf/cfmax)                                                  
-    ! by finding cbtau such that f = 0                                                                         
-    use global                                                                                                        
-    implicit none                                                                                               
-                                                                                                                
-    integer, intent(in)              :: nargs                                                                   
-    DOUBLE PRECISION, intent(in out) :: cbtau                                                                   
-    DOUBLE PRECISION, intent(out)    :: f, df                                                                    
+subroutine kineticsFunc(cbtau, f, df, dHdl, args, nargs)
+    ! This subroutine serves as the function we would like to solve for
+    ! the bound crosslinker volume fraction (cbtau = cf/cfmax)
+    ! by finding cbtau such that f = 0
+    ! Outputs: f = H (Backward-Euler residual), df = dH/dcb, dHdl = dH/dlambda_i (at fixed cb),
+    ! the latter used for the consistent tangent (sub-step sensitivity dcb/dlambda_i)
+    use global
+    implicit none
+
+    integer, intent(in)              :: nargs
+    DOUBLE PRECISION, intent(in out) :: cbtau
+    DOUBLE PRECISION, intent(out)    :: f, df, dHdl
     DOUBLE PRECISION, intent(in)     :: args(nargs)                                                              
                                                                                                                 
     DOUBLE PRECISION                 :: r0f, etac, r0, r0c, fi, ffi, dwi, ddwi, l, mu0str, beta, b0 
     DOUBLE PRECISION                 :: cfmax, cbmax, dx_kT, dt, kon, koff0, koff, thetab, Ri
+    DOUBLE PRECISION                 :: kcatch0, dxc_kT, dkoffdf
     DOUBLE PRECISION                 :: lambdai, lambdaif, lambda0, lambda0f, lambdaic, thetaf, cbt, det                                                          
     DOUBLE PRECISION                 :: DfDcb,DRiDcb, aratio
     
@@ -4645,6 +4716,8 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
     thetaf  = args(15)
     cbt     = args(16)
     det     = args(17)
+    kcatch0 = args(18)
+    dxc_kT  = args(19)
 
     r0f = 1.6 * (cbtau*1.d3)**(- two / 5.d0)
     l = aratio * r0f
@@ -4653,6 +4726,7 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
     IF (lambdai.LE.one) then
         fi = 0.0
         DfDcb = 0.0
+        ddwi = zero
     ELSE
         IF((etac > zero).AND.(etac .LE. one))THEN
             lambdaif=etac*(r0/r0f)*(lambdai-one)+one
@@ -4670,15 +4744,16 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
             ! CALL filpce(lambdai, fi, dwi, ddwi)
     END IF
 
-    ! Unbinding rate
-    koff = koff0 * exp(dx_kT * fi)
+    ! Unbinding rate (catch-slip) and its force derivative
+    CALL koffcs(koff, dkoffdf, fi, koff0, kcatch0, dx_kT, dxc_kT)
     thetab = cbtau / cbmax
 
     ! Reaction rate and residual                                                                         
     Ri = kon * cfmax * thetaf / (1 - thetaf) - koff * cbmax * thetab / (1 - thetab)
     f = cbtau - cbt - Ri * dt
-    ! Check if any component of the residual is NaN or Inf
-    if (abs(f) > 1.0d050) then
+    ! Check if the residual is NaN or Inf. Large finite values are legitimate with the
+    ! extensible filament and the catch-slip law (koff is capped by koffcs, not bounded by locking)
+    if (.not. (abs(f) < huge(f))) then
         write(*,*) 'Error: kinetics residual is NaN or Inf in kineticsFunc'
         write(*,*) 'cbtau =', cbtau
         write(*,*) 'cbt =', cbt
@@ -4693,11 +4768,55 @@ subroutine kineticsFunc(cbtau, f, df, args, nargs)
     end if
                                                                                                                 
     ! Residual derivative
-    dRiDcb = - koff * (cbtau / (1 - thetab) * dx_kT * DfDcb + 1 / (1 - thetab)**2) 
+    dRiDcb = - (dkoffdf * cbtau / (1 - thetab) * DfDcb + koff / (1 - thetab)**2)
     df = one - dRiDcb * dt
-    
+
+    ! Residual derivative wrt lambda_i at fixed cb: df/dlambda_i = ddwi / (lambda0 * r0), since dwi = lambda0 * r0 * fi
+    dHdl = dt * cbmax * thetab / (1 - thetab) * dkoffdf * ddwi / (lambda0 * r0)
+
 end subroutine kineticsFunc
 
+SUBROUTINE koffcs(koff, dkoffdf, fi, koff0, kcatch0, dxs_kT, dxc_kT)
+
+!>    CATCH-SLIP (TWO-PATHWAY BELL-EVANS) UNBINDING RATE AND ITS FORCE DERIVATIVE
+!>      koff    = kcatch0*exp(-dxc_kT*fi) + koff0*exp(dxs_kT*fi)
+!>      dkoffdf = -dxc_kT*kcatch0*exp(-dxc_kT*fi) + dxs_kT*koff0*exp(dxs_kT*fi)
+!>    koff0 / dxs_kT: slip pathway, kcatch0 / dxc_kT: catch pathway (reactive distance / kB*theta).
+!>    kcatch0 = 0 recovers the slip-only Bell law.
+!>    Exponents are clipped to [-500, 500] to avoid overflow (-ffpe-trap=overflow); the derivative
+!>    of a clipped pathway is set to zero (as material.py::_koff). 500 (koff <= ~1e216 1/s, i.e.
+!>    instantaneous unbinding) instead of 700: koff is later multiplied by thetab/(1-thetab) and
+!>    1/(1-thetab)**2 (up to ~1e15 near cbmax) and by dt in kineticsFunc, which must not overflow.
+use global
+IMPLICIT NONE
+
+DOUBLE PRECISION, INTENT(OUT)            :: koff
+DOUBLE PRECISION, INTENT(OUT)            :: dkoffdf
+DOUBLE PRECISION, INTENT(IN)             :: fi
+DOUBLE PRECISION, INTENT(IN)             :: koff0
+DOUBLE PRECISION, INTENT(IN)             :: kcatch0
+DOUBLE PRECISION, INTENT(IN)             :: dxs_kT
+DOUBLE PRECISION, INTENT(IN)             :: dxc_kT
+
+DOUBLE PRECISION, PARAMETER :: argmax = 500.d0
+DOUBLE PRECISION :: arg_s, arg_c, k_s, k_c, dk_s, dk_c
+
+arg_s = dxs_kT * fi
+arg_c = -dxc_kT * fi
+
+k_s = koff0 * EXP(MIN(MAX(arg_s, -argmax), argmax))
+k_c = kcatch0 * EXP(MIN(MAX(arg_c, -argmax), argmax))
+
+dk_s = zero
+dk_c = zero
+IF (ABS(arg_s) < argmax) dk_s = dxs_kT * k_s
+IF (ABS(arg_c) < argmax) dk_c = -dxc_kT * k_c
+
+koff = k_s + k_c
+dkoffdf = dk_s + dk_c
+
+RETURN
+END SUBROUTINE koffcs
 SUBROUTINE linear_interpolate(xval, y1val, y2val, y3val)
     IMPLICIT NONE
 
@@ -11271,9 +11390,23 @@ ru0=ru
 RETURN
 
 END SUBROUTINE sliding
-subroutine solveKinetics(root, args, nargs, rootOld)
+subroutine solveKinetics(root, args, nargs, rootOld, converged, atbound, dHdcb, dHdl)
 
-    ! Numerical Recipes RTSAFE.
+    ! Implicit (Backward-Euler) update of the bound concentration of one direction:
+    ! root of H(cb) = cb - cbt - dt*R(cb) (kineticsFunc), same algorithm as material.py.
+    !
+    ! Catch bonds can make H(cb) non-monotonic (dH/dcb -> 0 or < 0), with several roots.
+    ! The solution must continue the previous state: starting at rootOld, H is marched in
+    ! the direction of the reaction (upwards if H(rootOld) < 0) with growing multiplicative
+    ! steps up to the FIRST sign change, and the root is then found in that bracket with a
+    ! safeguarded Newton (Numerical Recipes RTSAFE). No intermediate root (other branch)
+    ! can be skipped, up to the resolution of the marching steps.
+    !
+    ! Outputs: root, converged (.false. if H is NaN/Inf, root = rootOld, or RTSAFE did not
+    ! converge; if H keeps its sign up to a bound, the root lies beyond it and the bound is
+    ! returned as converged, with atbound = .true.), dHdcb and dHdl (dH/dcb and dH/dlambda_i)
+    ! at root, used for the sub-stepping checks and the consistent tangent.
+    ! No program stop: the caller decides (sub-stepping / PNEWDT cut-back).
 
     implicit none
 
@@ -11282,131 +11415,166 @@ subroutine solveKinetics(root, args, nargs, rootOld)
     real(8), intent(in)     :: args(nargs)
     real(8), intent(in)     :: rootOld
     real(8), intent(out)    :: root
+    logical, intent(out)    :: converged
+    logical, intent(out)    :: atbound
+    real(8), intent(out)    :: dHdcb, dHdl
 
     ! Local variables
-    integer :: j
-    real(8) :: f, df, fl, fh, xl, xh, x1, x2, swap, dxold
-    real(8) :: dx, temp, rootMax, rootMin
-    real(8) :: cbmax
+    integer :: j, imarch
+    logical :: upwards, newton_ok
+    real(8) :: rootMax, rootMin, x0, xend, a, b, s
+    real(8) :: Ha, dHa, Hb, dHb, dum
+    real(8) :: xl, xh, x, dx, dxold, Hx, dHx, xnew
+    real(8) :: last_x, last_H, last_dH, last_dHdl
 
     ! Parameter declarations
-    integer, parameter :: maxit = 50
-    real(8), parameter :: xacc  = 1.0d-12
-    real(8), parameter :: zero  = 0.0d0
+    integer, parameter :: maxit = 50       ! RTSAFE iterations
+    integer, parameter :: maxmarch = 200   ! marching steps (bound to bound needs ~20)
+    real(8), parameter :: xacc  = 1.0d-12  ! tolerance on |H| and on the root step
+    real(8), parameter :: s0    = 0.05d0   ! first relative marching step
+    real(8), parameter :: sgrow = 1.5d0    ! growth factor of the marching step
 
-    cbmax = args(9)
+    ! Safe bounds for the root (as material.py)
+    rootMin = 1.0d-10
+    rootMax = args(9) - 1.0d-10            ! cbmax - 1e-10
 
-    ! Set the safe bounds for the root
-    rootMax = cbmax - 1.0d-10
-    rootMin = 1.0d-8
+    last_x = -1.0d0
+    converged = .false.
+    atbound = .false.
 
-    ! write(*,*) 'solveKinetics: rootOld =', rootOld
+    x0 = min(max(rootOld, rootMin), rootMax)
+    root = x0
+    call evalH(x0, Ha, dHa)
 
-    x1 = rootMin
-    x2 = rootMax
-    call kineticsFunc(x1, fl, df, args, nargs)
-    call kineticsFunc(x2, fh, df, args, nargs)
-
-    ! Check if the root is safely bracketed
-    if (fl * fh >= zero) then
-        root = rootOld
-        write(*,*) 'FYI, root not bracketed on cb'
-        write(*,*) 'fl=', fl
-        write(*,*) 'fh=', fh
-        write(*,*) 'rootOld=', rootOld
-        write(*,*) 'lambdai =', args(1)
-        write(*,*) 'lambda0=', args(2)
-        write(*,*) 'aratio=', args(3)
-        write(*,*) 'etac=', args(4)
-        write(*,*) 'mu0str=', args(5)
-        write(*,*) 'beta=', args(6)
-        write(*,*) 'b0=', args(7)
-        write(*,*) 'r0c=', args(8)
-        write(*,*) 'cbmax=', args(9)
-        write(*,*) 'cfmax=', args(10)
-        write(*,*) 'dx/kb/theta=', args(11)
-        write(*,*) 'dtime=', args(12)
-        write(*,*) 'kon=', args(13)
-        write(*,*) 'Koff0=', args(14)
-        write(*,*) 'thetaf=', args(15)
-        write(*,*) 'cbt_i=', args(16)
-        call exit
-        return
+    if (abs(Ha) < xacc) then
+        converged = .true.
+    else if (abs(Ha) < huge(Ha)) then
+        ! March from rootOld in the direction of the reaction up to the first sign change of H
+        upwards = (Ha < 0.0d0)
+        if (upwards) then
+            xend = rootMax
+        else
+            xend = rootMin
+        end if
+        a = x0
+        s = s0
+        do imarch = 1, maxmarch
+            if (upwards) then
+                b = min(a * (1.0d0 + s), xend)
+            else
+                b = max(a / (1.0d0 + s), xend)
+            end if
+            call evalH(b, Hb, dHb)
+            if (.not. (abs(Hb) <= huge(Hb))) exit          ! NaN/Inf: give up (not converged)
+            ! Sign change (no product Ha*Hb: both can be huge and the product would overflow)
+            if ((Ha <= 0.0d0 .and. Hb >= 0.0d0) .or. (Ha >= 0.0d0 .and. Hb <= 0.0d0)) then
+                call rtsafe(min(a, b), max(a, b), a, Ha, dHa, merge(Ha, Hb, a < b))
+                exit
+            end if
+            if (b == xend) then
+                ! No sign change up to the bound: the root lies beyond it, between the bound and
+                ! 0 (H(0) = -cbt - dt*Ron < 0) or cbmax (H -> +inf). This happens e.g. at very
+                ! large forces (complete unbinding, root ~ cbt/(dt*koff) << rootMin). The bound
+                ! is the solution to within 1e-10 (the bound distance): accept it as converged.
+                root = xend
+                converged = .true.
+                atbound = .true.
+                exit
+            end if
+            a = b
+            Ha = Hb
+            dHa = dHb
+            s = sgrow * s
+        end do
     end if
 
-    ! Orient the search so that f(xl) < 0
-    if (fl < 0.0d0) then
-        xl = x1
-        xh = x2
+    ! dH/dcb and dH/dlambda_i at the root (reuse the last evaluation when it is at the root)
+    if (last_x == root) then
+        dHdcb = last_dH
+        dHdl = last_dHdl
     else
-        xh = x1
-        xl = x2
-        swap = fl
-        fl = fh
-        fh = swap
+        call evalH(root, dum, dum)
+        dHdcb = last_dH
+        dHdl = last_dHdl
     end if
 
-    ! Initialize the guess for the root, the "step size before last", and the last step
-    root = rootOld
-    if (rootOld < rootMin) root = rootMin ! rootOld = rootMin
-    if (rootOld > rootMax) root = rootMax ! rootOld = rootMax
-    
-    dxold = abs(x2 - x1)
-    dx    = dxold
-    
-    call kineticsFunc(root, f, df, args, nargs)
-
-    ! Loop over allowed iterations (Replaced old DO 10 loop)
-    do j = 1, maxit
-        
-        ! Bisect if Newton is out of range, or not decreasing fast enough.
-        if ( (((root - xh) * df - f) * ((root - xl) * df - f) >= 0.0d0) .or. &
-             (abs(2.0d0 * f) > abs(dxold * df)) ) then
-
-            dxold = dx
-            dx    = 0.5d0 * (xh - xl)
-            root  = xl + dx
-            
-            ! Change in root is negligible
-            if (xl == root) return
-
-        else
-            ! Newton step is acceptable. Take it.
-            dxold = dx
-            dx    = f / df
-            temp  = root
-            root  = root - dx
-            
-            ! Change in root is negligible
-            if (temp == root) return
-
-        end if
-
-        ! Convergence criterion
-        if (abs(dx) < xacc) return
-
-        ! The one new function evaluation per iteration
-        call kineticsFunc(root, f, df, args, nargs)
-
-        ! Maintain the bracket on the root 
-        if (f < 0.0d0) then
-            xl = root
-            fl = f
-        else
-            xh = root
-            fh = f
-        end if
-
-    end do
-
-    ! If loop finishes without returning, maximum iterations were exceeded
-    ! write(*, '(/1X,A)') 'solveKinetics EXCEEDING MAXIMUM ITERATIONS'
-    ! write(*, '(/1X,A)') 'rootOld = ', rootOld
-    ! write(*, '(/1X,A)') 'root = ', root
-    ! write(*, '(/1X,A)') 'f = ', f
-    ! write(*, '(/1X,A)') 'df = ', df
-    
     return
+
+contains
+
+    subroutine evalH(xin, H, dH)
+        ! kineticsFunc wrapper that keeps the last evaluation (x, H, dH/dcb, dH/dlambda_i)
+        real(8), intent(in)  :: xin
+        real(8), intent(out) :: H, dH
+        real(8) :: xloc
+        xloc = xin
+        call kineticsFunc(xloc, H, dH, last_dHdl, args, nargs)
+        last_x = xin
+        last_H = H
+        last_dH = dH
+    end subroutine evalH
+
+    subroutine rtsafe(x1, x2, xstart, Hstart, dHstart, H1)
+        ! Safeguarded Newton (Numerical Recipes RTSAFE) on [x1, x2], which brackets a sign
+        ! change of H. Starts at xstart, a bracket end where H and dH/dcb are already known
+        ! (Hstart, dHstart); H1 = H(x1) is also known, so no evaluation is repeated.
+        ! Sets root and converged of the host.
+        real(8), intent(in) :: x1, x2, xstart, Hstart, dHstart, H1
+
+        if (H1 < 0.0d0) then
+            xl = x1
+            xh = x2
+        else
+            xl = x2
+            xh = x1
+        end if
+        x = xstart
+        Hx = Hstart
+        dHx = dHstart
+        dxold = abs(x2 - x1)
+        dx = dxold
+
+        do j = 1, maxit
+            if (abs(Hx) < xacc) then
+                root = x
+                converged = .true.
+                return
+            end if
+            ! Newton only if finite, inside the bracket and decreasing fast enough; else bisect.
+            ! Written in overflow-safe form: the Newton step Hx/dHx is only formed once it is known
+            ! to be shorter than the bracket; then xnew inside (xl, xh) is the RTSAFE range test.
+            newton_ok = (abs(Hx) < huge(Hx)) .and. (abs(dHx) < huge(dHx)) .and. (dHx /= 0.0d0)
+            if (newton_ok) newton_ok = (abs(Hx) < abs(dHx) * abs(xh - xl))
+            if (newton_ok) then
+                xnew = x - Hx / dHx
+                newton_ok = ((xnew - xl) * (xnew - xh) < 0.0d0) .and. (abs(Hx) <= 0.5d0 * abs(dxold * dHx))
+            end if
+            dxold = dx
+            if (newton_ok) then
+                dx = Hx / dHx
+                x = x - dx
+            else
+                dx = 0.5d0 * (xh - xl)
+                x = xl + dx
+            end if
+            call evalH(x, Hx, dHx)
+            if (abs(dx) < xacc) then
+                root = x
+                converged = (abs(Hx) < huge(Hx))
+                return
+            end if
+            if (Hx < 0.0d0) then
+                xl = x
+            else
+                xh = x
+            end if
+        end do
+
+        ! Maximum iterations exceeded
+        root = x
+        converged = .false.
+    end subroutine rtsafe
+
 end subroutine solveKinetics
 subroutine solveThetaf(root, args, nargs, rootOld)
 
@@ -13276,7 +13444,7 @@ DOUBLE PRECISION :: c10,c01,sseiso,diso(5),pkmatfic(ndi,ndi),  &
     smatfic(ndi,ndi),sisomatfic(ndi,ndi), cmisomatfic(ndi,ndi,ndi,ndi),  &
     cisomatfic(ndi,ndi,ndi,ndi)
 !     FILAMENTS NETWORK CONTRIBUTION
-DOUBLE PRECISION :: filprops(10), affprops(5) ! affprops(6)
+DOUBLE PRECISION :: filprops(10), affprops(5), chemprops(10) ! affprops(6)
 DOUBLE PRECISION :: cactin,cabp,ll,lambda0,mu0str,beta,nn,b0,bb
 DOUBLE PRECISION :: phinet,r0,r0c,r0f,a,p,etac,na,mactin,rhoactin
 DOUBLE PRECISION :: pknetfic(ndi,ndi),cmnetfic(ndi,ndi,ndi,ndi)
@@ -13285,9 +13453,9 @@ DOUBLE PRECISION :: pknetficaf(ndi,ndi),pknetficnaf(ndi,ndi)
 DOUBLE PRECISION :: snetficaf(ndi,ndi),snetficnaf(ndi,ndi)
 DOUBLE PRECISION :: cmnetficaf(ndi,ndi,ndi,ndi), cmnetficnaf(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: cnetficaf(ndi,ndi,ndi,ndi), cnetficnaf(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: efi, kb, dx, Lp, theta
-DOUBLE PRECISION :: R, Rfmax, Rbmax, Keq, Koff0, Kon0
-DOUBLE PRECISION :: cb(ndir), cb0, cbmax, thetab, thetaf0 !, cfmax
+DOUBLE PRECISION :: efi, kb, dx, dxc, Lp, theta
+DOUBLE PRECISION :: R, Rfmax, Rbmax, Keq, Koff0, Kon0, Kcatch0
+DOUBLE PRECISION :: cb(ndir), cb0, cbmax, thetab, thetaf0
 DOUBLE PRECISION :: cb_tot, cb_tot_new, cf
 DOUBLE PRECISION :: cb_upper, machep, tol
 DOUBLE PRECISION :: Jc, f, df, dHdcb
@@ -13415,6 +13583,8 @@ MU0    = PROPS(21)
 VMOL   = PROPS(22)
 Koff0  = PROPS(23)
 Keq    = PROPS(24)
+Kcatch0 = PROPS(25)
+dxc     = PROPS(26)
 
 !Other parameters (Check which of these will be actually needed in the UMAT and not only in the AFFCL subroutine)
 kb = 1.380649e-5      
@@ -13423,23 +13593,23 @@ rgas = 8.314462618
 Mactin = 42.0e-3       ! [MDa]
 rhoactin = 16.0        ! [MDa/microm]
 NA = 6.022e5           ! [1/amol]
-Kon0 = Koff0 * Keq
-
-filprops = (/a, r0c, etac, mu0str, beta, Lp, theta, dx, kb, NA/)
-affprops = (/bb, lambda0, cactin, Mactin, rhoactin/)
-
-
-
-!     CL CONCENTRATION
-!!! THIS NEEDS TO BE CHANGED AFTER DIFFUSION IS IMPLEMENTED IN UEL
-cabp = cactin*R  ! <-- Placeholder: Replace with true UEL cR later!
+Kon0 = (Koff0 + Kcatch0) * Keq
 ! Maximum allowable CL concentration
 cfmax = Rfmax * cactin
 cbmax = Rbmax * cactin
 
+filprops = (/a, r0c, etac, mu0str, beta, Lp, theta, dx, kb, NA/)
+affprops = (/bb, lambda0, cactin, Mactin, rhoactin/)
+chemprops = (/cbmax, cfmax, CHI, D, MU0, VMOL, Koff0, Keq, Kcatch0, dxc/)
+
+
+
+
 !        STATE VARIABLES AND CHEMICAL PARAMETERS
 ! IF ((kinc <= 1).AND.(kstep == 1)) THEN
 IF (STATEV(1) == 0.0d0) THEN
+!     CL CONCENTRATION
+  cabp = cactin*R 
 ! Initial bound and free CL concentrations
   cb_upper = MIN(cabp, cbmax)
   machep = 2.22d-16
@@ -13610,8 +13780,8 @@ CALL erfi(efi,bb)
 IF (phinet > zero) THEN
   ! write(*,*) 'Calling affclnetfic_discrete at t = ', time(1)
   CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,unit2,filprops,  &
-      affprops,efi,noel,det,prefdir,ndi,cb,dtime,cfmax,cbmax,chi,Keq,Koff0, &
-      thetaf_tau, cb_tot_new, dPK2ficdcb, dcbdc)
+      affprops,efi,noel,det,prefdir,ndi,cb,dtime,chemprops, &
+      thetaf_tau, cb_tot_new, dPK2ficdcb, dcbdc, pnewdt)
 END IF
 
 ! Macroscopic reaction source (homogenized binding rate)

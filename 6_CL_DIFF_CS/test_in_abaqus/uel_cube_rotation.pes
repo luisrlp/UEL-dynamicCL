@@ -22,7 +22,7 @@ Rigid body rotation test (objectivity): no imposed deformation, no imposed chemi
 ** ----------------------------------------------------------------
 ** Variables = nlSdv * n_GP
 ** DOF 11 is the chemical potential
-*User Element, type=U3,Nodes=8,Coordinates=3,Properties=24,Iproperties=2,Variables=848,Unsymm
+*User Element, type=U3,Nodes=8,Coordinates=3,Properties=26,Iproperties=2,Variables=848,Unsymm
 1,2,3,11
 ** MESH
 *Element, type=U3, elset=main_mesh
@@ -97,13 +97,13 @@ all_nodes, 1, 3
 **
 **
 *uel property, elset=main_mesh
-1000.0,0.0,0.0,1.0,1.2,0.014,0.666667,38600000000000.0,
+1000.0,0.0,0.0,1.0,1.2,0.014,0.666667,38600.0,
 **
 0.5,16.0,298.0,0.005,1e-06,1.0,0.0095,0.1,
 **
 0.25,0.25,0.1,0.01,0.0,0.15,0.05,0.25,
-** nlSdv ngSdv
-106, 106
+**               nlSdv ngSdv
+0.0,0.005, 106, 106
 
 ** ----------------------------------------------------------------
 **

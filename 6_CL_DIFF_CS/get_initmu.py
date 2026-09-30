@@ -9,7 +9,7 @@ PHINET = 1.0
 a = 1.2
 R0C = 0.014
 ETAC = 0.666667
-MU0STRETCH = 38600000000000.0
+MU0STRETCH = 38600.0
 BETA = 0.5
 LP = 16.0
 THETA = 25.0 + 273.0
@@ -21,14 +21,12 @@ R = 0.1
 RFMAX = 0.25
 RBMAX = 0.25
 CHI = 0.1
-D = 1.0
+D = 0.01
 MU0 = 0.0
 VMOL = 0.15
-KOFF0 = 0.05
+KOFF0 = 0.03
 KEQ = 0.25
-# Catch pathway (props 25-26). Not used here: KEQ is defined with the total unloaded
-# off-rate (KOFF0 + KCATCH0), so the initial equilibrium and INITMU depend only on KEQ.
-KCATCH0 = 0.0
+KCATCH0 = 0.02
 DXC = 0.005
 
 

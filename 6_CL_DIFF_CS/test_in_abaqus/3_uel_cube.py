@@ -7,7 +7,7 @@ import math
 input_file = "base_mesh.inp"
 
 # Deformation Setup
-deformation_type = "biaxial"  # Options: "uniaxial", "biaxial", "shear"
+deformation_type = "shear"  # Options: "uniaxial", "biaxial", "shear"
 stretch_displacement = 0.3     # Displacement magnitude
 
 output_file = f"cube_{deformation_type}_uel_auto.inp"
@@ -25,7 +25,7 @@ t_relax = 10.0;     dtime_relax = 0.001;     max_inc_relax = 0.5
 
 # UEL Parameters
 uel_variables = 848
-dummy_variables = 108
+dummy_variables = 106
 num_properties = 26
 
 # ==============================================================================

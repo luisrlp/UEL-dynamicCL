@@ -3511,7 +3511,7 @@ all_nodes, <INITMU>
 all_nodes, 3, 3, 0.0
 bottom_nodes, 1, 2, 0.0
 top_nodes, 2, 2, 0.0
-top_nodes, 1, 1, 0.35
+top_nodes, 1, 1, 0.30
 *Output, field, time marks=no
 *Node Output, nset=all_nodes
 U, NT, RF
@@ -3522,7 +3522,7 @@ UVARM, LE
 *Coupled Temperature-displacement, creep=none, deltmx=10.0
 0.001, 10.0, 1e-15, 0.5
 *Boundary
-top_nodes, 1, 1, 0.35
+top_nodes, 1, 1, 0.30
 *Output, field, time marks=no
 *Node Output, nset=all_nodes
 U, NT, RF
