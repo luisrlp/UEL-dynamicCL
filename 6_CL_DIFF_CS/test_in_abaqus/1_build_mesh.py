@@ -8,15 +8,15 @@ import mesh
 # ==============================================================================
 # Geometry: box size_x x size_y x size_z (a cube when all equal); y is the "vertical" axis
 # used by 3_uel_cube.py (bottom face y = 0, top face y = size_y)
-size_x = 1.0
+size_x = 20.0
 size_y = 1.0
 size_z = 1.0
 
 # Mesh: elements per direction (n_x, n_y, n_z); None -> from the global size mesh_size
 mesh_size = 1.0
-n_x = None
-n_y = None
-n_z = None
+n_x = 20
+n_y = 1
+n_z = 1
 
 # Grading along one axis: bias_axis ('x', 'y' or 'z'); ratio largest/smallest element
 # bias_ratio (1.0 = uniform); smallest elements at bias_end: 'max' (e.g. the bath face of the
@@ -25,7 +25,7 @@ bias_axis = 'x'
 bias_ratio = 1.0
 bias_end = 'max'
 
-job_name = 'base_mesh_1el'
+job_name = 'base_mesh_column'
 
 # ------------------------------------------------------------------------------
 # Presets (replace the values above):

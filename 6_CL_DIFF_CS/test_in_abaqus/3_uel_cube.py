@@ -55,30 +55,30 @@ bath_chemical_potential = "<INITMU>" # The potential of the surrounding bath
 # ==============================================================================
 # ------------------------------------------------------------------------------
 # STAGE 1 (single-element shear-hold): open system, bath on all nodes
-input_file = "base_mesh_1el.inp"     # 1_build_mesh.py: size_x = size_y = size_z = mesh_size = 1.0, job_name = 'base_mesh_1el'
-deformation_type = "shear";  stretch_displacement = "<GAMMA>"   # height 1 -> displacement = shear strain
-output_file = "stage1_shear_hold.inp"
-cube_size = 1.0;  top_face_y = 1.0
-t_indent = 0.5;   dtime_indent = 0.001;  max_inc_indent = 0.05
-t_hold = 200.0;   dtime_hold = 0.01;     max_inc_hold = 2.0
-t_withdraw = 0.0; t_relax = 0.0          # zero-length steps are skipped
-ramp_first_step = True
-top_boundary_condition = side_boundary_condition = bottom_boundary_condition = "open"
-# (GAMMA must be defined in properties.inp for a manual run; run_stage1.py adds it per case)
+# input_file = "base_mesh_1el.inp"     # 1_build_mesh.py: size_x = size_y = size_z = mesh_size = 1.0, job_name = 'base_mesh_1el'
+# deformation_type = "shear";  stretch_displacement = "<GAMMA>"   # height 1 -> displacement = shear strain
+# output_file = "stage1_shear_hold.inp"
+# cube_size = 1.0;  top_face_y = 1.0
+# t_indent = 0.5;   dtime_indent = 0.001;  max_inc_indent = 0.05
+# t_hold = 200.0;   dtime_hold = 0.01;     max_inc_hold = 2.0
+# t_withdraw = 0.0; t_relax = 0.0          # zero-length steps are skipped
+# ramp_first_step = True
+# top_boundary_condition = side_boundary_condition = bottom_boundary_condition = "open"
+# # (GAMMA must be defined in properties.inp for a manual run; run_stage1.py adds it per case)
 # ------------------------------------------------------------------------------
 # STAGE 2 (column along x, bath at x = size_x only): comment out the stage-1 preset and use
-# input_file = "base_mesh_column.inp"  # 1_build_mesh.py: size_x = 50.0, size_y = size_z = 1.0, n_x = 15,
-#                                      #   n_y = n_z = 1, bias_axis = 'x', bias_ratio = 3.0, bias_end = 'max',
-#                                      #   job_name = 'base_mesh_column'
-# deformation_type = "shear";  stretch_displacement = "<GAMMA>"   # shear u_x = GAMMA*y over the height 1
-# output_file = "stage2_column_bath.inp"
-# cube_size = 1.0;  top_face_y = 1.0;  size_x = 50.0;  size_z = 1.0
-# t_indent = 0.5;   dtime_indent = 0.001;  max_inc_indent = 0.05
-# t_hold = 1000.0;  dtime_hold = 0.01;     max_inc_hold = 10.0
-# t_withdraw = 0.0; t_relax = 0.0
-# ramp_first_step = True
-# top_boundary_condition = side_boundary_condition = bottom_boundary_condition = "closed"
-# xmax_boundary_condition = "open"     # bath on the end face x = size_x only
+input_file = "base_mesh_column.inp"  # 1_build_mesh.py: size_x = 50.0, size_y = size_z = 1.0, n_x = 15,
+                                     #   n_y = n_z = 1, bias_axis = 'x', bias_ratio = 3.0, bias_end = 'max',
+                                     #   job_name = 'base_mesh_column'
+deformation_type = "shear";  stretch_displacement = "<GAMMA>"   # shear u_x = GAMMA*y over the height 1
+output_file = "stage2_column_bath.inp"
+cube_size = 1.0;  top_face_y = 1.0;  size_x = 20.0;  size_z = 1.0
+t_indent = 0.5;   dtime_indent = 0.001;  max_inc_indent = 0.05
+t_hold = 1000.0;  dtime_hold = 0.01;     max_inc_hold = 10.0
+t_withdraw = 0.0; t_relax = 0.0
+ramp_first_step = True
+top_boundary_condition = side_boundary_condition = bottom_boundary_condition = "closed"
+xmax_boundary_condition = "open"     # bath on the end face x = size_x only
 # ------------------------------------------------------------------------------
 
 

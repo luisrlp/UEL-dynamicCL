@@ -1,0 +1,31 @@
+folder,label,overrides,INITMU,status
+A_core/slip_gamma0.1,"A: slip, GAMMA = 0.1",KOFF0=0.05; KCATCH0=0; GAMMA=0.1,-2002.850426,completed
+A_core/slip_gamma0.45,"A: slip, GAMMA = 0.45",KOFF0=0.05; KCATCH0=0; GAMMA=0.45,-2002.850426,completed
+A_core/slip_gamma0.5,"A: slip, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; GAMMA=0.5,-2002.850426,completed
+A_core/slip_gamma0.55,"A: slip, GAMMA = 0.55",KOFF0=0.05; KCATCH0=0; GAMMA=0.55,-2002.850426,completed
+A_core/catch_gamma0.1,"A: catch, GAMMA = 0.1",KOFF0=0.005; KCATCH0=0.045; GAMMA=0.1,-2002.850426,completed
+A_core/catch_gamma0.45,"A: catch, GAMMA = 0.45",KOFF0=0.005; KCATCH0=0.045; GAMMA=0.45,-2002.850426,completed
+A_core/catch_gamma0.5,"A: catch, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; GAMMA=0.5,-2002.850426,completed
+A_core/catch_gamma0.55,"A: catch, GAMMA = 0.55",KOFF0=0.005; KCATCH0=0.045; GAMMA=0.55,-2002.850426,completed
+B_D/slip_D1,"B: slip, D = 1 um^2/s, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; D=1; GAMMA=0.5,-2002.850426,completed
+B_D/slip_D3,"B: slip, D = 3 um^2/s, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; D=3; GAMMA=0.5,-2002.850426,completed
+B_D/slip_D10,"B: slip, D = 10 um^2/s, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; D=10; GAMMA=0.5,-2002.850426,completed
+B_D/slip_D30,"B: slip, D = 30 um^2/s, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; D=30; GAMMA=0.5,-2002.850426,completed
+B_D/catch_D1,"B: catch, D = 1 um^2/s, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; D=1; GAMMA=0.5,-2002.850426,completed
+B_D/catch_D3,"B: catch, D = 3 um^2/s, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; D=3; GAMMA=0.5,-2002.850426,completed
+B_D/catch_D10,"B: catch, D = 10 um^2/s, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; D=10; GAMMA=0.5,-2002.850426,completed
+B_D/catch_D30,"B: catch, D = 30 um^2/s, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; D=30; GAMMA=0.5,-2002.850426,completed
+C_KEQ/slip_keq0.0625,"C: slip, KEQ = 0.0625, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; KEQ=0.0625; GAMMA=0.5,-1310.370993,completed
+C_KEQ/slip_keq0.25,"C: slip, KEQ = 0.25, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; KEQ=0.25; GAMMA=0.5,-2002.850426,completed
+C_KEQ/slip_keq1,"C: slip, KEQ = 1, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; KEQ=1; GAMMA=0.5,-3359.965008,completed
+C_KEQ/slip_keq5,"C: slip, KEQ = 5, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; KEQ=5; GAMMA=0.5,-5852.251692,completed
+C_KEQ/catch_keq0.0625,"C: catch, KEQ = 0.0625, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; KEQ=0.0625; GAMMA=0.5,-1310.370993,completed
+C_KEQ/catch_keq0.25,"C: catch, KEQ = 0.25, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; KEQ=0.25; GAMMA=0.5,-2002.850426,completed
+C_KEQ/catch_keq1,"C: catch, KEQ = 1, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; KEQ=1; GAMMA=0.5,-3359.965008,completed
+C_KEQ/catch_keq5,"C: catch, KEQ = 5, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; KEQ=5; GAMMA=0.5,-5852.251692,completed
+D_RBMAX/slip_rbmax0.25,"D: slip, RBMAX = 0.25, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; RBMAX=0.25; GAMMA=0.5,-2002.850426,completed
+D_RBMAX/slip_rbmax0.5,"D: slip, RBMAX = 0.5, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; RBMAX=0.5; GAMMA=0.5,-2044.116498,completed
+D_RBMAX/slip_rbmax1,"D: slip, RBMAX = 1, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; RBMAX=1; GAMMA=0.5,-2065.526051,completed
+D_RBMAX/catch_rbmax0.25,"D: catch, RBMAX = 0.25, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; RBMAX=0.25; GAMMA=0.5,-2002.850426,completed
+D_RBMAX/catch_rbmax0.5,"D: catch, RBMAX = 0.5, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; RBMAX=0.5; GAMMA=0.5,-2044.116498,completed
+D_RBMAX/catch_rbmax1,"D: catch, RBMAX = 1, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; RBMAX=1; GAMMA=0.5,-2065.526051,completed
