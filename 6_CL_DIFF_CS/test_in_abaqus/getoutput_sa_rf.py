@@ -17,7 +17,8 @@
 #   {'t': total time, 'u2': indenter displacement U2, 'rf2': reaction force RF2,
 #    'folder': run folder, 'odb': odb path}
 # and all runs together to SA/rf_indenter_all.pkl as {run folder: dict above}.
-# Plots: SA/plots/RF_vs_indentation_<VAR>.pdf, one line per value of <VAR>.
+# Plots: SA/plots/RF_vs_indentation_<VAR>.pdf and SA/plots/RF_vs_time_<VAR>.pdf (dashed lines at
+# the step transitions), one line per value of <VAR>.
 # Note: RF2 is the raw reaction at the reference point (sign as in Abaqus), and the model is a
 # quarter of the sample (XSYMM and ZSYMM planes through the indenter axis): see FORCE_FACTOR.
 
@@ -118,9 +119,13 @@ def extract(odb_files):
 
         u2 = find_xy('U:U2')
         rf2 = find_xy('RF:RF2')
+        # Step names and end times (total time), to mark the step transitions in the plots
+        steps = list(odb.steps.values())
         output = {'t': np.array([pt[0] for pt in u2.data]),
                   'u2': np.array([pt[1] for pt in u2.data]),
                   'rf2': np.array([pt[1] for pt in rf2.data]),
+                  'step_names': [s.name for s in steps],
+                  'step_ends': [s.totalTime + s.timePeriod for s in steps],
                   'folder': folder,
                   'odb': odb_file}
 
@@ -142,12 +147,38 @@ def load_outputs():
     for path in sorted(glob.glob(os.path.join(sa_dir, '*', 'rf_indenter.pkl'))
                        + glob.glob(os.path.join(sa_dir, '*', '*', 'rf_indenter.pkl'))):
         with open(path, 'rb') as f:
-            outputs[os.path.relpath(os.path.dirname(path), sa_dir)] = pickle.load(f)
+            folder = os.path.relpath(os.path.dirname(path), sa_dir)
+            outputs[folder] = pickle.load(f)
+            outputs[folder]['folder'] = folder
     return outputs
 
 
+def steps_from_inp(inp_file):
+    """Step names and end times (total time) from the *Step blocks of an input file.
+
+    Fallback for rf_indenter.pkl files extracted before the step data was stored. The time
+    period is the 2nd value of the data line after the procedure keyword of each step."""
+    names, ends, total = [], [], 0.0
+    with open(inp_file) as f:
+        lines = [l.strip() for l in f if l.strip() and not l.strip().startswith('**')]
+    for i, line in enumerate(lines):
+        if line.lower().startswith('*step'):
+            name = next((p.split('=', 1)[1].strip() for p in line.split(',')
+                         if p.strip().lower().startswith('name')), f'Step-{len(names) + 1}')
+            # procedure keyword (e.g. *Coupled Temperature-displacement), then its data line
+            j = i + 1
+            while j < len(lines) and not lines[j].startswith('*'):
+                j += 1
+            period = float(lines[j + 1].split(',')[1])
+            total += period
+            names.append(name)
+            ends.append(total)
+    return names, ends
+
+
 def plot_sa(outputs):
-    """One PDF per studied parameter: reaction force vs indentation depth, one line per value."""
+    """One PDF per studied parameter and plot type (one line per value of the parameter):
+    reaction force vs indentation depth, and reaction force vs time with the step transitions."""
     try:
         import matplotlib
         matplotlib.use('Agg')
@@ -185,6 +216,34 @@ def plot_sa(outputs):
         fig.savefig(pdf_path)
         plt.close(fig)
         print(f"Plot saved: {pdf_path} ({len(runs)} lines)")
+
+        # Reaction force vs time, with a dashed line at each step transition
+        out0 = runs[0][1]
+        if 'step_ends' in out0:
+            step_names, step_ends = out0['step_names'], out0['step_ends']
+        else:
+            inp_file = os.path.join(sa_dir, out0['folder'], file.replace('.odb', '.inp'))
+            step_names, step_ends = steps_from_inp(inp_file)
+        fig, ax = plt.subplots(figsize=(6.0, 3.8))
+        for (value, out), color in zip(runs, colors):
+            ax.plot(out['t'], FORCE_FACTOR * out['rf2'], color=color, lw=1.5,
+                    label=f'{var} = {value:g}')
+        for t_end in step_ends[:-1]:
+            ax.axvline(t_end, color='grey', ls='--', lw=0.8)
+        step_starts = [0.0] + list(step_ends[:-1])
+        for name, t0, t1 in zip(step_names, step_starts, step_ends):
+            ax.text(0.5 * (t0 + t1), 1.01, name, transform=ax.get_xaxis_transform(),
+                    ha='center', va='bottom', fontsize=8, color='grey')
+        ax.set_xlabel('Time (s)')
+        ax.set_ylabel(FORCE_LABEL)
+        ax.set_title(f'Sensitivity to {var}', pad=16)
+        ax.grid(True, alpha=0.3)
+        ax.legend(frameon=False)
+        fig.tight_layout()
+        pdf_path = os.path.join(plot_dir, f'RF_vs_time_{var}.pdf')
+        fig.savefig(pdf_path)
+        plt.close(fig)
+        print(f"Plot saved: {pdf_path} ({len(runs)} lines, {len(step_ends)} steps)")
 
 
 ###########################     ODB FILES TO PROCESS     #########################
