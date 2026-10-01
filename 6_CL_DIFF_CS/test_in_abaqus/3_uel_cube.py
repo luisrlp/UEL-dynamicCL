@@ -28,13 +28,32 @@ uel_variables = 848
 dummy_variables = 106
 num_properties = 26
 
+# Output and loading options
+node_output_vars = "U, NT, RF, RFL"  # RFL: reaction flux of the chemical DOF (crosslinker exchange with the bath)
+ramp_first_step = False              # True: ramp the imposed displacement over the first step (explicit amplitude)
+
+# ------------------------------------------------------------------------------
+# STAGE 1 (single-element shear-hold) settings: replace the values above with
+input_file = "base_mesh_1el.inp"     # 1_build_mesh.py with cube_size = mesh_size = 1.0, job_name = 'base_mesh_1el'
+deformation_type = "shear";  stretch_displacement = "<GAMMA>"   # height 1 -> displacement = shear strain
+output_file = "stage1_shear_hold.inp"
+cube_size = 1.0;  top_face_y = 1.0
+t_indent = 0.5;   dtime_indent = 0.001;  max_inc_indent = 0.05
+t_hold = 200.0;   dtime_hold = 0.01;     max_inc_hold = 2.0
+t_withdraw = 0.0; t_relax = 0.0          # zero-length steps are skipped
+ramp_first_step = True
+top_boundary_condition = side_boundary_condition = bottom_boundary_condition = "open"
+# (GAMMA must be defined in properties.inp for a manual run; run_stage1.py adds it per case)
+# ------------------------------------------------------------------------------
+
 # ==============================================================================
 # CHEMICAL BOUNDARY CONFIGURATION
 # ==============================================================================
 # "closed" -> Impermeable boundary. Fluid/proteins cannot cross this surface.
 # "open"   -> Permeable boundary. Fluid/proteins can escape into the surrounding bath.
-top_boundary_condition = "closed"   # Top surface (outside the indenter)
-side_boundary_condition = "closed"  # Outer physical side walls
+top_boundary_condition = "closed"     # Top surface (outside the indenter)
+side_boundary_condition = "closed"    # Outer physical side walls
+bottom_boundary_condition = "closed"  # Bottom surface (y = 0)
 
 bath_chemical_potential = "<INITMU>" # The potential of the surrounding bath
 
@@ -145,7 +164,8 @@ open_chem_nodes = set()
 if top_boundary_condition == "open": open_chem_nodes.update(list(top_nodes.keys()))
 if side_boundary_condition == "open":
     open_chem_nodes.update(x0_nodes + z0_nodes + xmax_nodes + zmax_nodes)
-uel_block += write_nset("open_chem_nodes", list(open_chem_nodes))
+if bottom_boundary_condition == "open": open_chem_nodes.update(bottom_nodes)
+uel_block += write_nset("open_chem_nodes", sorted(open_chem_nodes))
 
 uel_block += f"""
 ** ==============================================================================
@@ -180,6 +200,12 @@ extra_element, 0.0
 all_nodes, <INITMU>
 """
 
+# Ramp for the imposed displacement of the first step (model data, before the steps)
+if ramp_first_step:
+    uel_block += f"""*Amplitude, name=ramp_load, time=STEP TIME
+0.0, 0.0, {t_indent}, 1.0
+"""
+
 # Dynamic Boundary Condition Generator
 def get_fixed_bcs():
     if deformation_type == "uniaxial":
@@ -202,21 +228,25 @@ def get_active_bcs(disp):
 
 def write_step(name, dtime, t, max_inc, disp, is_first=False):
     if t <= 0.0: return ""
-    
-    bc_str = "*Boundary\n"
+
+    bc_str = ""
+    # Fixed mechanical BCs and the chemical bath: constant, never ramped
+    # (they carry over to the following steps)
     if is_first:
-        bc_str += get_fixed_bcs()
-    bc_str += get_active_bcs(disp)
-    
-    step = f"""*Step, name={name}, nlgeom=YES, inc=10000
+        bc_str += "*Boundary\n" + get_fixed_bcs()
+        if len(open_chem_nodes) > 0:
+            bc_str += f"open_chem_nodes, 11, 11, {bath_chemical_potential}\n"
+    # Imposed displacement, in its own block so that only it is ramped in the first step;
+    # in later steps it is held (same value) or changed (e.g. unloading)
+    amp = ", amplitude=ramp_load" if (is_first and ramp_first_step) else ""
+    bc_str += f"*Boundary{amp}\n" + get_active_bcs(disp)
+
+    step = f"""*Step, name={name}, nlgeom=YES, inc=1000
 *Coupled Temperature-displacement, creep=none, deltmx=10.0
 {dtime}, {t}, 1e-15, {max_inc}
-{bc_str}"""
-    if name == "Loading" and len(open_chem_nodes) > 0:
-        step += f"open_chem_nodes, 11, 11, {bath_chemical_potential}\n"
-    step += """*Output, field, time marks=no
+{bc_str}*Output, field, time marks=no
 *Node Output, nset=all_nodes
-U, NT, RF
+{node_output_vars}
 *Element Output, elset=dummy_mesh
 UVARM, LE
 *node output, nset=extra_element

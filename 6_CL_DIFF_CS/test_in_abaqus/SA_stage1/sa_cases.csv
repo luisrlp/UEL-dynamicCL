@@ -1,0 +1,93 @@
+folder,label,overrides,INITMU,status
+A_core/slip_gamma0.1,"A: slip, GAMMA = 0.1",KOFF0=0.05; KCATCH0=0; GAMMA=0.1,-2002.850426,completed
+A_core/slip_gamma0.3,"A: slip, GAMMA = 0.3",KOFF0=0.05; KCATCH0=0; GAMMA=0.3,-2002.850426,completed
+A_core/slip_gamma0.4,"A: slip, GAMMA = 0.4",KOFF0=0.05; KCATCH0=0; GAMMA=0.4,-2002.850426,completed
+A_core/slip_gamma0.45,"A: slip, GAMMA = 0.45",KOFF0=0.05; KCATCH0=0; GAMMA=0.45,-2002.850426,completed
+A_core/slip_gamma0.5,"A: slip, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; GAMMA=0.5,-2002.850426,completed
+A_core/slip_gamma0.55,"A: slip, GAMMA = 0.55",KOFF0=0.05; KCATCH0=0; GAMMA=0.55,-2002.850426,completed
+A_core/catch_gamma0.1,"A: catch, GAMMA = 0.1",KOFF0=0.005; KCATCH0=0.045; GAMMA=0.1,-2002.850426,completed
+A_core/catch_gamma0.3,"A: catch, GAMMA = 0.3",KOFF0=0.005; KCATCH0=0.045; GAMMA=0.3,-2002.850426,completed
+A_core/catch_gamma0.4,"A: catch, GAMMA = 0.4",KOFF0=0.005; KCATCH0=0.045; GAMMA=0.4,-2002.850426,completed
+A_core/catch_gamma0.45,"A: catch, GAMMA = 0.45",KOFF0=0.005; KCATCH0=0.045; GAMMA=0.45,-2002.850426,completed
+A_core/catch_gamma0.5,"A: catch, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; GAMMA=0.5,-2002.850426,completed
+A_core/catch_gamma0.55,"A: catch, GAMMA = 0.55",KOFF0=0.005; KCATCH0=0.045; GAMMA=0.55,-2002.850426,completed
+B_catch_frac/cf0_gamma0.3,"B: catch fraction = 0, GAMMA = 0.3",KOFF0=0.05; KCATCH0=0; GAMMA=0.3,-2002.850426,completed
+B_catch_frac/cf0_gamma0.45,"B: catch fraction = 0, GAMMA = 0.45",KOFF0=0.05; KCATCH0=0; GAMMA=0.45,-2002.850426,completed
+B_catch_frac/cf0_gamma0.5,"B: catch fraction = 0, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; GAMMA=0.5,-2002.850426,completed
+B_catch_frac/cf0_gamma0.55,"B: catch fraction = 0, GAMMA = 0.55",KOFF0=0.05; KCATCH0=0; GAMMA=0.55,-2002.850426,completed
+B_catch_frac/cf0.5_gamma0.3,"B: catch fraction = 0.5, GAMMA = 0.3",KOFF0=0.025; KCATCH0=0.025; GAMMA=0.3,-2002.850426,completed
+B_catch_frac/cf0.5_gamma0.45,"B: catch fraction = 0.5, GAMMA = 0.45",KOFF0=0.025; KCATCH0=0.025; GAMMA=0.45,-2002.850426,completed
+B_catch_frac/cf0.5_gamma0.5,"B: catch fraction = 0.5, GAMMA = 0.5",KOFF0=0.025; KCATCH0=0.025; GAMMA=0.5,-2002.850426,completed
+B_catch_frac/cf0.5_gamma0.55,"B: catch fraction = 0.5, GAMMA = 0.55",KOFF0=0.025; KCATCH0=0.025; GAMMA=0.55,-2002.850426,completed
+B_catch_frac/cf0.8_gamma0.3,"B: catch fraction = 0.8, GAMMA = 0.3",KOFF0=0.01; KCATCH0=0.04; GAMMA=0.3,-2002.850426,completed
+B_catch_frac/cf0.8_gamma0.45,"B: catch fraction = 0.8, GAMMA = 0.45",KOFF0=0.01; KCATCH0=0.04; GAMMA=0.45,-2002.850426,completed
+B_catch_frac/cf0.8_gamma0.5,"B: catch fraction = 0.8, GAMMA = 0.5",KOFF0=0.01; KCATCH0=0.04; GAMMA=0.5,-2002.850426,completed
+B_catch_frac/cf0.8_gamma0.55,"B: catch fraction = 0.8, GAMMA = 0.55",KOFF0=0.01; KCATCH0=0.04; GAMMA=0.55,-2002.850426,completed
+B_catch_frac/cf0.9_gamma0.3,"B: catch fraction = 0.9, GAMMA = 0.3",KOFF0=0.005; KCATCH0=0.045; GAMMA=0.3,-2002.850426,completed
+B_catch_frac/cf0.9_gamma0.45,"B: catch fraction = 0.9, GAMMA = 0.45",KOFF0=0.005; KCATCH0=0.045; GAMMA=0.45,-2002.850426,completed
+B_catch_frac/cf0.9_gamma0.5,"B: catch fraction = 0.9, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; GAMMA=0.5,-2002.850426,completed
+B_catch_frac/cf0.9_gamma0.55,"B: catch fraction = 0.9, GAMMA = 0.55",KOFF0=0.005; KCATCH0=0.045; GAMMA=0.55,-2002.850426,completed
+B_catch_frac/cf0.95_gamma0.3,"B: catch fraction = 0.95, GAMMA = 0.3",KOFF0=0.0025; KCATCH0=0.0475; GAMMA=0.3,-2002.850426,completed
+B_catch_frac/cf0.95_gamma0.45,"B: catch fraction = 0.95, GAMMA = 0.45",KOFF0=0.0025; KCATCH0=0.0475; GAMMA=0.45,-2002.850426,completed
+B_catch_frac/cf0.95_gamma0.5,"B: catch fraction = 0.95, GAMMA = 0.5",KOFF0=0.0025; KCATCH0=0.0475; GAMMA=0.5,-2002.850426,completed
+B_catch_frac/cf0.95_gamma0.55,"B: catch fraction = 0.95, GAMMA = 0.55",KOFF0=0.0025; KCATCH0=0.0475; GAMMA=0.55,-2002.850426,completed
+C_dx/slip_dx0.5nm_gamma0.3,"C: slip, DX = DXC = 0.5 nm, GAMMA = 0.3",KOFF0=0.05; KCATCH0=0; DX=0.0005; DXC=0.0005; GAMMA=0.3,-2002.850426,completed
+C_dx/slip_dx0.5nm_gamma0.45,"C: slip, DX = DXC = 0.5 nm, GAMMA = 0.45",KOFF0=0.05; KCATCH0=0; DX=0.0005; DXC=0.0005; GAMMA=0.45,-2002.850426,completed
+C_dx/slip_dx0.5nm_gamma0.5,"C: slip, DX = DXC = 0.5 nm, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; DX=0.0005; DXC=0.0005; GAMMA=0.5,-2002.850426,completed
+C_dx/slip_dx0.5nm_gamma0.55,"C: slip, DX = DXC = 0.5 nm, GAMMA = 0.55",KOFF0=0.05; KCATCH0=0; DX=0.0005; DXC=0.0005; GAMMA=0.55,-2002.850426,completed
+C_dx/slip_dx1nm_gamma0.3,"C: slip, DX = DXC = 1 nm, GAMMA = 0.3",KOFF0=0.05; KCATCH0=0; DX=0.001; DXC=0.001; GAMMA=0.3,-2002.850426,completed
+C_dx/slip_dx1nm_gamma0.45,"C: slip, DX = DXC = 1 nm, GAMMA = 0.45",KOFF0=0.05; KCATCH0=0; DX=0.001; DXC=0.001; GAMMA=0.45,-2002.850426,completed
+C_dx/slip_dx1nm_gamma0.5,"C: slip, DX = DXC = 1 nm, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; DX=0.001; DXC=0.001; GAMMA=0.5,-2002.850426,completed
+C_dx/slip_dx1nm_gamma0.55,"C: slip, DX = DXC = 1 nm, GAMMA = 0.55",KOFF0=0.05; KCATCH0=0; DX=0.001; DXC=0.001; GAMMA=0.55,-2002.850426,completed
+C_dx/slip_dx2nm_gamma0.3,"C: slip, DX = DXC = 2 nm, GAMMA = 0.3",KOFF0=0.05; KCATCH0=0; DX=0.002; DXC=0.002; GAMMA=0.3,-2002.850426,completed
+C_dx/slip_dx2nm_gamma0.45,"C: slip, DX = DXC = 2 nm, GAMMA = 0.45",KOFF0=0.05; KCATCH0=0; DX=0.002; DXC=0.002; GAMMA=0.45,-2002.850426,completed
+C_dx/slip_dx2nm_gamma0.5,"C: slip, DX = DXC = 2 nm, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; DX=0.002; DXC=0.002; GAMMA=0.5,-2002.850426,completed
+C_dx/slip_dx2nm_gamma0.55,"C: slip, DX = DXC = 2 nm, GAMMA = 0.55",KOFF0=0.05; KCATCH0=0; DX=0.002; DXC=0.002; GAMMA=0.55,-2002.850426,completed
+C_dx/catch_dx0.5nm_gamma0.3,"C: catch, DX = DXC = 0.5 nm, GAMMA = 0.3",KOFF0=0.005; KCATCH0=0.045; DX=0.0005; DXC=0.0005; GAMMA=0.3,-2002.850426,completed
+C_dx/catch_dx0.5nm_gamma0.45,"C: catch, DX = DXC = 0.5 nm, GAMMA = 0.45",KOFF0=0.005; KCATCH0=0.045; DX=0.0005; DXC=0.0005; GAMMA=0.45,-2002.850426,completed
+C_dx/catch_dx0.5nm_gamma0.5,"C: catch, DX = DXC = 0.5 nm, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; DX=0.0005; DXC=0.0005; GAMMA=0.5,-2002.850426,completed
+C_dx/catch_dx0.5nm_gamma0.55,"C: catch, DX = DXC = 0.5 nm, GAMMA = 0.55",KOFF0=0.005; KCATCH0=0.045; DX=0.0005; DXC=0.0005; GAMMA=0.55,-2002.850426,completed
+C_dx/catch_dx1nm_gamma0.3,"C: catch, DX = DXC = 1 nm, GAMMA = 0.3",KOFF0=0.005; KCATCH0=0.045; DX=0.001; DXC=0.001; GAMMA=0.3,-2002.850426,completed
+C_dx/catch_dx1nm_gamma0.45,"C: catch, DX = DXC = 1 nm, GAMMA = 0.45",KOFF0=0.005; KCATCH0=0.045; DX=0.001; DXC=0.001; GAMMA=0.45,-2002.850426,completed
+C_dx/catch_dx1nm_gamma0.5,"C: catch, DX = DXC = 1 nm, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; DX=0.001; DXC=0.001; GAMMA=0.5,-2002.850426,completed
+C_dx/catch_dx1nm_gamma0.55,"C: catch, DX = DXC = 1 nm, GAMMA = 0.55",KOFF0=0.005; KCATCH0=0.045; DX=0.001; DXC=0.001; GAMMA=0.55,-2002.850426,completed
+C_dx/catch_dx2nm_gamma0.3,"C: catch, DX = DXC = 2 nm, GAMMA = 0.3",KOFF0=0.005; KCATCH0=0.045; DX=0.002; DXC=0.002; GAMMA=0.3,-2002.850426,completed
+C_dx/catch_dx2nm_gamma0.45,"C: catch, DX = DXC = 2 nm, GAMMA = 0.45",KOFF0=0.005; KCATCH0=0.045; DX=0.002; DXC=0.002; GAMMA=0.45,-2002.850426,completed
+C_dx/catch_dx2nm_gamma0.5,"C: catch, DX = DXC = 2 nm, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; DX=0.002; DXC=0.002; GAMMA=0.5,-2002.850426,completed
+C_dx/catch_dx2nm_gamma0.55,"C: catch, DX = DXC = 2 nm, GAMMA = 0.55",KOFF0=0.005; KCATCH0=0.045; DX=0.002; DXC=0.002; GAMMA=0.55,-2002.850426,completed
+C2_dxc_ratio/ratio0.5_gamma0.3,"C2: catch, DXC/DX = 0.5 (DX = 1 nm), GAMMA = 0.3",KOFF0=0.005; KCATCH0=0.045; DX=0.001; DXC=0.0005; GAMMA=0.3,-2002.850426,completed
+C2_dxc_ratio/ratio0.5_gamma0.45,"C2: catch, DXC/DX = 0.5 (DX = 1 nm), GAMMA = 0.45",KOFF0=0.005; KCATCH0=0.045; DX=0.001; DXC=0.0005; GAMMA=0.45,-2002.850426,completed
+C2_dxc_ratio/ratio0.5_gamma0.5,"C2: catch, DXC/DX = 0.5 (DX = 1 nm), GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; DX=0.001; DXC=0.0005; GAMMA=0.5,-2002.850426,completed
+C2_dxc_ratio/ratio0.5_gamma0.55,"C2: catch, DXC/DX = 0.5 (DX = 1 nm), GAMMA = 0.55",KOFF0=0.005; KCATCH0=0.045; DX=0.001; DXC=0.0005; GAMMA=0.55,-2002.850426,completed
+C2_dxc_ratio/ratio1_gamma0.3,"C2: catch, DXC/DX = 1 (DX = 1 nm), GAMMA = 0.3",KOFF0=0.005; KCATCH0=0.045; DX=0.001; DXC=0.001; GAMMA=0.3,-2002.850426,completed
+C2_dxc_ratio/ratio1_gamma0.45,"C2: catch, DXC/DX = 1 (DX = 1 nm), GAMMA = 0.45",KOFF0=0.005; KCATCH0=0.045; DX=0.001; DXC=0.001; GAMMA=0.45,-2002.850426,completed
+C2_dxc_ratio/ratio1_gamma0.5,"C2: catch, DXC/DX = 1 (DX = 1 nm), GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; DX=0.001; DXC=0.001; GAMMA=0.5,-2002.850426,completed
+C2_dxc_ratio/ratio1_gamma0.55,"C2: catch, DXC/DX = 1 (DX = 1 nm), GAMMA = 0.55",KOFF0=0.005; KCATCH0=0.045; DX=0.001; DXC=0.001; GAMMA=0.55,-2002.850426,completed
+C2_dxc_ratio/ratio2_gamma0.3,"C2: catch, DXC/DX = 2 (DX = 1 nm), GAMMA = 0.3",KOFF0=0.005; KCATCH0=0.045; DX=0.001; DXC=0.002; GAMMA=0.3,-2002.850426,completed
+C2_dxc_ratio/ratio2_gamma0.45,"C2: catch, DXC/DX = 2 (DX = 1 nm), GAMMA = 0.45",KOFF0=0.005; KCATCH0=0.045; DX=0.001; DXC=0.002; GAMMA=0.45,-2002.850426,completed
+C2_dxc_ratio/ratio2_gamma0.5,"C2: catch, DXC/DX = 2 (DX = 1 nm), GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; DX=0.001; DXC=0.002; GAMMA=0.5,-2002.850426,completed
+C2_dxc_ratio/ratio2_gamma0.55,"C2: catch, DXC/DX = 2 (DX = 1 nm), GAMMA = 0.55",KOFF0=0.005; KCATCH0=0.045; DX=0.001; DXC=0.002; GAMMA=0.55,-2002.850426,completed
+D_etac/slip_etac0.3333_gamma0.8,"D: slip, ETAC = 0.3333, GAMMA = 0.8",KOFF0=0.05; KCATCH0=0; ETAC=0.333333; GAMMA=0.8,-2002.850426,completed
+D_etac/slip_etac0.3333_gamma0.9,"D: slip, ETAC = 0.3333, GAMMA = 0.9",KOFF0=0.05; KCATCH0=0; ETAC=0.333333; GAMMA=0.9,-2002.850426,completed
+D_etac/slip_etac0.3333_gamma1,"D: slip, ETAC = 0.3333, GAMMA = 1",KOFF0=0.05; KCATCH0=0; ETAC=0.333333; GAMMA=1,-2002.850426,completed
+D_etac/slip_etac0.6667_gamma0.45,"D: slip, ETAC = 0.6667, GAMMA = 0.45",KOFF0=0.05; KCATCH0=0; ETAC=0.666667; GAMMA=0.45,-2002.850426,completed
+D_etac/slip_etac0.6667_gamma0.5,"D: slip, ETAC = 0.6667, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; ETAC=0.666667; GAMMA=0.5,-2002.850426,completed
+D_etac/slip_etac0.6667_gamma0.55,"D: slip, ETAC = 0.6667, GAMMA = 0.55",KOFF0=0.05; KCATCH0=0; ETAC=0.666667; GAMMA=0.55,-2002.850426,completed
+D_etac/slip_etac1_gamma0.3,"D: slip, ETAC = 1, GAMMA = 0.3",KOFF0=0.05; KCATCH0=0; ETAC=1; GAMMA=0.3,-2002.850426,completed
+D_etac/slip_etac1_gamma0.35,"D: slip, ETAC = 1, GAMMA = 0.35",KOFF0=0.05; KCATCH0=0; ETAC=1; GAMMA=0.35,-2002.850426,completed
+D_etac/slip_etac1_gamma0.4,"D: slip, ETAC = 1, GAMMA = 0.4",KOFF0=0.05; KCATCH0=0; ETAC=1; GAMMA=0.4,-2002.850426,completed
+D_etac/catch_etac0.3333_gamma0.8,"D: catch, ETAC = 0.3333, GAMMA = 0.8",KOFF0=0.005; KCATCH0=0.045; ETAC=0.333333; GAMMA=0.8,-2002.850426,completed
+D_etac/catch_etac0.3333_gamma0.9,"D: catch, ETAC = 0.3333, GAMMA = 0.9",KOFF0=0.005; KCATCH0=0.045; ETAC=0.333333; GAMMA=0.9,-2002.850426,completed
+D_etac/catch_etac0.3333_gamma1,"D: catch, ETAC = 0.3333, GAMMA = 1",KOFF0=0.005; KCATCH0=0.045; ETAC=0.333333; GAMMA=1,-2002.850426,completed
+D_etac/catch_etac0.6667_gamma0.45,"D: catch, ETAC = 0.6667, GAMMA = 0.45",KOFF0=0.005; KCATCH0=0.045; ETAC=0.666667; GAMMA=0.45,-2002.850426,completed
+D_etac/catch_etac0.6667_gamma0.5,"D: catch, ETAC = 0.6667, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; ETAC=0.666667; GAMMA=0.5,-2002.850426,completed
+D_etac/catch_etac0.6667_gamma0.55,"D: catch, ETAC = 0.6667, GAMMA = 0.55",KOFF0=0.005; KCATCH0=0.045; ETAC=0.666667; GAMMA=0.55,-2002.850426,completed
+D_etac/catch_etac1_gamma0.3,"D: catch, ETAC = 1, GAMMA = 0.3",KOFF0=0.005; KCATCH0=0.045; ETAC=1; GAMMA=0.3,-2002.850426,completed
+D_etac/catch_etac1_gamma0.35,"D: catch, ETAC = 1, GAMMA = 0.35",KOFF0=0.005; KCATCH0=0.045; ETAC=1; GAMMA=0.35,-2002.850426,completed
+D_etac/catch_etac1_gamma0.4,"D: catch, ETAC = 1, GAMMA = 0.4",KOFF0=0.005; KCATCH0=0.045; ETAC=1; GAMMA=0.4,-2002.850426,completed
+E_rate/slip_koff0.01,"E: slip, koff(0) = 0.01, GAMMA = 0.5",KOFF0=0.01; KCATCH0=0; GAMMA=0.5,-2002.850426,completed
+E_rate/slip_koff0.05,"E: slip, koff(0) = 0.05, GAMMA = 0.5",KOFF0=0.05; KCATCH0=0; GAMMA=0.5,-2002.850426,completed
+E_rate/slip_koff0.25,"E: slip, koff(0) = 0.25, GAMMA = 0.5",KOFF0=0.25; KCATCH0=0; GAMMA=0.5,-2002.850426,completed
+E_rate/catch_koff0.01,"E: catch, koff(0) = 0.01, GAMMA = 0.5",KOFF0=0.001; KCATCH0=0.009; GAMMA=0.5,-2002.850426,completed
+E_rate/catch_koff0.05,"E: catch, koff(0) = 0.05, GAMMA = 0.5",KOFF0=0.005; KCATCH0=0.045; GAMMA=0.5,-2002.850426,completed
+E_rate/catch_koff0.25,"E: catch, koff(0) = 0.25, GAMMA = 0.5",KOFF0=0.025; KCATCH0=0.225; GAMMA=0.5,-2002.850426,completed

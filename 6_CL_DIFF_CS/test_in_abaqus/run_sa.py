@@ -1,4 +1,8 @@
-"""One-at-a-time sensitivity analysis of the UEL model in Abaqus.
+"""One-at-a-time sensitivity analysis of the UEL model in Abaqus (indentation study, stage 3).
+
+The machinery (properties, run folders, skip logic, parallel runs, log, summary) is in
+run_study(), which other study scripts (e.g. run_stage1.py) import with their own job, files,
+results folder and list of cases.
 
 For every variable in STUDY_PROPS_INFO and every value swept for it, a run folder
 SA/<VAR>/<VAR>_<value>/ is created with:
@@ -84,9 +88,9 @@ def log(message):
                 f.write(line + '\n')
 
 
-# Files copied into every run folder (properties.inp is written, not copied)
-FILES_TO_COPY = [f'{JOB_NAME}.inp', 'sec_uel_cube.inp', 'prefdir.inp', 'uel.f90',
-                 'abaqus_v6.env', 'aba_param.inc']
+# Files copied into every run folder besides the job input (properties.inp is written, not copied)
+COMMON_FILES = ['sec_uel_cube.inp', 'prefdir.inp', 'uel.f90', 'abaqus_v6.env', 'aba_param.inc']
+FILES_TO_COPY = [f'{JOB_NAME}.inp'] + COMMON_FILES
 
 # ------------------------------------------------------------------------------------------
 # Properties
@@ -166,10 +170,27 @@ def render_properties(props, initmu, header):
 # ------------------------------------------------------------------------------------------
 # Cases and folders
 # ------------------------------------------------------------------------------------------
+def base_properties(overrides=None):
+    """Base properties: ./properties.inp (INITMU excluded) with the given overrides applied."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    props = read_properties(os.path.join(base_dir, 'properties.inp'))
+    props.update({k: float(v) for k, v in (overrides or {}).items()})
+    return props
+
+
+def make_case(folder, label, base_props, overrides):
+    """A case: run folder (relative to the study folder), label, and its properties, i.e. the
+    base properties with the overrides applied (overrides may add parameters, e.g. GAMMA)."""
+    props = dict(base_props)
+    props.update({k: float(v) for k, v in overrides.items()})
+    return dict(folder=folder, label=label, overrides=dict(overrides), props=props)
+
+
 def build_cases(base_props, study, only=None):
+    """One-at-a-time cases: <VAR>/<VAR>_<value>, plus base/ (base properties)."""
     cases = []
     if RUN_BASE_CASE and not only:
-        cases.append(dict(var='base', value='', folder=os.path.join('base'), props=dict(base_props)))
+        cases.append(make_case('base', 'base properties', base_props, {}))
     for var, values in study.items():
         if only and var not in only:
             continue
@@ -179,10 +200,8 @@ def build_cases(base_props, study, only=None):
             log("WARNING: sweeping DXC with KCATCH0 = 0 has no effect on the results "
                 "(no catch pathway). Set KCATCH0 in BASE_OVERRIDES.")
         for value in values:
-            props = dict(base_props)
-            props[var] = float(value)
-            cases.append(dict(var=var, value=float(value),
-                              folder=os.path.join(var, f'{var}_{float(value):g}'), props=props))
+            cases.append(make_case(os.path.join(var, f'{var}_{float(value):g}'),
+                                   f'{var} = {float(value):g}', base_props, {var: value}))
     return cases
 
 
@@ -190,11 +209,10 @@ def set_case_inputs(case, sa_dir):
     """Run folder, INITMU and properties.inp content of a case (nothing written yet)."""
     case['run_dir'] = os.path.join(sa_dir, case['folder'])
     case['initmu'] = compute_initmu(case['props'])
-    header = 'base properties' if case['var'] == 'base' else f"{case['var']} = {case['value']:g}"
-    case['properties'] = render_properties(case['props'], case['initmu'], header)
+    case['properties'] = render_properties(case['props'], case['initmu'], case['label'])
 
 
-def inputs_unchanged(case, base_dir):
+def inputs_unchanged(case, base_dir, files):
     """True if the run folder already holds exactly the inputs that would be written now."""
     run_dir = case['run_dir']
     path = os.path.join(run_dir, 'properties.inp')
@@ -203,77 +221,146 @@ def inputs_unchanged(case, base_dir):
     with open(path) as f:
         if f.read() != case['properties']:
             return False
-    for name in FILES_TO_COPY:
+    for name in files:
         dest = os.path.join(run_dir, name)
         if not (os.path.exists(dest) and filecmp.cmp(os.path.join(base_dir, name), dest, shallow=False)):
             return False
     return True
 
 
-def prepare_case(case, base_dir):
+def prepare_case(case, base_dir, files):
     """Write properties.inp and copy the job files into the run folder."""
     run_dir = case['run_dir']
     os.makedirs(run_dir, exist_ok=True)
     with open(os.path.join(run_dir, 'properties.inp'), 'w') as f:
         f.write(case['properties'])
-    for name in FILES_TO_COPY:
+    for name in files:
         shutil.copy(os.path.join(base_dir, name), os.path.join(run_dir, name))
 
 
-def job_completed(run_dir):
-    sta = os.path.join(run_dir, f'{JOB_NAME}.sta')
+def job_completed(run_dir, job_name=JOB_NAME):
+    sta = os.path.join(run_dir, f'{job_name}.sta')
     if not os.path.exists(sta):
         return False
     with open(sta, errors='ignore') as f:
         return 'COMPLETED SUCCESSFULLY' in f.read()
 
 
-def clean_previous_attempt(run_dir):
+def clean_previous_attempt(run_dir, job_name=JOB_NAME):
     """Remove the files of an unfinished attempt (the .lck file blocks a new run)."""
     for ext in ('.lck', '.odb', '.sta', '.msg', '.dat', '.com', '.prt', '.sim', '.log', '.exception'):
-        path = os.path.join(run_dir, f'{JOB_NAME}{ext}')
+        path = os.path.join(run_dir, f'{job_name}{ext}')
         if os.path.exists(path):
             os.remove(path)
 
 
-def run_abaqus(run_dir, poll_seconds=10):
+def run_abaqus(run_dir, job_name=JOB_NAME, cpus=CPUS_PER_JOB, poll_seconds=10):
     """Run one job in the foreground ('interactive'), with its output written to a file.
 
-    The worker only returns once the job has finished, so that at most MAX_WORKERS jobs run
+    The worker only returns once the job has finished, so that at most `workers` jobs run
     at the same time: 'interactive' keeps the launcher in the foreground, and as a safeguard
     (in case the launcher ever returns early, e.g. queued or background submission) the
     worker also waits while the job lock file <job>.lck exists (Abaqus removes it at the end).
     stdin is closed so that no Abaqus prompt can block a worker.
     """
-    cmd = ['abaqus', f'job={JOB_NAME}', 'user=uel.f90', f'cpus={CPUS_PER_JOB}',
+    cmd = ['abaqus', f'job={job_name}', 'user=uel.f90', f'cpus={cpus}',
            'ask_delete=off', 'interactive']
-    with open(os.path.join(run_dir, f'{JOB_NAME}_output.txt'), 'w') as out:
+    with open(os.path.join(run_dir, f'{job_name}_output.txt'), 'w') as out:
         result = subprocess.run(cmd, cwd=run_dir, stdin=subprocess.DEVNULL,
                                 stdout=out, stderr=subprocess.STDOUT)
-    lock = os.path.join(run_dir, f'{JOB_NAME}.lck')
+    lock = os.path.join(run_dir, f'{job_name}.lck')
     while os.path.exists(lock):
         time.sleep(poll_seconds)
-    return result.returncode, job_completed(run_dir)
+    return result.returncode, job_completed(run_dir, job_name)
 
 
-def run_case(case, sa_dir):
+def run_case(case, sa_dir, job_name=JOB_NAME, cpus=CPUS_PER_JOB):
     """Run one case, logging its start and end and the jobs running at that moment."""
     folder = case['folder']
-    label = 'base properties' if case['var'] == 'base' else f"{case['var']} = {case['value']:g}"
     # The set update and its log line are done together, so the logged lines are in order
     with _RUN_LOCK:
         _RUNNING.add(folder)
-        log(f"START  {folder} ({label}): {JOB_NAME}.inp with user=uel.f90 in "
+        log(f"START  {folder} ({case['label']}): {job_name}.inp with user=uel.f90 in "
             f"{os.path.join(os.path.basename(sa_dir), folder)} | running now ({len(_RUNNING)}): "
             f"{', '.join(sorted(_RUNNING))}")
     t_start = time.time()
-    code, completed = run_abaqus(case['run_dir'])
+    code, completed = run_abaqus(case['run_dir'], job_name, cpus)
     status = 'completed' if completed else f'FAILED (return code {code})'
     with _RUN_LOCK:
         _RUNNING.discard(folder)
         log(f"END    {folder}: {status} after {(time.time() - t_start) / 60:.1f} min | "
             f"still running ({len(_RUNNING)}): {', '.join(sorted(_RUNNING)) if _RUNNING else '-'}")
     return code, completed
+
+
+# ------------------------------------------------------------------------------------------
+# Study runner (shared by all study scripts)
+# ------------------------------------------------------------------------------------------
+def run_study(cases, job_name, sa_dir_name, files_to_copy=None, workers=MAX_WORKERS,
+              cpus_per_job=CPUS_PER_JOB, dry_run=False, force=False, title=''):
+    """Prepare the run folder of every case in <sa_dir_name>/, skip completed and unchanged
+    cases, run the others in parallel (`workers` at a time), and write the log
+    (<sa_dir_name>/output.txt) and the summary (<sa_dir_name>/sa_cases.csv)."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    files = files_to_copy if files_to_copy is not None else [f'{job_name}.inp'] + COMMON_FILES
+    missing = [f for f in files if not os.path.exists(os.path.join(base_dir, f))]
+    if missing:
+        raise FileNotFoundError(f"Missing files in {base_dir}: {missing}")
+    sa_dir = os.path.join(base_dir, sa_dir_name)
+    os.makedirs(sa_dir, exist_ok=True)
+
+    global _LOG_FILE
+    _LOG_FILE = os.path.join(sa_dir, 'output.txt')
+    log('=' * 80)
+    log(f"{title or 'Sensitivity analysis'}: job {job_name}.inp, {len(cases)} cases, options: "
+        f"dry_run={dry_run}, workers={workers}, cpus_per_job={cpus_per_job}, force={force}")
+
+    # A completed job is skipped (and its folder left untouched) only if its inputs are identical
+    # to the ones that would be written now; otherwise the folder is refreshed and the job rerun.
+    to_run = []
+    for case in cases:
+        set_case_inputs(case, sa_dir)
+        completed = job_completed(case['run_dir'], job_name)
+        if completed and not force and inputs_unchanged(case, base_dir, files):
+            case['status'] = 'completed (skipped)'
+            continue
+        if completed and not force:
+            log(f"{case['folder']}: inputs changed since the completed run -> will be rerun")
+        prepare_case(case, base_dir, files)
+        clean_previous_attempt(case['run_dir'], job_name)
+        case['status'] = 'not run' if dry_run else 'pending'
+        to_run.append(case)
+    skipped = [c['folder'] for c in cases if c not in to_run]
+    log(f"{len(cases)} cases in {sa_dir}: {len(skipped)} completed and unchanged (skipped), "
+        f"{len(to_run)} to run")
+    if skipped:
+        log(f"Skipped: {', '.join(skipped)}")
+    if to_run:
+        log(f"{'Prepared (dry run)' if dry_run else 'To run'}: {', '.join(c['folder'] for c in to_run)}")
+
+    if not dry_run and to_run:
+        log(f"Running {len(to_run)} jobs, {workers} at a time...")
+        t0 = time.time()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(run_case, c, sa_dir, job_name, cpus_per_job): c for c in to_run}
+            for n, future in enumerate(concurrent.futures.as_completed(futures), 1):
+                case = futures[future]
+                code, completed = future.result()
+                case['status'] = 'completed' if completed else f'FAILED (return code {code})'
+                log(f"Progress {n}/{len(to_run)} finished ({(time.time() - t0) / 60:.1f} min elapsed)")
+
+    with open(os.path.join(sa_dir, 'sa_cases.csv'), 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['folder', 'label', 'overrides', 'INITMU', 'status'])
+        for c in cases:
+            overrides = '; '.join(f'{k}={v:g}' for k, v in c['overrides'].items())
+            writer.writerow([c['folder'], c['label'], overrides, f"{c['initmu']:.6f}", c['status']])
+
+    failed = [c['folder'] for c in cases if c['status'].startswith('FAILED')]
+    log(f"Summary written to {os.path.join(sa_dir, 'sa_cases.csv')}")
+    if failed:
+        log(f"{len(failed)} jobs failed: {', '.join(failed)}")
+    return cases
 
 
 # ------------------------------------------------------------------------------------------
@@ -285,64 +372,11 @@ def main():
     parser.add_argument('--force', action='store_true', help='rerun completed jobs')
     args = parser.parse_args()
 
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    sa_dir = os.path.join(base_dir, SA_DIR_NAME)
-    os.makedirs(sa_dir, exist_ok=True)
-
-    global _LOG_FILE
-    _LOG_FILE = os.path.join(sa_dir, 'output.txt')
-    log('=' * 80)
-    log(f"Sensitivity analysis: job {JOB_NAME}.inp, options: dry_run={args.dry_run}, "
-        f"only={args.only or 'all'}, workers={args.workers}, force={args.force}")
-
-    base_props = read_properties(os.path.join(base_dir, 'properties.inp'))
-    base_props.update(BASE_OVERRIDES)
+    base_props = base_properties(BASE_OVERRIDES)
     cases = build_cases(base_props, STUDY_PROPS_INFO, args.only)
-
-    # A completed job is skipped (and its folder left untouched) only if its inputs are identical
-    # to the ones that would be written now; otherwise the folder is refreshed and the job rerun.
-    to_run = []
-    for case in cases:
-        set_case_inputs(case, sa_dir)
-        completed = job_completed(case['run_dir'])
-        if completed and not args.force and inputs_unchanged(case, base_dir):
-            case['status'] = 'completed (skipped)'
-            continue
-        if completed and not args.force:
-            log(f"{case['folder']}: inputs changed since the completed run -> will be rerun")
-        prepare_case(case, base_dir)
-        clean_previous_attempt(case['run_dir'])
-        case['status'] = 'not run' if args.dry_run else 'pending'
-        to_run.append(case)
-    skipped = [c['folder'] for c in cases if c not in to_run]
-    log(f"{len(cases)} cases in {sa_dir}: {len(skipped)} completed and unchanged (skipped), "
-        f"{len(to_run)} to run")
-    if skipped:
-        log(f"Skipped: {', '.join(skipped)}")
-    if to_run:
-        log(f"{'Prepared (dry run)' if args.dry_run else 'To run'}: {', '.join(c['folder'] for c in to_run)}")
-
-    if not args.dry_run and to_run:
-        log(f"Running {len(to_run)} jobs, {args.workers} at a time...")
-        t0 = time.time()
-        with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
-            futures = {executor.submit(run_case, c, sa_dir): c for c in to_run}
-            for n, future in enumerate(concurrent.futures.as_completed(futures), 1):
-                case = futures[future]
-                code, completed = future.result()
-                case['status'] = 'completed' if completed else f'FAILED (return code {code})'
-                log(f"Progress {n}/{len(to_run)} finished ({(time.time() - t0) / 60:.1f} min elapsed)")
-
-    with open(os.path.join(sa_dir, 'sa_cases.csv'), 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(['variable', 'value', 'folder', 'INITMU', 'status'])
-        for c in cases:
-            writer.writerow([c['var'], c['value'], c['folder'], f"{c['initmu']:.6f}", c['status']])
-
-    failed = [c['folder'] for c in cases if c['status'].startswith('FAILED')]
-    log(f"Summary written to {os.path.join(sa_dir, 'sa_cases.csv')}")
-    if failed:
-        log(f"{len(failed)} jobs failed: {', '.join(failed)}")
+    run_study(cases, JOB_NAME, SA_DIR_NAME, FILES_TO_COPY, workers=args.workers,
+              cpus_per_job=CPUS_PER_JOB, dry_run=args.dry_run, force=args.force,
+              title=f"One-at-a-time sensitivity analysis (only={args.only or 'all'})")
 
 
 if __name__ == '__main__':
