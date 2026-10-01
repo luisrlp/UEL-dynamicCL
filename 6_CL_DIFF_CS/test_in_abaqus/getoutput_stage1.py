@@ -303,6 +303,13 @@ def plot_all(by_sweep):
         print("matplotlib is not available in this Python. Plot the extracted results with a "
               "Python that has it, e.g. '<venv>/bin/python getoutput_stage1.py --plot-only'")
         return
+    print(f"Plotting with matplotlib {matplotlib.__version__} (Python {sys.version.split()[0]})")
+    # Watchdog: if a plot hangs, print the stack trace every 120 s to show where
+    try:
+        import faulthandler
+        faulthandler.dump_traceback_later(120, repeat=True)
+    except Exception:
+        faulthandler = None
     plot_dir = os.path.join(sa_dir, 'plots')
     os.makedirs(plot_dir, exist_ok=True)
 
@@ -316,6 +323,7 @@ def plot_all(by_sweep):
         nrow = int(np.ceil(len(groups) / ncol))
 
         def panels(title, ylabel, plot_fn, name, xlab='Hold time (s)'):
+            print(f"Plotting {sweep}_{name} ...", flush=True)
             fig, axs = plt.subplots(nrow, ncol, figsize=(4.2 * ncol, 3.3 * nrow), squeeze=False, sharey=True)
             for ax, grp in zip(axs.flat, groups):
                 for group, x, _, out, m in sorted((it for it in items if it[0] == grp), key=lambda it: it[1]):
@@ -323,7 +331,7 @@ def plot_all(by_sweep):
                 ax.set_title(grp, fontsize=9)
                 ax.set_xlabel(xlab)
                 ax.grid(True, alpha=0.3)
-                ax.legend(fontsize=7, frameon=False)
+                ax.legend(fontsize=7, frameon=False, loc='best')   # fixed position ('best' can be slow)
             for ax in axs[:, 0]:
                 ax.set_ylabel(ylabel)
             for ax in list(axs.flat)[len(groups):]:
@@ -334,6 +342,14 @@ def plot_all(by_sweep):
             fig.savefig(path)
             plt.close(fig)
             print(f"Plot saved: {path}")
+
+        def finite_xy(x, y):
+            """Only the finite points (NaN/inf dropped, with a message)."""
+            x, y = np.asarray(x, float), np.asarray(y, float)
+            ok = np.isfinite(x) & np.isfinite(y)
+            if not ok.all():
+                print(f"  {sweep}: {np.count_nonzero(~ok)} non-finite points dropped from a scatter")
+            return x[ok], y[ok]
 
         def hold_series(out, y):
             t_ramp = out['step_ends'][0]
@@ -347,11 +363,12 @@ def plot_all(by_sweep):
                lambda ax, out, m, c, lab: ax.plot(*hold_series(out, out['cb_tot'] / out['cb_tot'][0]), color=c, label=lab),
                'cbtot_time')
         panels('bound crosslinkers per direction at the end of the hold', r'$c_{b,i}/c_{b0}$',
-               lambda ax, out, m, c, lab: ax.scatter(m['lambda_i'], m['cb_rel_end'], s=10, color=c, label=lab),
+               lambda ax, out, m, c, lab: ax.scatter(*finite_xy(m['lambda_i'], m['cb_rel_end']), s=10, color=c, label=lab),
                'cb_dirs', xlab=r'Direction stretch $\lambda_i$')
 
         # Relaxation metrics vs x (the catch-slip signature: t_half vs GAMMA)
         if xs:
+            print(f"Plotting {sweep}_relaxation_vs_x ...", flush=True)
             fig, axs = plt.subplots(1, 2, figsize=(9.0, 3.6))
             for grp, marker in zip(groups, 'osD^v<>ph*'):
                 pts = sorted((it[1], it[4]) for it in items if it[0] == grp and np.isfinite(it[1]))
@@ -363,13 +380,15 @@ def plot_all(by_sweep):
             for ax in axs:
                 ax.set_xlabel(xlabel)
                 ax.grid(True, alpha=0.3)
-                ax.legend(fontsize=7, frameon=False)
+                ax.legend(fontsize=7, frameon=False, loc='best')
             fig.suptitle(f'{sweep}: relaxation vs {xlabel}')
             fig.tight_layout()
             path = os.path.join(plot_dir, f'{sweep}_relaxation_vs_x.pdf')
             fig.savefig(path)
             plt.close(fig)
             print(f"Plot saved: {path}")
+    if faulthandler is not None:
+        faulthandler.cancel_dump_traceback_later()
 
 
 # ------------------------------------------------------------------------------------------

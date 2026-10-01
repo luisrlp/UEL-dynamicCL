@@ -26,6 +26,9 @@ GEMINI.md
 *.sim
 *.stt
 *.sel
+*.par
+*.pes
+*.pmg
 
 # Text outputs, statuses, and messages
 *.dat
@@ -33,6 +36,7 @@ GEMINI.md
 *.sta
 *.log
 *.txt
+*.pdf
 
 # Temporary, lock, and process files
 *.lck
