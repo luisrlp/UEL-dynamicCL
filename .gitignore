@@ -47,7 +47,7 @@ abaqus.rpy*
 *.rec
 
 # Scratch files generated during analysis (usually numbered like .023, .024)
-*.0*
+*.0*.exception
 
 # =========================
 # Fortran Ignore List
