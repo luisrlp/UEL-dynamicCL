@@ -9,7 +9,9 @@ SA/<VAR>/<VAR>_<value>/ is created with:
 All jobs are then run in parallel (MAX_WORKERS at a time), each in its own folder.
 
 Base properties are read from ./properties.inp (single source of truth), with optional
-overrides in BASE_OVERRIDES. A summary of all cases is written to SA/sa_cases.csv.
+overrides in BASE_OVERRIDES. A summary of all cases is written to SA/sa_cases.csv, and every
+message (cases skipped/prepared, start and end of each job, jobs running at that moment) is
+printed and appended with a timestamp to SA/output.txt.
 
 Usage (from test_in_abaqus/):
   python3 run_sa.py                  # create all folders and run all jobs
@@ -17,19 +19,24 @@ Usage (from test_in_abaqus/):
   python3 run_sa.py --only DX KEQ    # restrict to some variables
   python3 run_sa.py --workers 8      # number of simultaneous Abaqus jobs
   python3 run_sa.py --force          # rerun jobs that already completed
-Completed jobs (.sta containing "COMPLETED") are skipped, so the script can be relaunched
-to finish or retry a study.
+Completed jobs (.sta containing "COMPLETED SUCCESSFULLY") whose inputs (properties.inp and the
+copied files) are identical to the current ones are skipped and their folders left untouched,
+so the script can be relaunched to finish or retry a study. A completed job whose inputs
+changed (e.g. new base properties or uel.f90) is rerun.
 """
 import argparse
 import ast
 import concurrent.futures
 import csv
+import filecmp
 import math
 import operator
 import os
 import shutil
 import subprocess
+import threading
 import time
+from datetime import datetime
 
 # ------------------------------------------------------------------------------------------
 # Study definition
@@ -37,7 +44,7 @@ import time
 JOB_NAME = 'cube_indent_uel_relax_auto'
 SA_DIR_NAME = 'SA'
 MAX_WORKERS = 4        # simultaneous Abaqus jobs (limited by CPUs and license tokens)
-CPUS_PER_JOB = 1
+CPUS_PER_JOB = 4
 RUN_BASE_CASE = True   # also run the unmodified base properties in SA/base/
 
 # Changes to the base properties read from properties.inp (applied to every case)
@@ -59,6 +66,23 @@ STUDY_PROPS_INFO = {
     'KCATCH0': [0.01, 0.1, 1.0],
     'KEQ': [0.25 * f for f in (1 / 4, 1, 4, 20)],
 }
+
+# Log of the study (console + SA/output.txt), shared by all worker threads
+_LOG_FILE = None
+_LOG_LOCK = threading.Lock()
+_RUN_LOCK = threading.Lock()
+_RUNNING = set()        # folders of the jobs currently running
+
+
+def log(message):
+    """Print a message and append it, with a timestamp, to SA/output.txt (thread-safe)."""
+    line = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}"
+    with _LOG_LOCK:
+        print(line, flush=True)
+        if _LOG_FILE is not None:
+            with open(_LOG_FILE, 'a') as f:
+                f.write(line + '\n')
+
 
 # Files copied into every run folder (properties.inp is written, not copied)
 FILES_TO_COPY = [f'{JOB_NAME}.inp', 'sec_uel_cube.inp', 'prefdir.inp', 'uel.f90',
@@ -132,14 +156,11 @@ def compute_initmu(p, rgas=8.31446261815324, tol=1.e-12):
         - (p['K'] * p['VMOL'] / (rgas * p['THETA'])) * (math.log(1.0 / jc) / jc))
 
 
-def write_properties(path, props, initmu, header):
-    with open(path, 'w') as f:
-        f.write('*parameter\n')
-        f.write(f'** {header}\n')
-        for key, value in props.items():
-            f.write(f'{key} = {value:.12g}\n')
-        f.write('*' * 79 + '\n')
-        f.write(f'INITMU = {initmu:.6f}\n')
+def render_properties(props, initmu, header):
+    lines = ['*parameter', f'** {header}']
+    lines += [f'{key} = {value:.12g}' for key, value in props.items()]
+    lines += ['*' * 79, f'INITMU = {initmu:.6f}']
+    return '\n'.join(lines) + '\n'
 
 
 # ------------------------------------------------------------------------------------------
@@ -155,8 +176,8 @@ def build_cases(base_props, study, only=None):
         if var not in base_props:
             raise KeyError(f"{var} is not a property in properties.inp")
         if var == 'DXC' and base_props.get('KCATCH0', 0.0) == 0.0:
-            print("WARNING: sweeping DXC with KCATCH0 = 0 has no effect on the results "
-                  "(no catch pathway). Set KCATCH0 in BASE_OVERRIDES.")
+            log("WARNING: sweeping DXC with KCATCH0 = 0 has no effect on the results "
+                "(no catch pathway). Set KCATCH0 in BASE_OVERRIDES.")
         for value in values:
             props = dict(base_props)
             props[var] = float(value)
@@ -165,13 +186,36 @@ def build_cases(base_props, study, only=None):
     return cases
 
 
-def prepare_case(case, base_dir, sa_dir):
-    run_dir = os.path.join(sa_dir, case['folder'])
-    os.makedirs(run_dir, exist_ok=True)
-    case['run_dir'] = run_dir
+def set_case_inputs(case, sa_dir):
+    """Run folder, INITMU and properties.inp content of a case (nothing written yet)."""
+    case['run_dir'] = os.path.join(sa_dir, case['folder'])
     case['initmu'] = compute_initmu(case['props'])
     header = 'base properties' if case['var'] == 'base' else f"{case['var']} = {case['value']:g}"
-    write_properties(os.path.join(run_dir, 'properties.inp'), case['props'], case['initmu'], header)
+    case['properties'] = render_properties(case['props'], case['initmu'], header)
+
+
+def inputs_unchanged(case, base_dir):
+    """True if the run folder already holds exactly the inputs that would be written now."""
+    run_dir = case['run_dir']
+    path = os.path.join(run_dir, 'properties.inp')
+    if not os.path.exists(path):
+        return False
+    with open(path) as f:
+        if f.read() != case['properties']:
+            return False
+    for name in FILES_TO_COPY:
+        dest = os.path.join(run_dir, name)
+        if not (os.path.exists(dest) and filecmp.cmp(os.path.join(base_dir, name), dest, shallow=False)):
+            return False
+    return True
+
+
+def prepare_case(case, base_dir):
+    """Write properties.inp and copy the job files into the run folder."""
+    run_dir = case['run_dir']
+    os.makedirs(run_dir, exist_ok=True)
+    with open(os.path.join(run_dir, 'properties.inp'), 'w') as f:
+        f.write(case['properties'])
     for name in FILES_TO_COPY:
         shutil.copy(os.path.join(base_dir, name), os.path.join(run_dir, name))
 
@@ -212,6 +256,26 @@ def run_abaqus(run_dir, poll_seconds=10):
     return result.returncode, job_completed(run_dir)
 
 
+def run_case(case, sa_dir):
+    """Run one case, logging its start and end and the jobs running at that moment."""
+    folder = case['folder']
+    label = 'base properties' if case['var'] == 'base' else f"{case['var']} = {case['value']:g}"
+    # The set update and its log line are done together, so the logged lines are in order
+    with _RUN_LOCK:
+        _RUNNING.add(folder)
+        log(f"START  {folder} ({label}): {JOB_NAME}.inp with user=uel.f90 in "
+            f"{os.path.join(os.path.basename(sa_dir), folder)} | running now ({len(_RUNNING)}): "
+            f"{', '.join(sorted(_RUNNING))}")
+    t_start = time.time()
+    code, completed = run_abaqus(case['run_dir'])
+    status = 'completed' if completed else f'FAILED (return code {code})'
+    with _RUN_LOCK:
+        _RUNNING.discard(folder)
+        log(f"END    {folder}: {status} after {(time.time() - t_start) / 60:.1f} min | "
+            f"still running ({len(_RUNNING)}): {', '.join(sorted(_RUNNING)) if _RUNNING else '-'}")
+    return code, completed
+
+
 # ------------------------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -225,34 +289,49 @@ def main():
     sa_dir = os.path.join(base_dir, SA_DIR_NAME)
     os.makedirs(sa_dir, exist_ok=True)
 
+    global _LOG_FILE
+    _LOG_FILE = os.path.join(sa_dir, 'output.txt')
+    log('=' * 80)
+    log(f"Sensitivity analysis: job {JOB_NAME}.inp, options: dry_run={args.dry_run}, "
+        f"only={args.only or 'all'}, workers={args.workers}, force={args.force}")
+
     base_props = read_properties(os.path.join(base_dir, 'properties.inp'))
     base_props.update(BASE_OVERRIDES)
     cases = build_cases(base_props, STUDY_PROPS_INFO, args.only)
 
-    for case in cases:
-        prepare_case(case, base_dir, sa_dir)
-    print(f"Prepared {len(cases)} run folders in {sa_dir}")
-
+    # A completed job is skipped (and its folder left untouched) only if its inputs are identical
+    # to the ones that would be written now; otherwise the folder is refreshed and the job rerun.
     to_run = []
     for case in cases:
-        if job_completed(case['run_dir']) and not args.force:
+        set_case_inputs(case, sa_dir)
+        completed = job_completed(case['run_dir'])
+        if completed and not args.force and inputs_unchanged(case, base_dir):
             case['status'] = 'completed (skipped)'
-        else:
-            clean_previous_attempt(case['run_dir'])
-            case['status'] = 'not run' if args.dry_run else 'pending'
-            to_run.append(case)
+            continue
+        if completed and not args.force:
+            log(f"{case['folder']}: inputs changed since the completed run -> will be rerun")
+        prepare_case(case, base_dir)
+        clean_previous_attempt(case['run_dir'])
+        case['status'] = 'not run' if args.dry_run else 'pending'
+        to_run.append(case)
+    skipped = [c['folder'] for c in cases if c not in to_run]
+    log(f"{len(cases)} cases in {sa_dir}: {len(skipped)} completed and unchanged (skipped), "
+        f"{len(to_run)} to run")
+    if skipped:
+        log(f"Skipped: {', '.join(skipped)}")
+    if to_run:
+        log(f"{'Prepared (dry run)' if args.dry_run else 'To run'}: {', '.join(c['folder'] for c in to_run)}")
 
     if not args.dry_run and to_run:
-        print(f"Running {len(to_run)} jobs, {args.workers} at a time...")
+        log(f"Running {len(to_run)} jobs, {args.workers} at a time...")
         t0 = time.time()
         with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
-            futures = {executor.submit(run_abaqus, c['run_dir']): c for c in to_run}
+            futures = {executor.submit(run_case, c, sa_dir): c for c in to_run}
             for n, future in enumerate(concurrent.futures.as_completed(futures), 1):
                 case = futures[future]
                 code, completed = future.result()
                 case['status'] = 'completed' if completed else f'FAILED (return code {code})'
-                print(f"[{n}/{len(to_run)}] {case['folder']}: {case['status']} "
-                      f"({(time.time() - t0) / 60:.1f} min elapsed)")
+                log(f"Progress {n}/{len(to_run)} finished ({(time.time() - t0) / 60:.1f} min elapsed)")
 
     with open(os.path.join(sa_dir, 'sa_cases.csv'), 'w', newline='') as f:
         writer = csv.writer(f)
@@ -261,9 +340,9 @@ def main():
             writer.writerow([c['var'], c['value'], c['folder'], f"{c['initmu']:.6f}", c['status']])
 
     failed = [c['folder'] for c in cases if c['status'].startswith('FAILED')]
-    print(f"Summary written to {os.path.join(sa_dir, 'sa_cases.csv')}")
+    log(f"Summary written to {os.path.join(sa_dir, 'sa_cases.csv')}")
     if failed:
-        print(f"{len(failed)} jobs failed: {failed}")
+        log(f"{len(failed)} jobs failed: {', '.join(failed)}")
 
 
 if __name__ == '__main__':
