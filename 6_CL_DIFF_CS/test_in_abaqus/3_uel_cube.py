@@ -13,8 +13,10 @@ stretch_displacement = 0.3     # Displacement magnitude
 output_file = f"cube_{deformation_type}_uel_auto.inp"
 
 # Geometry Parameters
-cube_size = 2.0  
-top_face_y = 2.0 
+cube_size = 2.0
+top_face_y = 2.0
+size_x = None        # box size in x (None -> cube_size), e.g. a column along x
+size_z = None        # box size in z (None -> cube_size)
 dummy_element_offset = 100000
 
 # Step Times
@@ -32,9 +34,28 @@ num_properties = 26
 node_output_vars = "U, NT, RF, RFL"  # RFL: reaction flux of the chemical DOF (crosslinker exchange with the bath)
 ramp_first_step = False              # True: ramp the imposed displacement over the first step (explicit amplitude)
 
+# ==============================================================================
+# CHEMICAL BOUNDARY CONFIGURATION (defaults; the presets below may override them)
+# ==============================================================================
+# "closed" -> Impermeable boundary. Fluid/proteins cannot cross this surface.
+# "open"   -> Permeable boundary. Fluid/proteins can escape into the surrounding bath.
+top_boundary_condition = "closed"     # Top surface, y = top_face_y (outside the indenter)
+side_boundary_condition = "closed"    # All four side walls (x = 0, x = max, z = 0, z = max) together
+bottom_boundary_condition = "closed"  # Bottom surface (y = 0)
+# Single side faces (opened in addition to the above), e.g. the bath end of a column along x
+x0_boundary_condition = "closed"      # x = 0
+xmax_boundary_condition = "closed"    # x = size_x
+z0_boundary_condition = "closed"      # z = 0
+zmax_boundary_condition = "closed"    # z = size_z
+
+bath_chemical_potential = "<INITMU>" # The potential of the surrounding bath
+
+# ==============================================================================
+# PRESETS (after the defaults above, so that they override them)
+# ==============================================================================
 # ------------------------------------------------------------------------------
-# STAGE 1 (single-element shear-hold) settings: replace the values above with
-input_file = "base_mesh_1el.inp"     # 1_build_mesh.py with cube_size = mesh_size = 1.0, job_name = 'base_mesh_1el'
+# STAGE 1 (single-element shear-hold): open system, bath on all nodes
+input_file = "base_mesh_1el.inp"     # 1_build_mesh.py: size_x = size_y = size_z = mesh_size = 1.0, job_name = 'base_mesh_1el'
 deformation_type = "shear";  stretch_displacement = "<GAMMA>"   # height 1 -> displacement = shear strain
 output_file = "stage1_shear_hold.inp"
 cube_size = 1.0;  top_face_y = 1.0
@@ -45,17 +66,20 @@ ramp_first_step = True
 top_boundary_condition = side_boundary_condition = bottom_boundary_condition = "open"
 # (GAMMA must be defined in properties.inp for a manual run; run_stage1.py adds it per case)
 # ------------------------------------------------------------------------------
-
-# ==============================================================================
-# CHEMICAL BOUNDARY CONFIGURATION
-# ==============================================================================
-# "closed" -> Impermeable boundary. Fluid/proteins cannot cross this surface.
-# "open"   -> Permeable boundary. Fluid/proteins can escape into the surrounding bath.
-top_boundary_condition = "closed"     # Top surface (outside the indenter)
-side_boundary_condition = "closed"    # Outer physical side walls
-bottom_boundary_condition = "closed"  # Bottom surface (y = 0)
-
-bath_chemical_potential = "<INITMU>" # The potential of the surrounding bath
+# STAGE 2 (column along x, bath at x = size_x only): comment out the stage-1 preset and use
+# input_file = "base_mesh_column.inp"  # 1_build_mesh.py: size_x = 50.0, size_y = size_z = 1.0, n_x = 15,
+#                                      #   n_y = n_z = 1, bias_axis = 'x', bias_ratio = 3.0, bias_end = 'max',
+#                                      #   job_name = 'base_mesh_column'
+# deformation_type = "shear";  stretch_displacement = "<GAMMA>"   # shear u_x = GAMMA*y over the height 1
+# output_file = "stage2_column_bath.inp"
+# cube_size = 1.0;  top_face_y = 1.0;  size_x = 50.0;  size_z = 1.0
+# t_indent = 0.5;   dtime_indent = 0.001;  max_inc_indent = 0.05
+# t_hold = 1000.0;  dtime_hold = 0.01;     max_inc_hold = 10.0
+# t_withdraw = 0.0; t_relax = 0.0
+# ramp_first_step = True
+# top_boundary_condition = side_boundary_condition = bottom_boundary_condition = "closed"
+# xmax_boundary_condition = "open"     # bath on the end face x = size_x only
+# ------------------------------------------------------------------------------
 
 
 # ==============================================================================
@@ -67,6 +91,9 @@ try:
 except FileNotFoundError:
     print(f"Error: {input_file} not found.")
     exit()
+
+sx = size_x if size_x is not None else cube_size   # box sizes used to find the x = max / z = max faces
+sz = size_z if size_z is not None else cube_size
 
 new_lines, element_lines = [], []
 in_nodes, in_elements = False, False
@@ -101,8 +128,8 @@ for line in lines:
             all_node_ids.append(n_id)
             if abs(y - top_face_y) < 1e-6: top_nodes[n_id] = (x, y, z)
             if abs(y - 0.0) < 1e-6: bottom_nodes.append(n_id)
-            if abs(x - cube_size) < 1e-6: xmax_nodes.append(n_id)
-            if abs(z - cube_size) < 1e-6: zmax_nodes.append(n_id)
+            if abs(x - sx) < 1e-6: xmax_nodes.append(n_id)
+            if abs(z - sz) < 1e-6: zmax_nodes.append(n_id)
             if abs(x - 0.0) < 1e-6: x0_nodes.append(n_id)
             if abs(z - 0.0) < 1e-6: z0_nodes.append(n_id)
                 
@@ -165,6 +192,11 @@ if top_boundary_condition == "open": open_chem_nodes.update(list(top_nodes.keys(
 if side_boundary_condition == "open":
     open_chem_nodes.update(x0_nodes + z0_nodes + xmax_nodes + zmax_nodes)
 if bottom_boundary_condition == "open": open_chem_nodes.update(bottom_nodes)
+if x0_boundary_condition == "open": open_chem_nodes.update(x0_nodes)
+if xmax_boundary_condition == "open": open_chem_nodes.update(xmax_nodes)
+if z0_boundary_condition == "open": open_chem_nodes.update(z0_nodes)
+if zmax_boundary_condition == "open": open_chem_nodes.update(zmax_nodes)
+print(f"Chemical bath (mu = {bath_chemical_potential}) on {len(open_chem_nodes)} of {len(all_node_ids)} nodes")
 uel_block += write_nset("open_chem_nodes", sorted(open_chem_nodes))
 
 uel_block += f"""
