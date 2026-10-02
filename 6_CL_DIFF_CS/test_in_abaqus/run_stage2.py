@@ -62,10 +62,15 @@ def sweep_cases():
          {**LAWS[law], 'KEQ': k, 'GAMMA': GAMMA_SWEEPS})
         for law in LAWS for k in [0.0625, 0.25, 1.0, 5.0]]
 
-    sweeps['D_RBMAX'] = [
-        (f'{law}_rbmax{g(rb)}', f'D: {law}, RBMAX = {g(rb)}, GAMMA = {g(GAMMA_SWEEPS)}',
-         {**LAWS[law], 'RBMAX': rb, 'GAMMA': GAMMA_SWEEPS})
-        for law in LAWS for rb in [0.25, 0.5, 1.0]]
+    # sweeps['D_RBMAX'] = [
+    #     (f'{law}_rbmax{g(rb)}', f'D: {law}, RBMAX = {g(rb)}, GAMMA = {g(GAMMA_SWEEPS)}',
+    #      {**LAWS[law], 'RBMAX': rb, 'GAMMA': GAMMA_SWEEPS})
+    #     for law in LAWS for rb in [0.25, 0.5, 1.0]]
+    sweeps['D_RFMAX'] = [
+        (f'{law}_rfmax{g(rb)}', f'D: {law}, RFMAX = {g(rb)}, GAMMA = {g(GAMMA_SWEEPS)}',
+         {**LAWS[law], 'RFMAX': rb, 'GAMMA': GAMMA_SWEEPS})
+        for law in LAWS for rb in [0.25, 0.5, 1.0, 2.]]
+    
 
     return sweeps
 

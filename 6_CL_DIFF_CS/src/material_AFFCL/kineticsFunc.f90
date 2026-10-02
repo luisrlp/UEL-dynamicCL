@@ -45,19 +45,23 @@ subroutine kineticsFunc(cbtau, f, df, dHdl, args, nargs)
     l = aratio * r0f
     r0 = r0f + r0c
     
-    IF (lambdai.LE.one) then
+    IF((etac > zero).AND.(etac .LE. one))THEN
+        lambdaif=etac*(r0/r0f)*(lambdai-one)+one
+        lambda0f=etac*(r0/r0f)*(lambda0-one)+one
+        lambdaic=(lambdai*r0-lambdaif*r0f)/r0c
+    ELSE
+        lambdaif=lambdai ! False for a filament attached to a stiff crosslinker (etac = 1), only valid for etac = 0 (???)
+        lambda0f=lambda0
+        lambdaic=zero ! False for a stiff crosslinker (etac = 1), only valid for etac = 0 (???)
+    END IF
+
+    ! Slack filament (total filament stretch, prestretch included, <= 1): no force.
+    ! With LAMBDA0 = 1 this is lambdai <= 1; with LAMBDA0 > 1 the filament is loaded at rest
+    IF (lambdaif*lambda0f .LE. one) then
         fi = 0.0
         DfDcb = 0.0
         ddwi = zero
     ELSE
-        IF((etac > zero).AND.(etac .LE. one))THEN
-            lambdaif=etac*(r0/r0f)*(lambdai-one)+one
-            lambda0f=etac*(r0/r0f)*(lambda0-one)+one
-            lambdaic=(lambdai*r0-lambdaif*r0f)/r0c
-        ELSE
-            lambdaif=lambdai ! False for a filament attached to a stiff crosslinker (etac = 1), only valid for etac = 0 (???)
-            lambdaic=zero ! False for a stiff crosslinker (etac = 1), only valid for etac = 0 (???)
-        END IF
         CALL fil(fi,ffi,dwi,ddwi,&
                 lambdai,lambdaif,lambda0,lambda0f,&
                 l,r0,r0f,mu0str,beta,b0,etac,&

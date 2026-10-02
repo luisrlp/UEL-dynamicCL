@@ -316,11 +316,14 @@ do face = 1, face_num/2
           lambdaif = etac*(r0/r0f)*(lambdai-one)+one
           lambda0f = etac*(r0/r0f)*(lambda0-one)+one
         ELSE
-          lambdaif = lambdai 
+          lambdaif = lambdai
+          lambda0f = lambda0
         END IF
 
         fi = zero
-        IF(lambdai .GE. 1.0d0) THEN 
+        ! Loaded filament: total filament stretch (prestretch included) >= 1, as in kineticsFunc.
+        ! With LAMBDA0 = 1 this is lambdai >= 1 (the reference state F = I keeps the filament tangent)
+        IF(lambdaif*lambda0f .GE. one) THEN
           CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),DfDcb)
           !CALL fil_inext(fi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,beta,b0,etac,cb(node_num),DfDcb)
           CALL sigfilfic(sfilfic,rho,lambdai,dwi,mfi,ai,ndi)
