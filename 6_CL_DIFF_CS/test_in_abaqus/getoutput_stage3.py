@@ -345,12 +345,13 @@ SWEEP_X = {'d': ('delta/R', None), 'lambda0': ('LAMBDA0', 'LAMBDA0'), 'D': (r'D 
 
 def group_and_x(case, props, radius):
     """Law and swept value of a case folder '<law>_<var><value>' (or '<law>_nomatrix')."""
-    mm = re.match(r'^([A-Za-z]+)_([A-Za-z]+?)(\d[-+.\deE]*)$', case)
-    if mm and mm.group(2) in SWEEP_X:
-        xlabel, key = SWEEP_X[mm.group(2)]
-        x = float(mm.group(3)) if key is None else props.get(key, float(mm.group(3)))
-        return mm.group(1), x, xlabel
-    return case.split('_')[0], np.nan, ''
+    law, _, rest = case.partition('_')
+    for prefix in sorted(SWEEP_X, key=len, reverse=True):     # 'lambda0' before shorter prefixes
+        value = rest[len(prefix):]
+        if rest.startswith(prefix) and re.fullmatch(r'\d[-+.\deE]*', value):
+            xlabel, key = SWEEP_X[prefix]
+            return law, (float(value) if key is None else props.get(key, float(value))), xlabel
+    return law, np.nan, ''
 
 
 def load_outputs():

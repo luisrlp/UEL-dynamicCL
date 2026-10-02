@@ -97,7 +97,7 @@ field_number_interval = None       # None: field output at every increment; or {
 #   python3 2_uel_afm.py length_scale=20 side_boundary_condition=open output_file=stage3_afm_large_open.inp
 input_file = "base_mesh_afm.inp"
 output_file = "stage3_afm_large_closed.inp"
-cube_size = 3.0;  top_face_y = 2.5;  size_x = 3.0;  size_z = 3.0
+cube_size = 3.0;  top_face_y = 3.0;  size_x = 3.0;  size_z = 3.0
 length_scale = 20.0                 # R = 20 um (60 x 50 x 60 um gel); 2/3 -> 2 x 1.67 x 2 um sample
 indenter_position = "vertex";  indenter_radius = 1.0;  initial_gap = 0.005
 depth = "<UIND>"                    # -(gap + delta) in um, set per case by run_stage3.py

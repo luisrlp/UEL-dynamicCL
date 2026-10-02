@@ -70,14 +70,14 @@ import run_sa
 from run_stage1 import STAGE1_BASE, LAWS, g
 
 SA_DIR_NAME = 'SA_stage3'
-MAX_WORKERS = 4
+MAX_WORKERS = 8
 CPUS_PER_JOB = 4
 
 D_BASE = 3.0                                    # um^2/s, as in stage 2
 MATRIX = {'PHINET': 0.5, 'C10': 0.008}          # weak matrix, ~5% of the network shear modulus
 STAGE3_BASE = {**STAGE1_BASE, 'D': D_BASE, 'LAMBDA0': 1.0, **MATRIX}
 
-SCALES = ('large', 'small')
+SCALES = ('large',) #, 'small')
 CHEMS = ('closed', 'open')
 DEPTHS = [0.05, 0.15, 0.3]                      # delta / R
 DEPTH_REF = 0.15

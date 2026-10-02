@@ -1,0 +1,4 @@
+cre /home/lpacheco/UEL-dynamicCL/6_CL_DIFF_CS/test_in_abaqus/SA_stage3/large_closed/B2_prestress_deep/catch_lambda01.2/stage3_afm_large_closed.1.SMABulk
+cre /home/lpacheco/UEL-dynamicCL/6_CL_DIFF_CS/test_in_abaqus/SA_stage3/large_closed/B2_prestress_deep/catch_lambda01.2/stage3_afm_large_closed.2.SMABulk
+cre /home/lpacheco/UEL-dynamicCL/6_CL_DIFF_CS/test_in_abaqus/SA_stage3/large_closed/B2_prestress_deep/catch_lambda01.2/stage3_afm_large_closed.simdir/stage3_afm_large_closed.1.SMAFocus
+cre /home/lpacheco/UEL-dynamicCL/6_CL_DIFF_CS/test_in_abaqus/SA_stage3/large_closed/B2_prestress_deep/catch_lambda01.2/stage3_afm_large_closed.sim

@@ -1,0 +1,33 @@
+*parameter
+** C2: catch, DXC/DX = 2 (DX = 1 nm), GAMMA = 0.55
+density = 0.0005
+K = 1000
+C10 = 0
+C01 = 0
+PHINET = 1
+a = 1.2
+R0C = 0.014
+ETAC = 0.666666666667
+MU0STRETCH = 38600
+BETA = 0.5
+LP = 16
+THETA = 298
+DX = 0.001
+BB = 1e-06
+LAMBDA0 = 1
+CACTIN = 0.0095
+R = 0.1
+RFMAX = 0.25
+RBMAX = 0.25
+CHI = 0.1
+D = 0.01
+MU0 = 0
+VMOL = 0.15
+KOFF0 = 0.005
+KEQ = 0.25
+KCATCH0 = 0.045
+DXC = 0.002
+UIND = -3.1
+GAMMA = 0.55
+*******************************************************************************
+INITMU = -2002.850426
