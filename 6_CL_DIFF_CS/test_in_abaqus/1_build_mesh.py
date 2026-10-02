@@ -18,9 +18,10 @@ n_x = 20
 n_y = 1
 n_z = 1
 
-# Grading along one axis: bias_axis ('x', 'y' or 'z'); ratio largest/smallest element
-# bias_ratio (1.0 = uniform); smallest elements at bias_end: 'max' (e.g. the bath face of the
-# stage-2 column at x = size_x) or 'min' (coordinate 0)
+# Grading: bias_axis is one axis ('x', 'y' or 'z') or several, e.g. ('x', 'y', 'z') to grade
+# towards a corner; ratio largest/smallest element bias_ratio (1.0 = uniform); smallest elements
+# at bias_end: 'max' (e.g. the bath face of the stage-2 column at x = size_x) or 'min'
+# (coordinate 0). bias_ratio and bias_end apply to every graded axis
 bias_axis = 'x'
 bias_ratio = 1.0
 bias_end = 'max'
@@ -36,6 +37,12 @@ job_name = 'base_mesh_column'
 #                              bias_end = 'max'; job_name = 'base_mesh_column'
 #   Indentation cube (previous): size_x = size_y = size_z = 2.0; mesh_size = 0.2;
 #                              job_name = 'base_mesh'
+#   Stage 3 (AFM quarter model, in units of the indenter radius R; 2_uel_afm.py scales it):
+#                              size_x = size_z = 3.0; size_y = 2.5; n_x = n_z = 16; n_y = 14;
+#                              bias_axis = ('x', 'y', 'z'); bias_ratio = 10.0; bias_end = 'max';
+#                              job_name = 'base_mesh_afm'
+#                              (3584 elements, ~0.045 R at the indented corner, ~0.45 R far away;
+#                              numElem in global.f90 must be >= the number of elements)
 # ------------------------------------------------------------------------------
 
 # ==============================================================================
@@ -94,44 +101,46 @@ def axis_spacings(a):
             out.append((vals[1] - vals[0], vals[-1] - vals[-2]))
     return out
 
+bias_axes = [AXIS[b] for b in ((bias_axis, ) if isinstance(bias_axis, str) else bias_axis)]
 uniform_global = n_x is None and n_y is None and n_z is None and bias_ratio == 1.0
 if uniform_global:
     myPart.seedPart(size=mesh_size, deviationFactor=0.1, minSizeFactor=0.1)
 else:
     counts = [n or max(1, int(round(size / mesh_size))) for n, size in zip((n_x, n_y, n_z), SIZES)]
-    ab = AXIS[bias_axis]
     for a in range(3):
-        if a != ab or bias_ratio == 1.0:
+        if a not in bias_axes or bias_ratio == 1.0:
             myPart.seedEdgeByNumber(edges=axis_edges(a), number=counts[a], constraint=FIXED)
     if bias_ratio != 1.0:
-        # Smallest elements at the parameter start (end1) or end (end2) of each edge, chosen so
-        # that they lie at the requested face (coordinate = size for 'max', 0 for 'min')
-        fine = SIZES[ab] if bias_end == 'max' else 0.0
-        b_edges = axis_edges(ab)
-        end1 = [e for e in b_edges if abs(edge_start(e)[ab] - fine) < 1e-6]
-        end2 = [e for e in b_edges if abs(edge_start(e)[ab] - fine) >= 1e-6]
-        kwargs = dict(biasMethod=SINGLE, ratio=bias_ratio, number=counts[ab], constraint=FIXED)
-        if end1:
-            kwargs['end1Edges'] = end1
-        if end2:
-            kwargs['end2Edges'] = end2
-        myPart.seedEdgeByBias(**kwargs)
+        for ab in bias_axes:
+            # Smallest elements at the parameter start (end1) or end (end2) of each edge, chosen so
+            # that they lie at the requested face (coordinate = size for 'max', 0 for 'min')
+            fine = SIZES[ab] if bias_end == 'max' else 0.0
+            b_edges = axis_edges(ab)
+            end1 = [e for e in b_edges if abs(edge_start(e)[ab] - fine) < 1e-6]
+            end2 = [e for e in b_edges if abs(edge_start(e)[ab] - fine) >= 1e-6]
+            kwargs = dict(biasMethod=SINGLE, ratio=bias_ratio, number=counts[ab], constraint=FIXED)
+            if end1:
+                kwargs['end1Edges'] = end1
+            if end2:
+                kwargs['end2Edges'] = end2
+            myPart.seedEdgeByBias(**kwargs)
 
 elemType = mesh.ElemType(elemCode=C3D8, elemLibrary=STANDARD)
 myPart.setElementType(regions=(myPart.cells,), elemTypes=(elemType,))
 myPart.generateMesh()
 
-# Check the grading: finest spacing at the requested face, on all 4 edges along bias_axis
+# Check the grading: finest spacing at the requested face, on all 4 edges along each graded axis
 if not uniform_global and bias_ratio != 1.0:
-    spacings = axis_spacings(AXIS[bias_axis])
-    want_max = bias_end == 'max'
-    ok = all((d_max < d_min) if want_max else (d_min < d_max) for d_min, d_max in spacings)
-    print("Spacing along %s at %s = 0 / %s = %g on its 4 edges: %s" % (
-        bias_axis, bias_axis, bias_axis, SIZES[AXIS[bias_axis]],
-        ', '.join('%.4g / %.4g' % s for s in spacings)))
-    if not ok:
-        raise RuntimeError("Grading along %s is not finest at bias_end = '%s' on all edges: "
-                           "check the edge directions (end1Edges/end2Edges)" % (bias_axis, bias_end))
+    for ab in bias_axes:
+        name = 'xyz'[ab]
+        spacings = axis_spacings(ab)
+        want_max = bias_end == 'max'
+        ok = all((d_max < d_min) if want_max else (d_min < d_max) for d_min, d_max in spacings)
+        print("Spacing along %s at %s = 0 / %s = %g on its 4 edges: %s" % (
+            name, name, name, SIZES[ab], ', '.join('%.4g / %.4g' % s for s in spacings)))
+        if not ok:
+            raise RuntimeError("Grading along %s is not finest at bias_end = '%s' on all edges: "
+                               "check the edge directions (end1Edges/end2Edges)" % (name, bias_end))
 
 print("Mesh: %d nodes, %d elements" % (len(myPart.nodes), len(myPart.elements)))
 

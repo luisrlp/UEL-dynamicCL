@@ -27,7 +27,7 @@
       DOUBLE PRECISION HALF,THIRD
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       ! Set the number of UEL elements used here
-      parameter(numElem=1000)
+      parameter(numElem=5000)
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       ! Set the offset here for UVARM plotting, must match input file!
       parameter(ElemOffset=100000)
