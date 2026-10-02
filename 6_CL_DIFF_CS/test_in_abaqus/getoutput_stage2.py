@@ -240,7 +240,7 @@ def case_metrics(out):
 
 
 SWEEP_VAR = {'gamma': ('GAMMA', 'GAMMA'), 'D': ('D', r'D ($\mu$m$^2$/s)'),
-             'keq': ('KEQ', 'KEQ'), 'rbmax': ('RBMAX', 'RBMAX')}
+             'keq': ('KEQ', 'KEQ'), 'rfmax': ('RFMAX', 'RFMAX')}
 
 
 def group_and_x(case, props):
@@ -270,7 +270,7 @@ def analyse(outs):
         group, x, xlabel = group_and_x(case, out['props'])
         p = out['props']
         rows.append({'sweep': sweep, 'case': case, 'label': out['label'], 'group': group, 'x': x,
-                     **{k: p.get(k, np.nan) for k in ('GAMMA', 'KOFF0', 'KCATCH0', 'D', 'KEQ', 'RBMAX')},
+                     **{k: p.get(k, np.nan) for k in ('GAMMA', 'KOFF0', 'KCATCH0', 'D', 'KEQ', 'RFMAX')},
                      **{k: v for k, v in m.items() if k != 'uptake_t'},
                      **{f'warn_{k}': v for k, v in out['warnings'].items()}, 'completed': out['completed']})
         by_sweep.setdefault(sweep, []).append((group, x, xlabel, out, m))
