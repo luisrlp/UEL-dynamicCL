@@ -1,0 +1,23 @@
+folder,label,overrides,INITMU,status
+A_core/slip_d0.05,"A: slip, delta/R = 0.05 [large, R = 20 um]",KOFF0=0.05; KCATCH0=0; DELTA=1; RIND=20; UIND=-1.1,-2002.850426,completed
+A_core/slip_d0.15,"A: slip, delta/R = 0.15 [large, R = 20 um]",KOFF0=0.05; KCATCH0=0; DELTA=3; RIND=20; UIND=-3.1,-2002.850426,completed
+A_core/slip_d0.3,"A: slip, delta/R = 0.3 [large, R = 20 um]",KOFF0=0.05; KCATCH0=0; DELTA=6; RIND=20; UIND=-6.1,-2002.850426,completed
+A_core/catch_d0.05,"A: catch, delta/R = 0.05 [large, R = 20 um]",KOFF0=0.005; KCATCH0=0.045; DELTA=1; RIND=20; UIND=-1.1,-2002.850426,completed
+A_core/catch_d0.15,"A: catch, delta/R = 0.15 [large, R = 20 um]",KOFF0=0.005; KCATCH0=0.045; DELTA=3; RIND=20; UIND=-3.1,-2002.850426,completed
+A_core/catch_d0.3,"A: catch, delta/R = 0.3 [large, R = 20 um]",KOFF0=0.005; KCATCH0=0.045; DELTA=6; RIND=20; UIND=-6.1,-2002.850426,completed
+B_prestress/slip_lambda01.1,"B: slip, LAMBDA0 = 1.1, delta/R = 0.05 [large, R = 20 um]",KOFF0=0.05; KCATCH0=0; LAMBDA0=1.1; DELTA=1; RIND=20; UIND=-1.1,-2002.850426,completed
+B_prestress/slip_lambda01.2,"B: slip, LAMBDA0 = 1.2, delta/R = 0.05 [large, R = 20 um]",KOFF0=0.05; KCATCH0=0; LAMBDA0=1.2; DELTA=1; RIND=20; UIND=-1.1,-2002.850426,completed
+B_prestress/slip_lambda01.24,"B: slip, LAMBDA0 = 1.24, delta/R = 0.05 [large, R = 20 um]",KOFF0=0.05; KCATCH0=0; LAMBDA0=1.24; DELTA=1; RIND=20; UIND=-1.1,-2002.850426,completed
+B_prestress/catch_lambda01.1,"B: catch, LAMBDA0 = 1.1, delta/R = 0.05 [large, R = 20 um]",KOFF0=0.005; KCATCH0=0.045; LAMBDA0=1.1; DELTA=1; RIND=20; UIND=-1.1,-2002.850426,completed
+B_prestress/catch_lambda01.2,"B: catch, LAMBDA0 = 1.2, delta/R = 0.05 [large, R = 20 um]",KOFF0=0.005; KCATCH0=0.045; LAMBDA0=1.2; DELTA=1; RIND=20; UIND=-1.1,-2002.850426,completed
+B_prestress/catch_lambda01.24,"B: catch, LAMBDA0 = 1.24, delta/R = 0.05 [large, R = 20 um]",KOFF0=0.005; KCATCH0=0.045; LAMBDA0=1.24; DELTA=1; RIND=20; UIND=-1.1,-2002.850426,completed
+B2_prestress_deep/slip_lambda01.1,"B2: slip, LAMBDA0 = 1.1, delta/R = 0.15 [large, R = 20 um]",KOFF0=0.05; KCATCH0=0; LAMBDA0=1.1; DELTA=3; RIND=20; UIND=-3.1,-2002.850426,completed
+B2_prestress_deep/slip_lambda01.2,"B2: slip, LAMBDA0 = 1.2, delta/R = 0.15 [large, R = 20 um]",KOFF0=0.05; KCATCH0=0; LAMBDA0=1.2; DELTA=3; RIND=20; UIND=-3.1,-2002.850426,completed
+B2_prestress_deep/catch_lambda01.1,"B2: catch, LAMBDA0 = 1.1, delta/R = 0.15 [large, R = 20 um]",KOFF0=0.005; KCATCH0=0.045; LAMBDA0=1.1; DELTA=3; RIND=20; UIND=-3.1,-2002.850426,completed
+B2_prestress_deep/catch_lambda01.2,"B2: catch, LAMBDA0 = 1.2, delta/R = 0.15 [large, R = 20 um]",KOFF0=0.005; KCATCH0=0.045; LAMBDA0=1.2; DELTA=3; RIND=20; UIND=-3.1,-2002.850426,completed
+C_D/slip_D0.3,"C: slip, D = 0.3 um^2/s, delta/R = 0.15 [large, R = 20 um]",KOFF0=0.05; KCATCH0=0; D=0.3; DELTA=3; RIND=20; UIND=-3.1,-2002.850426,completed
+C_D/slip_D30,"C: slip, D = 30 um^2/s, delta/R = 0.15 [large, R = 20 um]",KOFF0=0.05; KCATCH0=0; D=30; DELTA=3; RIND=20; UIND=-3.1,-2002.850426,completed
+C_D/catch_D0.3,"C: catch, D = 0.3 um^2/s, delta/R = 0.15 [large, R = 20 um]",KOFF0=0.005; KCATCH0=0.045; D=0.3; DELTA=3; RIND=20; UIND=-3.1,-2002.850426,completed
+C_D/catch_D30,"C: catch, D = 30 um^2/s, delta/R = 0.15 [large, R = 20 um]",KOFF0=0.005; KCATCH0=0.045; D=30; DELTA=3; RIND=20; UIND=-3.1,-2002.850426,completed
+E_nomatrix/slip_nomatrix,"E: slip, pure network, delta/R = 0.15 [large, R = 20 um]",KOFF0=0.05; KCATCH0=0; PHINET=1; C10=0; DELTA=3; RIND=20; UIND=-3.1,-2002.850426,completed
+E_nomatrix/catch_nomatrix,"E: catch, pure network, delta/R = 0.15 [large, R = 20 um]",KOFF0=0.005; KCATCH0=0.045; PHINET=1; C10=0; DELTA=3; RIND=20; UIND=-3.1,-2002.850426,completed

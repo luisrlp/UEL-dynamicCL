@@ -188,8 +188,10 @@ def extract(odb_files):
                 cb_tot.append(element_average(fo['UVARM4'], dummy, lookup, n)[:, 0])
                 s22.append(element_average(fo['UVARM6'], dummy, lookup, n)[:, 0])
                 top_u2.append(node_values(fo['U'], top, top_lookup, len(top_labels), 1))
-                rfl_bath.append(float(sum(np.sum(np.asarray(b.data)) for b in fo['RFL'].getSubset(region=bath).bulkDataBlocks))
-                                if bath is not None and 'RFL' in fo.keys() else np.nan)
+                # Reaction flux of the chemical DOF: stored per component ('RFL11') in the ODB
+                rfl_key = next((k for k in ('RFL11', 'RFL') if k in fo.keys()), None)
+                rfl_bath.append(float(sum(np.sum(np.asarray(b.data)) for b in fo[rfl_key].getSubset(region=bath).bulkDataBlocks))
+                                if bath is not None and rfl_key else np.nan)
                 if probe_labels:
                     if ndir is None:
                         ndir = len([k for k in fo.keys() if re.match(r'UVARM\d+$', k) and int(k[5:]) >= 17])
@@ -260,8 +262,11 @@ def contact_radius(out, i, u_ind):
 
 
 def direction_stretch(le, dirs):
-    """lambda_i = |V m_i| with V = exp(LE) (LE components 11 22 33 12 13 23)."""
-    L = np.array([[le[0], le[3], le[4]], [le[3], le[1], le[5]], [le[4], le[5], le[2]]])
+    """lambda_i = |V m_i| with V = exp(LE) (LE components 11 22 33 12 13 23; Abaqus stores the
+    shear components as engineering shear strains, gamma_ij = 2 eps_ij, hence the halving)."""
+    L = np.array([[le[0], 0.5 * le[3], 0.5 * le[4]],
+                  [0.5 * le[3], le[1], 0.5 * le[5]],
+                  [0.5 * le[4], 0.5 * le[5], le[2]]])
     w, Q = np.linalg.eigh(L)
     V = Q @ np.diag(np.exp(w)) @ Q.T
     return np.linalg.norm(dirs @ V.T, axis=1)
