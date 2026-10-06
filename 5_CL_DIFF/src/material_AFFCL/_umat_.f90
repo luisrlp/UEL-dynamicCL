@@ -29,7 +29,7 @@ IMPLICIT NONE
 INTEGER :: NDI, NSHR, NTENS, NSTATEV, NPROPS, NOEL, NPT, &
             LAYER, KSPT, KSTEP, KINC
 
-INTEGER, PARAMETER :: nargs = 10
+INTEGER, PARAMETER :: nargs = 11
 
 REAL(KIND=8) :: STRESS(NTENS), STATEV(NSTATEV), &
                 DDSDDE(NTENS,NTENS), DDSDDT(NTENS), DRPLDE(NTENS), &
@@ -300,13 +300,16 @@ CALL projlag(c,unit4,projl,ndi)
       ARGS(8) = DET
       ARGS(9) = CB_TOT
       ARGS(10) = CFMAX
+      ARGS(11) = cactin * R      ! initial total crosslinker content c0 (reference state of J^c)
       ! write(*,*) 'ARGS = ', ARGS
       ! write(*,*) 'THETAF_T =', THETAF_T
       CALL SOLVETHETAF(THETAF_TAU, ARGS, NARGS, THETAF_T)
       ! write(*,*) 'THETAF_TAU =', THETAF_TAU
 
       cf = THETAF_TAU * cfmax
-      Jc = 1.0d0 + VMOL * (cb_tot + cf)
+      ! Swelling relative to the initial content c0 = cactin*R (stress-free reference: Jc = 1 at t = 0);
+      ! dJc/dc = VMOL as before, so the derivatives below are unchanged (same definition in thetafFunc)
+      Jc = 1.0d0 + VMOL * (cb_tot + cf - cactin * R)
 
       ! Evaluate tangent at converged root
       CALL thetafFunc(THETAF_TAU, f, df, ARGS, NARGS)

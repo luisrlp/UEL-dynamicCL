@@ -154,7 +154,7 @@ def compute_initmu(p, rgas=8.31446261815324, tol=1.e-12):
     if not 0.0 < thetaf0 < 1.0:
         raise ValueError(f"Initial free fraction thetaf0 = {thetaf0:.4g} outside (0, 1): "
                          f"free crosslinkers exceed RFMAX*CACTIN for these properties.")
-    jc = 1.0 + p['VMOL'] * cr
+    jc = 1.0    # J^c = 1 + VMOL*(c - c0) is measured from the initial content c0 = cr (stress-free reference)
     return p['MU0'] + rgas * p['THETA'] * (
         math.log(thetaf0 / (1.0 - thetaf0)) + p['CHI'] * (1.0 - 2.0 * thetaf0)
         - (p['K'] * p['VMOL'] / (rgas * p['THETA'])) * (math.log(1.0 / jc) / jc))

@@ -66,7 +66,7 @@ cb0_root = bisection(evalh, 0.0, min(CR, C_MAX))
 # --- CALCULATE EXACT INITMU ---
 cf0 = CR - cb0_root
 thetaf0 = cf0 / F_MAX
-JC = 1.0 + VMOL * CR
+JC = 1.0    # J^c = 1 + VMOL*(c - c0) is measured from the initial content c0 = CR (stress-free reference)
 JE = 1.0 / JC
 
 INITMU = MU0 + RGAS * THETA * (

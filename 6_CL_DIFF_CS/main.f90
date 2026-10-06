@@ -146,7 +146,7 @@ PROGRAM TEST
       CALL pullchem(CB0_EQ, 0.d0, MIN(CR_EQ, PROPS(18)*PROPS(15)), 2.22d-16, 1.0d-12, &
                     CR_EQ, PROPS(17)*PROPS(15), PROPS(18)*PROPS(15), PROPS(19), PROPS(24))
       THETAF0_EQ = (CR_EQ - CB0_EQ) / (PROPS(17)*PROPS(15))
-      JC_EQ = 1.d0 + PROPS(22) * CR_EQ
+      JC_EQ = 1.d0    ! J^c is measured from the initial content (1 + VMOL*(c - c0) at c = c0)
       INITMU = PROPS(21) + RGAS_EQ * PROPS(11) * ( LOG(THETAF0_EQ / (1.d0 - THETAF0_EQ)) &
                + PROPS(19) * (1.d0 - 2.d0*THETAF0_EQ) &
                - (PROPS(1) * PROPS(22) / (RGAS_EQ * PROPS(11))) * (LOG(1.d0/JC_EQ) / JC_EQ) )

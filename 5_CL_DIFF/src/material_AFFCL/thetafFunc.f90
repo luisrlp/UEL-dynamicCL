@@ -11,7 +11,7 @@ subroutine thetafFunc(thetaf, f, df, args, nargs)
     DOUBLE PRECISION, intent(in)     :: args(nargs)                                                              
                                                                                                                 
     DOUBLE PRECISION                 :: mu, mu0, Rgas, theta, chi, Vmol, Kbulk                                                           
-    DOUBLE PRECISION                 :: detF, RT, Jc, Je, cb, cfmax
+    DOUBLE PRECISION                 :: detF, RT, Jc, Je, cb, cfmax, c0
     ! DOUBLE PRECISION, parameter      :: zero  = 0.0d0                                                                         
     ! DOUBLE PRECISION, parameter      :: one   = 1.0d0                                                                         
     ! DOUBLE PRECISION, parameter      :: two   = 2.0d0                                                                         
@@ -26,13 +26,15 @@ subroutine thetafFunc(thetaf, f, df, args, nargs)
     Kbulk = args(7)                                                                                             
     detF  = args(8)                                                                                             
     cb    = args(9)                                                         
-    cfmax = args(10)                                                                    
+    cfmax = args(10)
+    c0    = args(11)      ! initial total crosslinker content (reference state of J^c)
                                                                                                                 
     ! Compute the useful quantity                                                                               
     RT = Rgas * theta                                                                                           
                                                                                                                 
-    ! Compute the swelling ratio J^c
-    Jc = one + Vmol * cb + Vmol * cfmax * thetaf
+    ! Compute the swelling ratio J^c, relative to the initial content c0 (J^c = 1 at t = 0);
+    ! dJc/dthetaf = Vmol*cfmax as before, so the tangent df below is unchanged
+    Jc = one + Vmol * (cb + cfmax * thetaf - c0)
     
     ! Compute Elastic Volume Ratio J^e                                                                          
     Je = detF / Jc                                                       
