@@ -365,6 +365,12 @@ def load_outputs():
         with open(path, 'rb') as f:
             out = pickle.load(f)
         out['folder'] = os.path.relpath(os.path.dirname(path), sa_dir).replace('\\', '/')
+        # The first frame (t = 0, before any increment) can hold NaN values in a few elements;
+        # the initial state is uniform, so they are replaced by the mean of that frame
+        for key in ('thetaf', 'c', 'cb_tot', 's22'):
+            row = out[key][0]
+            if np.isnan(row).any() and not np.isnan(row).all():
+                row[np.isnan(row)] = np.nanmean(row)
         outs[out['folder']] = out
     return outs
 
