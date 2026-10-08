@@ -3,7 +3,7 @@
 
 SUBROUTINE affclnetfic_discrete(sfic,cfic,f,unit2,filprops,affprops,  &
   efi,noel,det,prefdir,ndi,cb,dtime,chemprops, &
-  thetaf, cbtau_tot, dPK2ficdcb, dcbdc, pnewdt)
+  thetaf, cbtau_tot, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf)
 
 
 
@@ -30,6 +30,8 @@ DOUBLE PRECISION, INTENT(IN OUT)         :: det
 DOUBLE PRECISION, INTENT(IN)             :: dtime
 DOUBLE PRECISION, INTENT(IN)             :: thetaf
 DOUBLE PRECISION, INTENT(OUT)            :: cbtau_tot
+DOUBLE PRECISION, INTENT(OUT)            :: dcbdthetaf ! G = dcb_tot/dthetaf (at fixed stretches)
+DOUBLE PRECISION, INTENT(OUT)            :: dsficdthetaf(ndi,ndi) ! d(fictitious Cauchy)/dthetaf via cb_i
 DOUBLE PRECISION, INTENT(IN OUT)         :: cb(ndir)
 
 INTEGER :: i1,j1,k1,l1,m1, im1, isub, n_sub
@@ -48,6 +50,7 @@ DOUBLE PRECISION :: cbt_i, cbtau_i, thetab_i, Kon, Koff_i, R_i, dtime_sub, cb_su
 INTEGER :: iter
 DOUBLE PRECISION :: cb_new, Res, cb_pert, dcb, r0f_p, l_p, r0_p
 DOUBLE PRECISION :: DfDcb, DdwDcb, Dr0Dcb, auxdwdcb, dHdlambda, dHdcb, dRiDcb, auxchem, dKoffDf_i
+DOUBLE PRECISION :: sth_i, dHdth_i, dsfilficdcb(ndi,ndi)
 DOUBLE PRECISION :: dHdcb_i, dHdl_i, sens_i, dHdcb_min, kh_i, gerr_i, cbx_i, Hx_i, dHdcbx_i, dHdlx_i
 LOGICAL :: conv_i, atb_i, ok_i, hard_i
 INTEGER :: nhard, nacc, nsub_max
@@ -156,6 +159,8 @@ off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
   aa = zero
 
   cbtau_tot = zero
+  dcbdthetaf = zero
+  dsficdthetaf = zero
   thetab_i = zero
   dPK2ficdcb=zero
   dcbdc=zero
@@ -257,10 +262,13 @@ do face = 1, face_num/2
         ! Consistent tangent: sub-step k solves H_k(cb_k, cb_k-1, lambda) = 0, hence the sensitivity
         !   sens = dcb/dlambda_i:  sens_k = (sens_k-1 - dH_k/dlambda) / (dH_k/dcb),  sens_0 = 0
         ! (for n_sub = 1: sens = -dHdlambda/dHdcb).
+        ! Same recursion for sth = dcb/dthetaf (Part C, item 1), with
+        !   dH_k/dthetaf = -dt_sub*cfmax*kon*[1/(1-thetaf)^2 - 2*chi*thetaf/(1-thetaf)]
         n_sub = 1
         DO
           cb_sub = cbt_i
           sens_i = zero
+          sth_i = zero
           ok_i = .TRUE.
           hard_i = .FALSE.
           args(12) = dtime / DBLE(n_sub)
@@ -268,6 +276,9 @@ do face = 1, face_num/2
             args(16) = cb_sub
             CALL solveKinetics(cb_new, args, nargs, cb_sub, conv_i, atb_i, dHdcb_i, dHdl_i)
             IF (dHdcb_i /= zero) sens_i = (sens_i - dHdl_i) / dHdcb_i
+            dHdth_i = - args(12) * cfmax * kon &
+                      * (one / (one - thetaf)**2 - two * CHI * thetaf / (one - thetaf))
+            IF (dHdcb_i /= zero) sth_i = (sth_i - dHdth_i) / dHdcb_i
             ! Hard failures (no converged root, or uniqueness being lost)
             IF ((.NOT. conv_i) .OR. (dHdcb_i < DH_MIN)) THEN
               ok_i = .FALSE.
@@ -338,6 +349,10 @@ do face = 1, face_num/2
           auxdwdcb = two / 5.d0 * dwi / cb(node_num) + ddwdcb
           !!! Leverage sigfilfic to get dSfic/Dcb for current direction
           call sigfilfic(dPK2filficdcb,rho,lambdai,auxdwdcb,mf0i,ai,ndi)
+          ! Kuc (Part C, item 4): same derivative in the deformed direction mfi (fictitious Cauchy),
+          ! weighted by the free-fraction sensitivity S^theta_i = dcb_i/dthetaf
+          call sigfilfic(dsfilficdcb,rho,lambdai,auxdwdcb,mfi,ai,ndi)
+          dsficdthetaf = dsficdthetaf + aux * sth_i * dsfilficdcb
           !! Term 3.2
           call pfdlambdadc(pfdlambdadcfil,rho,lambdai,unit2,mfi,ai,det,ndi)
           ! auxchem = -dcb/dlambda_i from the sub-step sensitivity recursion
@@ -367,6 +382,7 @@ do face = 1, face_num/2
         
         ! Update total bound CL concentration for this integration point                                                       
         cbtau_tot = cbtau_tot + cb(node_num) * rho * ai
+        dcbdthetaf = dcbdthetaf + sth_i * rho * ai
         ! ==============================================================   
 
         !v=dwi

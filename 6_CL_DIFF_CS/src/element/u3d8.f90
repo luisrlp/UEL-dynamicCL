@@ -39,6 +39,9 @@
                   Nvec(1, NNODE), ResFac, AmatUC(6, 1), TanFac, AmatCU(3, 9), DSIGDMU(3, 3), &
                   SpCUModFac(3, 3), SpCUMod(3, 3, 3), pi, detF_t, PNEWDT
          real(8) :: CFMAX,RMACRO,val
+         real(8) :: gNaGmu, gmuGNb, gNaGNb
+         real(8) :: DSRCDMU, DSRCDJ, DSRCDGU(3, 3), srcAlpha, srcA(3, 3)
+         integer :: aNod, bNod, kDir
          character(len=256) :: jobName, outDir, fileName
 
          ! Get element parameters
@@ -365,7 +368,8 @@
                call material(sigma_tau, statev, DDSIGDDE, F_t, F_tau, detF_tau, &
                        TIME, DTIME, PREDEF, nDim, nshr, ntens, nsdv, PROPS, NPROPS, coords, &
                        PNEWDT, JELEM, intpt, KSTEP, KINC,MU_TAU,THETAF_TAU,DTHETAFDT, &
-                       DTHETAFDMU,RMACRO,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,CFMAX,DSIGDMU,SPCUMODFAC)
+                       DTHETAFDMU,RMACRO,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,CFMAX,DSIGDMU,SPCUMODFAC, &
+                       DSRCDMU,DSRCDJ,DSRCDGU)
                !
                !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
                ! Previous determinant of the deformation gradient
@@ -642,8 +646,10 @@
          !          (two*(DTHETAFDT/thetaf_tau)*DTHETAFDMU - DphidotDmu)
          !
          ! CHANGED!!!!!!!
+         ! Capacity + reaction through thetaf (Part C, item 3):
+         !  TanFac = (cfmax + G)/(dt*detF) * dthetaf/dmu = DSRCDMU/detF
          if (DTIME > 1.0d-12) then
-            TanFac = (CFMAX * DTHETAFDMU) / (DTIME * detF)
+            TanFac = DSRCDMU / detF
          else
             TanFac = 0.0d0
          endif
@@ -652,50 +658,47 @@
                   + Mfluid*matmul(dshC,transpose(dshC)) &
                   + DmDmu*matmul(matmul(dshC,dMUdX),Nvec))
 
-         ! Compute/update the chemical potential - displacement tangent matrix
-         !  The F-bar method will have some effect, however we neglect that here.
-         !
-         SpCUMod = zero
-         do i=1,nDim
-            do k=1,nDim
-               do l=1,nDim
-                  SpCUMod(i,k,l) = SpCUMod(i,k,l) &
-                                 + dMUdX(k,1)*SpCUModFac(i,l)
-               enddo
-            enddo
-         enddo
-         !
-         AmatCU = zero
-         AmatCU(1,1) = SpCUMod(1,1,1)
-         AmatCU(1,2) = SpCUMod(1,2,1)
-         AmatCU(1,3) = SpCUMod(1,3,1)
-         AmatCU(1,4) = SpCUMod(1,1,2)
-         AmatCU(1,5) = SpCUMod(1,2,2)
-         AmatCU(1,6) = SpCUMod(1,3,2)
-         AmatCU(1,7) = SpCUMod(1,1,3)
-         AmatCU(1,8) = SpCUMod(1,2,3)
-         AmatCU(1,9) = SpCUMod(1,3,3)
-         AmatCU(2,1) = SpCUMod(2,1,1)
-         AmatCU(2,2) = SpCUMod(2,2,1)
-         AmatCU(2,3) = SpCUMod(2,3,1)
-         AmatCU(2,4) = SpCUMod(2,1,2)
-         AmatCU(2,5) = SpCUMod(2,2,2)
-         AmatCU(2,6) = SpCUMod(2,3,2)
-         AmatCU(2,7) = SpCUMod(2,1,3)
-         AmatCU(2,8) = SpCUMod(2,2,3)
-         AmatCU(2,9) = SpCUMod(2,3,3)
-         AmatCU(3,1) = SpCUMod(3,1,1)
-         AmatCU(3,2) = SpCUMod(3,2,1)
-         AmatCU(3,3) = SpCUMod(3,3,1)
-         AmatCU(3,4) = SpCUMod(3,1,2)
-         AmatCU(3,5) = SpCUMod(3,2,2)
-         AmatCU(3,6) = SpCUMod(3,3,2)
-         AmatCU(3,7) = SpCUMod(3,1,3)
-         AmatCU(3,8) = SpCUMod(3,2,3)
-         AmatCU(3,9) = SpCUMod(3,3,3)
-         !
-         Kcu = Kcu - detMapJC*w(intpt)* &
-               (matmul(matmul(dshC,AmatCU),Gmat))
+         ! Compute/update the chemical potential - displacement tangent matrix: diffusion part.
+         !  Exact derivative of -int( m gradNa . gradmu ) dv at fixed nodal mu (CATCH_BOND_PLAN.md,
+         !  Part C, item 5). The current volume dv and the spatial gradients (dshC, dMUdX) are local;
+         !  the mobility depends on the F-bar volume detF through theta_f, so its derivative uses the
+         !  centroid gradients dshC0 (dm/dJbar = DmDJ). Column order of Kcu: nDim*(b-1)+k.
+         !   K(a,bk) =  m (gradNa.gradmu) dNb/dxk                [dilation of dv]
+         !            + detF*DmDJ (gradNa.gradmu) dNb/dxk|c      [mobility shift, F-bar volume]
+         !            - m dNa/dxk (gradmu.gradNb)                [distortion of gradNa]
+         !            - m dmu/dxk (gradNa.gradNb)                [distortion of gradmu]
+         !  (Replaces the projected term -(m + detF*DmDJ) dmu/dxk (gradNa.gradNb) built from SpCUModFac.)
+         ! (dedicated indices: jj is the SVARS offset of the integration point)
+         do aNod = 1, nNode
+            gNaGmu = sum(dshC(aNod,:) * dMUdX(:,1))
+            do bNod = 1, nNode
+               gmuGNb = sum(dMUdX(:,1) * dshC(bNod,:))
+               gNaGNb = sum(dshC(aNod,:) * dshC(bNod,:))
+               do kDir = 1, nDim
+                  Kcu(aNod, nDim*(bNod-1)+kDir) = Kcu(aNod, nDim*(bNod-1)+kDir) + detMapJC*w(intpt)*( &
+                         Mfluid*gNaGmu*dshC(bNod,kDir) + detF*DmDJ*gNaGmu*dshC0(bNod,kDir) &
+                       - Mfluid*dshC(aNod,kDir)*gmuGNb - Mfluid*dMUdX(kDir,1)*gNaGNb )
+               end do
+            end do
+         end do
+
+         ! Compute/update the chemical potential - displacement tangent matrix: source part.
+         !  Derivative of int( Na*ResFac ) dv, ResFac = s/detF (Part C, item 1):
+         !   1a  (cfmax+G)/dt * dthetaf/dJbar * dNb/dxk|c       [thetaf through the F-bar volume]
+         !   1b  -ResFac*(dNb/dxk - dNb/dxk|c)                  [dv/detF = local/centroid volume]
+         !   1c  Q_kl/(detF*dt) * dNb/dxl, Q = -dcbdc           [cb through the isochoric stretches]
+         !  Grouped: K(a,bk) = Na*[ alpha*dNb/dxk|c + A_kl*dNb/dxl ],
+         !   alpha = DSRCDJ + ResFac,  A = DSRCDGU/detF - ResFac*I
+         srcAlpha = DSRCDJ + ResFac
+         srcA = DSRCDGU / detF - ResFac * Iden
+         do aNod = 1, nNode
+            do bNod = 1, nNode
+               do kDir = 1, nDim
+                  Kcu(aNod, nDim*(bNod-1)+kDir) = Kcu(aNod, nDim*(bNod-1)+kDir) + detMapJC*w(intpt)*sh(aNod)*( &
+                         srcAlpha*dshC0(bNod,kDir) + sum(srcA(kDir,1:nDim)*dshC(bNod,1:nDim)) )
+               end do
+            end do
+         end do
 
          ! Compute/update the displacement - chemical potential tangent matrix
          !  The F-bar method will have some effect, however we neglect that here.

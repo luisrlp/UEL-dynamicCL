@@ -19,9 +19,10 @@
     SUBROUTINE MATERIAL(SIGMA,STATEV,DDSIGDDE,DFGRD0,DFGRD1,DET, &
     TIME,DTIME,PREDEF,NDI,NSHR,NTENS,NSTATEV,PROPS,NPROPS,COORDS, &
     PNEWDT,NOEL,NPT,KSTEP,KINC,MU_TAU,THETAF_TAU,DTHETAFDT, &
-      DTHETAFDMU,RMACRO,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,CFMAX,DSIGDMU,SPCUMODFAC)
+      DTHETAFDMU,RMACRO,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,CFMAX,DSIGDMU,SPCUMODFAC, &
+      DSRCDMU,DSRCDJ,DSRCDGU)
 !
-use global  
+use global
 IMPLICIT NONE
 !----------------------------------------------------------------------
 !--------------------------- DECLARATIONS -----------------------------
@@ -42,6 +43,10 @@ REAL(8), INTENT(IN)      :: MU_TAU, DMUDX(3,1)
 REAL(8), INTENT(OUT)     :: DSIGDMU(NDI,NDI), SPCUMODFAC(NDI,NDI)
 REAL(8), INTENT(OUT)     :: THETAF_TAU, DTHETAFDT, DTHETAFDMU, RMACRO! DPHIDMU, DPHIDOTDMU
 REAL(8), INTENT(OUT)     :: MFLUID, DMDMU, DMDJ, VMOL, CFMAX
+! Derivatives of the source s = -(cfmax*dthetaf/dt + dcb_tot/dt) (sign: -ds/d(.)), Part C item 1:
+!   DSRCDMU = (cfmax+G)/dt * dthetaf/dmu,  DSRCDJ = (cfmax+G)/dt * dthetaf/dJbar,
+!   DSRCDGU = -dcbdc/dt (spatial, isochoric: contracts with grad(du) at the local point)
+REAL(8), INTENT(OUT)     :: DSRCDMU, DSRCDJ, DSRCDGU(NDI,NDI)
 
 REAL(8) :: THETAF_T
 ! DIFFUSION VARIABLES
@@ -98,6 +103,7 @@ DOUBLE PRECISION :: cb(ndir), cb0, cbmax, thetab, thetaf0
 DOUBLE PRECISION :: cb_tot, cb_tot_new, cf
 DOUBLE PRECISION :: cb_upper, machep, tol
 DOUBLE PRECISION :: Jc, f, df, dHdcb
+DOUBLE PRECISION :: DTHETAFDJ, dcbdthetaf, dsficdthetaf(ndi,ndi), dsigisodthetaf(ndi,ndi)
 !
 !     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)
 DOUBLE PRECISION :: cjr(ndi,ndi,ndi,ndi)
@@ -339,8 +345,8 @@ CALL projlag(c,unit4,projl,ndi)
       ! dm/dJ via Implicit Function Theorem on H(THETAF_TAU, mu, J) = 0:
       !   dthetaf/dJ = (k*Vmol) / (RT * Jc * det * df)
       !   dm/dJ = dm/dthetaf * dthetaf/dJ
-      DMDJ  = D / (RGAS * THETA) * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) &
-            * (k * VMOL) / (RGAS * THETA * Jc * det * df)
+      DTHETAFDJ = (k * VMOL) / (RGAS * THETA * Jc * det * df)
+      DMDJ  = D / (RGAS * THETA) * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) * DTHETAFDJ
 
       ! Fluid flux vector (for visualization/SVARS)
       jfluid = -MFLUID * DMUDX
@@ -419,18 +425,27 @@ END IF
 CALL erfi(efi,bb)
 !     'FICTICIOUS' PK2 STRESS AND MATERIAL ELASTICITY TENSORS
 !------------ AFFINE NETWORK --------------
+dcbdc = zero
+dcbdthetaf = zero
+dsficdthetaf = zero
 IF (phinet > zero) THEN
   ! write(*,*) 'Calling affclnetfic_discrete at t = ', time(1)
   CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,unit2,filprops,  &
       affprops,efi,noel,det,prefdir,ndi,cb,dtime,chemprops, &
-      thetaf_tau, cb_tot_new, dPK2ficdcb, dcbdc, pnewdt)
+      thetaf_tau, cb_tot_new, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf)
 END IF
 
-! Macroscopic reaction source (homogenized binding rate)
+! Macroscopic reaction source (homogenized binding rate) and the source derivatives (Part C, item 1)
 IF (DTIME > 1.0d-12) THEN
   RMACRO = (cb_tot_new - cb_tot) / DTIME
+  DSRCDMU = (CFMAX + dcbdthetaf) * DTHETAFDMU / DTIME
+  DSRCDJ  = (CFMAX + dcbdthetaf) * DTHETAFDJ / DTIME
+  DSRCDGU = - dcbdc / DTIME
 ELSE
   RMACRO = 0.0d0
+  DSRCDMU = 0.0d0
+  DSRCDJ  = 0.0d0
+  DSRCDGU = 0.0d0
 END IF
 ! write(*,*) 'cb_tot = ', cb_tot
 ! write(*,*) 'cb_tot_new = ', cb_tot_new
@@ -565,10 +580,26 @@ END DO
 
 
 !     CAUCHY STRESS - CHEMICAL POTENTIAL MODULUS (dS / dMu)
+!     volumetric (free CL swelling) + isochoric network through cb_i(thetaf) (Part C, item 4):
+!     dsigma/dthetaf = -K*Vmol*cfmax/(J*Jc) I + P : sum_i dsfic_i/dcb_i * S^theta_i
+  CALL contraction42(dsigisodthetaf, proje, dsficdthetaf, ndi)
   DO I1 = 1, NDI
       DO J1 = 1, NDI
-        DSIGDMU(I1,J1) = -((K * VMOL * CFMAX) / (DET * Jc)) * UNIT2(I1,J1) * DTHETAFDMU
+        DSIGDMU(I1,J1) = ( -((K * VMOL * CFMAX) / (DET * Jc)) * UNIT2(I1,J1) &
+                         + dsigisodthetaf(I1,J1) ) * DTHETAFDMU
       END DO
+  END DO
+
+!     NETWORK STRESS THROUGH THETAF(J) (Kuu term 4, Part C item 7): push-forward of
+!     2 dSiso/dthetaf (x) dthetaf/dC, with dthetaf/dC = J/2 dthetaf/dJ C^-1:
+!     c_ijkl += J * dthetaf/dJ * dsigiso/dthetaf_ij * delta_kl
+!     (the volumetric counterpart is zero: Jc uses the lagged cb_tot, as for cvolchem)
+  DO I1 = 1, NDI
+    DO J1 = 1, NDI
+      DO K1 = 1, NDI
+        ddsigdde(I1,J1,K1,K1) = ddsigdde(I1,J1,K1,K1) + DET * DTHETAFDJ * dsigisodthetaf(I1,J1)
+      END DO
+    END DO
   END DO
 
 
