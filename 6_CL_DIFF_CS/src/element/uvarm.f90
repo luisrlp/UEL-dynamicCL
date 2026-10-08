@@ -25,6 +25,19 @@
         ! for example
         ! uvar(2) = globalSdv(noel-ElemOffset,npt,2)
 
+        ! Bounds of globalSdv (allocated by the UEL; see the check in U3D8)
+        if (.not. allocated(globalSdv)) then
+            UVAR = 0.0d0
+            return
+        end if
+        if ((noel-ElemOffset < 1) .or. (noel-ElemOffset > size(globalSdv,1)) .or. &
+            (npt < 1) .or. (npt > size(globalSdv,2)) .or. (nuvarm < nsdv)) then
+            write(*,*) 'ERROR in UVARM: globalSdv index out of bounds'
+            write(*,*) '  noel =', noel, '  ElemOffset =', ElemOffset, '  numElem =', size(globalSdv,1)
+            write(*,*) '  npt =', npt, '  nuvarm =', nuvarm, '  nsdv =', nsdv
+            call exit
+        end if
+
         do i1 = 1, nsdv
             UVAR(i1) = globalSdv(noel-ElemOffset, npt, i1)
         end do

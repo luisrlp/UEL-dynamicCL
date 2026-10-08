@@ -94,6 +94,16 @@
             write(*, *) '-------------------------------------------------'
          endif
 
+         ! globalSdv is indexed by the element label and stores nsdv values per point:
+         !  labels must lie in 1..numElem (global.f90) and ngSdv must be >= nsdv
+         if ((jelem < 1) .or. (jelem > numElem) .or. (ngSdv < nsdv)) then
+            write(*, *) 'ERROR in U3D8: globalSdv index out of bounds'
+            write(*, *) '  jelem =', jelem, '  numElem =', numElem
+            write(*, *) '  ngSdv =', ngSdv, '  nsdv =', nsdv
+            write(*, *) '  increase numElem in global.f90, or renumber the UEL elements'
+            call exit
+         endif
+
 
       !      write(*,*) 'NDOFEL',NDOFEL
       !      write(*,*) 'MLVARX',MLVARX
