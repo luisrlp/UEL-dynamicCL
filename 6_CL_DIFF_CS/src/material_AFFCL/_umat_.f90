@@ -19,7 +19,7 @@
     SUBROUTINE MATERIAL(SIGMA,STATEV,DDSIGDDE,DFGRD0,DFGRD1,DET, &
     TIME,DTIME,PREDEF,NDI,NSHR,NTENS,NSTATEV,PROPS,NPROPS,COORDS, &
     PNEWDT,NOEL,NPT,KSTEP,KINC,MU_TAU,THETAF_TAU,DTHETAFDT, &
-      DTHETAFDMU,RMACRO,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,CFMAX,DSIGDMU,SPCUMODFAC, &
+      DTHETAFDMU,RMACRO,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,CFMAX,DSIGDMU, &
       DSRCDMU,DSRCDJ,DSRCDGU)
 !
 use global
@@ -39,8 +39,7 @@ REAL(KIND=8) :: STRESS(NTENS), STATEV(NSTATEV), &
                 FIBORI(NELEM,4), ARGS(NARGS)
 
 REAL(8), INTENT(IN)      :: MU_TAU, DMUDX(3,1)
-! REAL(8), INTENT(OUT)     :: SPUCMOD(NDI,NDI), SPCUMODFAC(NDI,NDI)
-REAL(8), INTENT(OUT)     :: DSIGDMU(NDI,NDI), SPCUMODFAC(NDI,NDI)
+REAL(8), INTENT(OUT)     :: DSIGDMU(NDI,NDI)
 REAL(8), INTENT(OUT)     :: THETAF_TAU, DTHETAFDT, DTHETAFDMU, RMACRO! DPHIDMU, DPHIDOTDMU
 REAL(8), INTENT(OUT)     :: MFLUID, DMDMU, DMDJ, VMOL, CFMAX
 ! Derivatives of the source s = -(cfmax*dthetaf/dt + dcb_tot/dt) (sign: -ds/d(.)), Part C item 1:
@@ -111,8 +110,8 @@ DOUBLE PRECISION :: cjr(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: sigma(ndi,ndi),ddsigdde(ndi,ndi,ndi,ndi),  &
     ddpkdde(ndi,ndi,ndi,ndi)
 !     OTHER TANGENT AUX TENSORS
-DOUBLE PRECISION :: dpk2dthetaf(ndi,ndi), dthetafdc(ndi,ndi), dpk2voldcb(ndi,ndi), dPK2ficdcb(ndi,ndi), &
-                    dpk2isodcb(ndi,ndi), dpk2dcb(ndi,ndi), dcbdc(ndi,ndi), cvolchem(ndi,ndi,ndi,ndi), &
+DOUBLE PRECISION :: dpk2dthetaf(ndi,ndi), dthetafdc(ndi,ndi), dPK2ficdcb(ndi,ndi), &
+                    dcbdc(ndi,ndi), cvolchem(ndi,ndi,ndi,ndi), &
                     dsigmadcb(ndi,ndi)
 DOUBLE PRECISION :: stest(ndi,ndi), ctest(ndi,ndi,ndi,ndi)
 
@@ -232,12 +231,13 @@ Kcatch0 = PROPS(25)
 dxc     = PROPS(26)
 
 !Other parameters (Check which of these will be actually needed in the UMAT and not only in the AFFCL subroutine)
-kb = 1.380649e-5      
+! (double-precision literals: single-precision ones carry ~1e-8 relative errors)
+kb = 1.380649d-5
 b0 = Lp * theta * kb
-rgas = 8.314462618
-Mactin = 42.0e-3       ! [MDa]
-rhoactin = 16.0        ! [MDa/microm]
-NA = 6.022e5           ! [1/amol]
+rgas = 8.314462618d0
+Mactin = 42.0d-3       ! [MDa]
+rhoactin = 16.0d0      ! [MDa/microm]
+NA = 6.022d5           ! [1/amol]
 Kon0 = (Koff0 + Kcatch0) * Keq
 ! Maximum allowable CL concentration
 cfmax = Rfmax * cactin
@@ -311,7 +311,7 @@ CALL projlag(c,unit4,projl,ndi)
       ARGS(11) = cactin * R      ! initial total crosslinker content c0 (reference state of J^c)
       ! write(*,*) 'ARGS = ', ARGS
       ! write(*,*) 'THETAF_T =', THETAF_T
-      CALL SOLVETHETAF(THETAF_TAU, ARGS, NARGS, THETAF_T)
+      CALL SOLVETHETAF(THETAF_TAU, ARGS, NARGS, THETAF_T, PNEWDT)
       ! write(*,*) 'THETAF_TAU =', THETAF_TAU
 
       cf = THETAF_TAU * cfmax
@@ -335,18 +335,22 @@ CALL projlag(c,unit4,projl,ndi)
       END IF
 
 
-      ! Fluid mobility: m = D/(RT) * cf * (1 - thetaf)
-      !   D is the Fickian diffusion coefficient; the 1/(RT) (Einstein relation)
-      !   gives D_eff = m * dmu/dcf = D * [1 - 2*chi*thetaf*(1-thetaf)] ~ D
-      MFLUID = D / (RGAS * THETA) * cf * (1.0d0 - THETAF_TAU)
+      ! Fluid mobility (spatial, consistent with the spatial flux j = -m grad(mu)):
+      !   m = D/(RT) * (cf/J) * (1 - thetaf), with cf/J the free CL concentration per unit
+      !   deformed volume (cf is per unit reference volume; J = det = Jbar with F-bar).
+      !   D is the Fickian diffusion coefficient; the 1/(RT) (Einstein relation) gives
+      !   D_eff = m * dmu/d(cf/J) = D * [1 - 2*chi*thetaf*(1-thetaf)] ~ D
+      !   (Chester, Di Leo & Anand 2015, Eqs. 2.11 and 4.1)
+      MFLUID = D / (RGAS * THETA) * cf * (1.0d0 - THETAF_TAU) / det
 
       ! Mobility tangents
-      DMDMU = D / (RGAS * THETA) * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) * DTHETAFDMU
-      ! dm/dJ via Implicit Function Theorem on H(THETAF_TAU, mu, J) = 0:
-      !   dthetaf/dJ = (k*Vmol) / (RT * Jc * det * df)
-      !   dm/dJ = dm/dthetaf * dthetaf/dJ
+      DMDMU = D / (RGAS * THETA) * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) * DTHETAFDMU / det
+      ! dm/dJ: through thetaf (Implicit Function Theorem on H(THETAF_TAU, mu, J) = 0,
+      !   dthetaf/dJ = (k*Vmol) / (RT * Jc * det * df)) and through the 1/J of the concentration:
+      !   dm/dJ = dm/dthetaf * dthetaf/dJ - m/J
       DTHETAFDJ = (k * VMOL) / (RGAS * THETA * Jc * det * df)
-      DMDJ  = D / (RGAS * THETA) * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) * DTHETAFDJ
+      DMDJ  = D / (RGAS * THETA) * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) * DTHETAFDJ / det &
+            - MFLUID / det
 
       ! Fluid flux vector (for visualization/SVARS)
       jfluid = -MFLUID * DMUDX
@@ -475,10 +479,6 @@ END IF
 !     end do
 !   end do
 ! end do
-! dSiso/dcb
-CALL pk2iso(dpk2isodcb,dPK2ficdcb,projl,det,ndi)
-! dS/dcb
-dpk2dcb = dpk2voldcb + dpk2isodcb
 !! 3.2 (computed in affclnetfic_discrete)
 
 !      PKNETFIC=PKNETFICNAF+PKNETFICAF
@@ -570,13 +570,8 @@ ddsigdde=cvol+ciso ! +cvolchem ! +cjr
 !     END DO
 ! END DO
 
-!     CHEMICAL POTENTIAL - DISPLACEMENT MODULUS
-DO I1 = 1, NDI
-    DO J1 = 1, NDI
-      ! Existing mobility term + dm/dJ contribution (via J * delta_il)
-      SPCUMODFAC(I1,J1) = (MFLUID + DMDJ * det) * UNIT2(I1,J1)
-    END DO
-END DO
+!     CHEMICAL POTENTIAL - DISPLACEMENT MODULUS: assembled in the element from MFLUID, DMDJ,
+!     DSRCDJ and DSRCDGU (u3d8.f90, Part C items 1 and 5)
 
 
 !     CAUCHY STRESS - CHEMICAL POTENTIAL MODULUS (dS / dMu)

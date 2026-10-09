@@ -36,8 +36,8 @@
                   DphidotDmu, Mfluid, Smat(6, 1), Bmat(6, 3 * NNODE), BodyForceRes(3 * NNODE, 1), flux, &
                   Gmat(9, 3 * NNODE), G0mat(9, 3 * NNODE), Amat(9, 9), Qmat(9, 9), dA, xLocal(nInttS), &
                   yLocal(nInttS), zLocal(nInttS), wS(nInttS), Kuc(3 * NNODE, NNODE), Kcu(NNODE, 3 * NNODE), &
-                  Nvec(1, NNODE), ResFac, AmatUC(6, 1), TanFac, AmatCU(3, 9), DSIGDMU(3, 3), &
-                  SpCUModFac(3, 3), SpCUMod(3, 3, 3), pi, detF_t, PNEWDT
+                  Nvec(1, NNODE), ResFac, AmatUC(6, 1), TanFac, DSIGDMU(3, 3), &
+                  pi, detF_t, PNEWDT
          real(8) :: CFMAX,RMACRO,val
          real(8) :: gNaGmu, gmuGNb, gNaGNb
          real(8) :: DSRCDMU, DSRCDJ, DSRCDGU(3, 3), srcAlpha, srcA(3, 3)
@@ -378,7 +378,7 @@
                call material(sigma_tau, statev, DDSIGDDE, F_t, F_tau, detF_tau, &
                        TIME, DTIME, PREDEF, nDim, nshr, ntens, nsdv, PROPS, NPROPS, coords, &
                        PNEWDT, JELEM, intpt, KSTEP, KINC,MU_TAU,THETAF_TAU,DTHETAFDT, &
-                       DTHETAFDMU,RMACRO,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,CFMAX,DSIGDMU,SPCUMODFAC, &
+                       DTHETAFDMU,RMACRO,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,CFMAX,DSIGDMU, &
                        DSRCDMU,DSRCDJ,DSRCDGU)
                !
                !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -677,7 +677,7 @@
          !            + detF*DmDJ (gradNa.gradmu) dNb/dxk|c      [mobility shift, F-bar volume]
          !            - m dNa/dxk (gradmu.gradNb)                [distortion of gradNa]
          !            - m dmu/dxk (gradNa.gradNb)                [distortion of gradmu]
-         !  (Replaces the projected term -(m + detF*DmDJ) dmu/dxk (gradNa.gradNb) built from SpCUModFac.)
+         !  (Replaces the former projected term -(m + detF*DmDJ) dmu/dxk (gradNa.gradNb).)
          ! (dedicated indices: jj is the SVARS offset of the integration point)
          do aNod = 1, nNode
             gNaGmu = sum(dshC(aNod,:) * dMUdX(:,1))
@@ -711,7 +711,7 @@
          end do
 
          ! Compute/update the displacement - chemical potential tangent matrix
-         !  The F-bar method will have some effect, however we neglect that here.
+         !  (exact: mu changes neither Fbar nor Jbar, so the F-bar method adds no term here)
          !
          AmatUC = zero
          AmatUC(1,1) = DSIGDMU(1,1)

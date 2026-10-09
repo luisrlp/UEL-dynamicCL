@@ -1,15 +1,15 @@
-subroutine kineticsFunc(cbtau, f, df, dHdl, args, nargs)
+subroutine kineticsFunc(cbtau, f, df, dHdlambda, args, nargs)
     ! This subroutine serves as the function we would like to solve for
     ! the bound crosslinker volume fraction (cbtau = cf/cfmax)
     ! by finding cbtau such that f = 0
-    ! Outputs: f = H (Backward-Euler residual), df = dH/dcb, dHdl = dH/dlambda_i (at fixed cb),
+    ! Outputs: f = H (Backward-Euler residual), df = dH/dcb, dHdlambda = dH/dlambda_i (at fixed cb),
     ! the latter used for the consistent tangent (sub-step sensitivity dcb/dlambda_i)
     use global
     implicit none
 
     integer, intent(in)              :: nargs
     DOUBLE PRECISION, intent(in out) :: cbtau
-    DOUBLE PRECISION, intent(out)    :: f, df, dHdl
+    DOUBLE PRECISION, intent(out)    :: f, df, dHdlambda
     DOUBLE PRECISION, intent(in)     :: args(nargs)                                                              
                                                                                                                 
     DOUBLE PRECISION                 :: r0f, etac, r0, r0c, fi, ffi, dwi, ddwi, l, mu0str, beta, b0 
@@ -98,7 +98,7 @@ subroutine kineticsFunc(cbtau, f, df, dHdl, args, nargs)
     df = one - dRiDcb * dt
 
     ! Residual derivative wrt lambda_i at fixed cb: df/dlambda_i = ddwi / (lambda0 * r0), since dwi = lambda0 * r0 * fi
-    dHdl = dt * cbmax * thetab / (1 - thetab) * dkoffdf * ddwi / (lambda0 * r0)
+    dHdlambda = dt * cbmax * thetab / (1 - thetab) * dkoffdf * ddwi / (lambda0 * r0)
 
 end subroutine kineticsFunc
 

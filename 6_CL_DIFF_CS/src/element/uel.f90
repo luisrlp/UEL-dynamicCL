@@ -123,7 +123,9 @@ subroutine UEL(RHS, AMATRX, SVARS, ENERGY, NDOFEL, NRHS, NSVARS, &
                    Uall(NDOFEL), DUall(MLVARX, 1), Vel(NDOFEL), &
                    Accn(NDOFEL), TIME(2), DTIME, PARAMS(1), &
                    ADLMAG(MDLOAD, 1), PREDEF(2, NPREDF, NNODE), &
-                   DDLMAG(MDLOAD, 1), PNEWDT, PERIOD
+                   DDLMAG(MDLOAD, 1), PERIOD
+  ! PNEWDT is also an output: the element and material set it < 1 to request a time cut-back
+  real(8), intent(inout) :: PNEWDT
   integer, intent(in) :: NDOFEL, NRHS, NSVARS, NPROPS, MCRD, NNODE, &
                    JTYPE, KSTEP, KINC, JELEM, NDLOAD, JDLTYP(MDLOAD, 1), &
                    NPREDF, LFLAGS(4), MLVARX, MDLOAD, JPROPS(NJPROP), &

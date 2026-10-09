@@ -1,4 +1,4 @@
-subroutine solveKinetics(root, args, nargs, rootOld, converged, atbound, dHdcb, dHdl)
+subroutine solveKinetics(root, args, nargs, rootOld, converged, atbound, dHdcb, dHdlambda)
 
     ! Implicit (Backward-Euler) update of the bound concentration of one direction:
     ! root of H(cb) = cb - cbt - dt*R(cb) (kineticsFunc), same algorithm as material.py.
@@ -12,7 +12,7 @@ subroutine solveKinetics(root, args, nargs, rootOld, converged, atbound, dHdcb, 
     !
     ! Outputs: root, converged (.false. if H is NaN/Inf, root = rootOld, or RTSAFE did not
     ! converge; if H keeps its sign up to a bound, the root lies beyond it and the bound is
-    ! returned as converged, with atbound = .true.), dHdcb and dHdl (dH/dcb and dH/dlambda_i)
+    ! returned as converged, with atbound = .true.), dHdcb and dHdlambda (dH/dcb and dH/dlambda_i)
     ! at root, used for the sub-stepping checks and the consistent tangent.
     ! No program stop: the caller decides (sub-stepping / PNEWDT cut-back).
 
@@ -25,7 +25,7 @@ subroutine solveKinetics(root, args, nargs, rootOld, converged, atbound, dHdcb, 
     real(8), intent(out)    :: root
     logical, intent(out)    :: converged
     logical, intent(out)    :: atbound
-    real(8), intent(out)    :: dHdcb, dHdl
+    real(8), intent(out)    :: dHdcb, dHdlambda
 
     ! Local variables
     integer :: j, imarch
@@ -33,7 +33,7 @@ subroutine solveKinetics(root, args, nargs, rootOld, converged, atbound, dHdcb, 
     real(8) :: rootMax, rootMin, x0, xend, a, b, s
     real(8) :: Ha, dHa, Hb, dHb, dum
     real(8) :: xl, xh, x, dx, dxold, Hx, dHx, xnew
-    real(8) :: last_x, last_H, last_dH, last_dHdl
+    real(8) :: last_x, last_H, last_dH, last_dHdlambda
 
     ! Parameter declarations
     integer, parameter :: maxit = 50       ! RTSAFE iterations
@@ -99,11 +99,11 @@ subroutine solveKinetics(root, args, nargs, rootOld, converged, atbound, dHdcb, 
     ! dH/dcb and dH/dlambda_i at the root (reuse the last evaluation when it is at the root)
     if (last_x == root) then
         dHdcb = last_dH
-        dHdl = last_dHdl
+        dHdlambda = last_dHdlambda
     else
         call evalH(root, dum, dum)
         dHdcb = last_dH
-        dHdl = last_dHdl
+        dHdlambda = last_dHdlambda
     end if
 
     return
@@ -116,7 +116,7 @@ contains
         real(8), intent(out) :: H, dH
         real(8) :: xloc
         xloc = xin
-        call kineticsFunc(xloc, H, dH, last_dHdl, args, nargs)
+        call kineticsFunc(xloc, H, dH, last_dHdlambda, args, nargs)
         last_x = xin
         last_H = H
         last_dH = dH

@@ -1,8 +1,10 @@
-subroutine solveThetaf(root, args, nargs, rootOld)
+subroutine solveThetaf(root, args, nargs, rootOld, pnewdt)
 
     ! This subroutine will numerically solve for the free
     ! crosslinker fraction (thetaf) based on the current
     ! chemical potential. See Numerical Recipes RTSAFE.
+    ! If the root is not bracketed or not converged, the old value is kept
+    ! and a time cut-back is requested (pnewdt <= 0.5) instead of stopping the analysis.
 
     implicit none
 
@@ -11,6 +13,7 @@ subroutine solveThetaf(root, args, nargs, rootOld)
     real(8), intent(in)     :: args(nargs)
     real(8), intent(in)     :: rootOld
     real(8), intent(out)    :: root
+    real(8), intent(inout)  :: pnewdt
 
     ! Local variables
     integer :: j
@@ -33,8 +36,9 @@ subroutine solveThetaf(root, args, nargs, rootOld)
 
     ! Check if the root is safely bracketed
     if (fl * fh >= zero) then
-        root = rootOld
-        write(*,*) 'FYI, root not bracketed on thetaf'
+        root = min(max(rootOld, rootMin), rootMax)
+        pnewdt = min(pnewdt, 0.5d0)
+        write(*,*) 'WARNING: root not bracketed on thetaf -> PNEWDT =', pnewdt
         write(*,*) 'fl=', fl
         write(*,*) 'fh=', fh
         write(*,*) 'rootOld=', rootOld
@@ -48,7 +52,6 @@ subroutine solveThetaf(root, args, nargs, rootOld)
         write(*,*) 'detF=', args(8)
         write(*,*) 'cb=', args(9)
         write(*,*) 'cfmax=', args(10)
-        call exit
         return
     end if
 
@@ -118,7 +121,8 @@ subroutine solveThetaf(root, args, nargs, rootOld)
     end do
 
     ! If loop finishes without returning, maximum iterations were exceeded
-    write(*, '(/1X,A)') 'solveThetaf EXCEEDING MAXIMUM ITERATIONS'
-    
+    pnewdt = min(pnewdt, 0.5d0)
+    write(*, '(/1X,A,ES12.4)') 'solveThetaf EXCEEDING MAXIMUM ITERATIONS -> PNEWDT =', pnewdt
+
     return
 end subroutine solveThetaf
