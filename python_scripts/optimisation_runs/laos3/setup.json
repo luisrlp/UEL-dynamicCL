@@ -1,0 +1,109 @@
+{
+  "started": "2026-10-14_163354",
+  "command": "optimise_laos.py --workers 8 --out optimisation_runs/laos3 --max-nfev 20",
+  "signature": "fe8e040f8181",
+  "data_file": "/home/luis/Desktop/PhD/UEL-dynamicCL/python_scripts/validation_data/unterberger2013_fig4a_laos_dataset0.csv",
+  "cfg": {
+    "dt": 0.1,
+    "factor": 3,
+    "cycles": 3,
+    "gamma_A": 0.125875
+  },
+  "free": [
+    "lambda0",
+    "s_taut",
+    "koff0",
+    "phi",
+    "dxc_nm",
+    "dxs_nm"
+  ],
+  "fixed": {},
+  "x0": {
+    "lambda0": 1.0115,
+    "s_taut": 1.0776,
+    "koff0": 0.24991,
+    "phi": 0.98578,
+    "dxc_nm": 17.209,
+    "dxs_nm": 0.5419
+  },
+  "bounds": {
+    "lambda0": [
+      1.0,
+      1.05
+    ],
+    "s_taut": [
+      1.05,
+      1.2
+    ],
+    "koff0": [
+      0.02,
+      5.0
+    ],
+    "phi": [
+      0.1,
+      0.999
+    ],
+    "dxc_nm": [
+      0.5,
+      40.0
+    ],
+    "dxs_nm": [
+      0.2,
+      40.0
+    ]
+  },
+  "constants": {
+    "FIXED_DIFF": {
+      "CHI": 0.1,
+      "THETA": 294.0,
+      "D": 0.1,
+      "MU0": 0.0,
+      "VMOL": 0.15,
+      "RGAS": 8.31446261815324,
+      "CACTIN": 0.0095,
+      "R": 0.1,
+      "RBMAX": 0.25,
+      "RFMAX": 1.0
+    },
+    "FIXED_MECH": {
+      "filament": "ext",
+      "KBULK": 1000.0,
+      "MU0STRETCH": 38600.0,
+      "Lp": 16.0,
+      "BETA": 0.438,
+      "R0C": 0.014,
+      "ETA": 1.0,
+      "b_disp": 1e-06,
+      "prefdir": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "stretch_free_binding": true,
+      "xi_t": 1.0
+    },
+    "KEQ": 5.0,
+    "FREQ": 0.05,
+    "THETA": 294.0
+  },
+  "weights": {
+    "DSIG": 0.025,
+    "DGAM": 0.0007
+  },
+  "optimiser": {
+    "method": "trf",
+    "x_scale": 1.0,
+    "ftol": 0.0001,
+    "xtol": 0.0001,
+    "gtol": 1e-06,
+    "max_nfev": 20,
+    "h": 0.01,
+    "workers": 8,
+    "evaluate_only": false
+  },
+  "versions": {
+    "numpy": "2.5.0",
+    "scipy": "1.18.0",
+    "python": "3.12.3"
+  }
+}
