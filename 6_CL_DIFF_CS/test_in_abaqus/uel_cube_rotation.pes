@@ -97,13 +97,13 @@ all_nodes, 1, 3
 **
 **
 *uel property, elset=main_mesh
-1000.0,0.0,0.0,1.0,1.2,0.014,0.666667,38600.0,
+1000,0.1,0,0.9,1.2,0.014,0.333333333333,38600.0,
 **
-0.5,16.0,298.0,0.005,1e-06,1.0,0.0095,0.1,
+0.5,16,298,0.005,1e-06,1,0.0095,0.1,
 **
 0.25,0.25,0.1,0.01,0.0,0.15,0.05,0.25,
 **               nlSdv ngSdv
-0.0,0.005, 106, 106
+0.05,0.005, 106, 106
 
 ** ----------------------------------------------------------------
 **
@@ -137,7 +137,7 @@ all_nodes, 1, 3
 **			INITIAL CONDITIONS
 ************************************************************************
 *Initial conditions, type=temperature
-all_nodes, -2002.850426
+all_nodes, -2002.871797
 **
 *Initial conditions, type=temperature
 extra_element, 0.0
@@ -194,7 +194,7 @@ extra_element, 0.0
 ** Set-1, YSYMM
 
 
-*Step, Name=Rotate, nlgeom=yes, inc=50000
+*Step, Name=Rotate, nlgeom=yes, inc=50000, extrapolation=NO
 *Coupled temperature-displacement, deltmx=100.0
 0.05, 1.0, 1.e-6, 0.05
 

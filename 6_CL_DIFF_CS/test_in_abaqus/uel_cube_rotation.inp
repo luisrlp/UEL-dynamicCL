@@ -184,8 +184,9 @@ extra_element, 0.0
 ** *Boundary, op=MOD
 ** Set-1, YSYMM
 
-
-*Step, Name=Rotate, nlgeom=yes, inc=50000
+** extrapolation=NO: prevents chemical unbalance due to the incorrect 
+** initial guess, which are not corrected due to the coarse chemical tolerance
+*Step, Name=Rotate, nlgeom=yes, inc=50000, extrapolation=NO
 *Coupled temperature-displacement, deltmx=100.0
 0.05, 1.0, 1.e-6, 0.05
 

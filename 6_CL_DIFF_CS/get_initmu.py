@@ -3,13 +3,13 @@ import math
 # Copy from properties.inp                                                 
 density = 0.0005
 K = 1000
-C10 = 0
+C10 = 0.1
 C01 = 0
-PHINET = 1
+PHINET = 0.9
 a = 1.2
 R0C = 0.014
 ETAC = 0.333333333333
-MU0STRETCH = 38600
+MU0STRETCH = 38600.0
 BETA = 0.5
 LP = 16
 THETA = 298
@@ -22,12 +22,14 @@ RFMAX = 0.25
 RBMAX = 0.25
 CHI = 0.1
 D = 0.01
-MU0 = 0
+MU0 = 0.0
 VMOL = 0.15
 KOFF0 = 0.05
 KEQ = 0.25
 KCATCH0 = 0.05
 DXC = 0.005
+# ** GAMMA = 0.2
+UIND = -3.1
 
 
 # Baseline

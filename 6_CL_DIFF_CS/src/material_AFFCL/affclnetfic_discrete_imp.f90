@@ -50,8 +50,8 @@ DOUBLE PRECISION :: cbt_i, cbtau_i, thetab_i, Kon, Koff_i, R_i, dtime_sub, cb_su
 INTEGER :: iter
 DOUBLE PRECISION :: cb_new, Res, cb_pert, dcb, r0f_p, l_p, r0_p
 DOUBLE PRECISION :: DfDcb, DdwDcb, Dr0Dcb, auxdwdcb, dHdlambda, dHdcb, dRiDcb, auxchem, dKoffDf_i
-DOUBLE PRECISION :: sensthetaf_i, dHdthetaf_i, dsfilficdcb(ndi,ndi)
-DOUBLE PRECISION :: dHdcb_i, dHdlambda_i, sens_i, dHdcb_min, kh_i, gerr_i, cbx_i, Hx_i, dHdcbx_i, dHdlambdax_i
+DOUBLE PRECISION :: dcbdthetaf_i, dHdthetaf_i, dsfilficdcb(ndi,ndi)
+DOUBLE PRECISION :: dHdcb_i, dHdlambda_i, dcbdlambda_i, dHdcb_min, kh_i, gerr_i, cbx_i, Hx_i, dHdcbx_i, dHdlambdax_i
 LOGICAL :: conv_i, atb_i, ok_i, hard_i
 INTEGER :: nhard, nacc, nsub_max
 ! Kinetics sub-stepping (per direction). The whole increment is tried first (n_sub = 1); it is
@@ -267,33 +267,42 @@ do face = 1, face_num/2
         n_sub = 1
         DO
           cb_sub = cbt_i
-          sens_i = zero
-          sensthetaf_i = zero
+          dcbdlambda_i = zero
+          dcbdthetaf_i = zero
+          ! Checkf if attempt passed all checks
           ok_i = .TRUE.
+          ! True for a hard failure (no converged root, or uniqueness being lost) in any sub-step
           hard_i = .FALSE.
+          ! Update sub-step size
           args(12) = dtime / DBLE(n_sub)
           DO isub = 1, n_sub
             args(16) = cb_sub
             CALL solveKinetics(cb_new, args, nargs, cb_sub, conv_i, atb_i, dHdcb_i, dHdlambda_i)
-            IF (dHdcb_i /= zero) sens_i = (sens_i - dHdlambda_i) / dHdcb_i
+            IF (dHdcb_i /= zero) dcbdlambda_i = (dcbdlambda_i - dHdlambda_i) / dHdcb_i
             dHdthetaf_i = - args(12) * cfmax * kon &
                       * (one / (one - thetaf)**2 - two * CHI * thetaf / (one - thetaf))
-            IF (dHdcb_i /= zero) sensthetaf_i = (sensthetaf_i - dHdthetaf_i) / dHdcb_i
+            IF (dHdcb_i /= zero) dcbdthetaf_i = (dcbdthetaf_i - dHdthetaf_i) / dHdcb_i
             ! Hard failures (no converged root, or uniqueness being lost)
             IF ((.NOT. conv_i) .OR. (dHdcb_i < DH_MIN)) THEN
               ok_i = .FALSE.
               hard_i = .TRUE.
             END IF
-            ! Error factor g(kh) = min(kh/2, 1/kh) at the end (root) and at the start of the
-            ! sub-step; the larger one is used (strongly nonlinear kinetics, e.g. fast transients)
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            !!!!!!!!!!!  CHECK IF THIS CAN BE REPLACED BY A SIMPLER APPROACH  !!!!!!!!!!
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            ! |dH/dcb - 1| = dt_sub * |dR/dcb| and tau_k = 1/|dR/dcb| is the local kinetic time scale
+            ! kh_i = dt_sub / tau_k = |dH/dcb - 1| measures the sub-step length relative to the kinetics
             kh_i = ABS(dHdcb_i - one)
             gerr_i = MIN(half * kh_i, one / MAX(kh_i, 1.0d-300))
             cbx_i = cb_sub
+            ! dH/dcb at the start of the sub-step (cb_sub), for kh at the start in the error check below
+            ! (same evaluation as the first one in solveKinetics, which only returns dH/dcb at the root)
             CALL kineticsFunc(cbx_i, Hx_i, dHdcbx_i, dHdlambdax_i, args, nargs)
             kh_i = ABS(dHdcbx_i - one)
             gerr_i = MAX(gerr_i, MIN(half * kh_i, one / MAX(kh_i, 1.0d-300)))
             IF (ABS(cb_new - cb_sub) * gerr_i &
                 > DCB_MAX * MAX(MIN(cb_sub, cb_new), CB_SCALE * cbmax)) ok_i = .FALSE.
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             dHdcb_min = MIN(dHdcb_min, dHdcb_i)
             cb_sub = cb_new
             ! Abandon this attempt and refine (the last attempt is always completed)
@@ -352,12 +361,12 @@ do face = 1, face_num/2
           ! Kuc (Part C, item 4): same derivative in the deformed direction mfi (fictitious Cauchy),
           ! weighted by the free-fraction sensitivity S^theta_i = dcb_i/dthetaf
           call sigfilfic(dsfilficdcb,rho,lambdai,auxdwdcb,mfi,ai,ndi)
-          dsficdthetaf = dsficdthetaf + aux * sensthetaf_i * dsfilficdcb
+          dsficdthetaf = dsficdthetaf + aux * dcbdthetaf_i * dsfilficdcb
           !! Term 3.2
           call pfdlambdadc(pfdlambdadcfil,rho,lambdai,unit2,mfi,ai,det,ndi)
           ! auxchem = -dcb/dlambda_i from the sub-step sensitivity recursion
           ! (n_sub = 1: auxchem = dHdlambda/dHdcb, as before)
-          auxchem = - sens_i
+          auxchem = - dcbdlambda_i
           ! auxchem = aux * auxdwdcb * (dHdcb)**(-one) * dHdlambda
           ! write(*,*) 'auxchem =', auxchem
           ! write(*,*) 'auxdwdcb =', auxdwdcb
@@ -382,7 +391,7 @@ do face = 1, face_num/2
         
         ! Update total bound CL concentration for this integration point                                                       
         cbtau_tot = cbtau_tot + cb(node_num) * rho * ai
-        dcbdthetaf = dcbdthetaf + sensthetaf_i * rho * ai
+        dcbdthetaf = dcbdthetaf + dcbdthetaf_i * rho * ai
         ! ==============================================================   
 
         !v=dwi
