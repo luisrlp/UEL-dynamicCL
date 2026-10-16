@@ -92,7 +92,7 @@ FIXED_MECH = {'filament': 'ext',
               'stretch_free_binding': True,
               'xi_t': 1.0}
 
-DSIG, DGAM = 0.025, 0.0007         # extraction uncertainty (Pa, -)
+DSIG, DGAM = 0.025, 0. # 0.0007         # extraction uncertainty (Pa, -)
 STEADY_TOL = 0.01                  # Pa: RMS change of the last cycle vs the previous one above which it is not steady
 N_EARLY = 2                        # early cycles checked by the overshoot penalty
 LSQ = {'method': 'trf', 'x_scale': 1.0, 'ftol': 1e-4, 'xtol': 1e-4, 'gtol': 1e-6}   # least_squares settings

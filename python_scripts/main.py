@@ -228,19 +228,44 @@ def run_simulation(material, time_array, profile_func, mode, mu):
         history['kin_converged'].append(bool(np.all(material.kin_converged)))  # all directions converged
     return history
 
+def moduli(t, gamma, sigma, frequency, both_halves=False):
+    """ 
+    G' and G'' from Unterberger et al. 2013:
+    G' = (sigma_A/gamma_A) * cos(delta)
+    G'' = (sigma_A/gamma_A) * sin(delta)
+    Positive peaks are used, with the option for averaging with the negative half cycle.
+    """
+    def peak(i, y):
+        '''Returns the time and value of the peak using parabolic interpolation'''
+        y0, y1, y2 = y[i - 1], y[i], y[i + 1]
+        # Parabola: y(s) = a s² + b s + y1
+        # b = (y2 − y0)/2, a = (y0 − 2 y1 + y2)/2 = den/2
+        den = y0 - 2.0 * y1 + y2
+        s = 0.5 * (y0 - y2) / den if den != 0.0 else 0.0
+        return t[i] + s * (t[i + 1] - t[i]), y1 - 0.25 * (y0 - y2) * s
+    out = []
+    for sgn in ((1.0, -1.0) if both_halves else (1.0,)):
+        # Gamma peaks
+        tg, gA = peak(np.argmax(sgn * gamma[1:-1]) + 1, sgn * gamma)
+        # Sigma peaks
+        ts, sA = peak(np.argmax(sgn * sigma[1:-1]) + 1, sgn * sigma)
+        out.append((gA, sA, 2.0 * np.pi * frequency * (tg - ts)))
+    gA, sA, delta = np.mean(out, axis=0)
+    return sA / gA * np.cos(delta), sA / gA * np.sin(delta), delta
+    
 
 if __name__ == "__main__":
 
     # --- MATERIAL PARAMETERS ---
     THETA = 294. # 21 + 273.0  # Temperature (K)
     diffusion_props = {
-        'k_off_0' : 0.22029024245567738*(1-0.9983249631220875),    # 1/s (baseline off-rate) [0.05]
-        'k_catch_0' : 0.22029024245567738*0.9983249631220875,  # 1/s (baseline catch-rate) [0.0]
-        'k_on_0' : 4.0031833*0.22029024245567738,   # 1/s (baseline on-rate) [0.0125]
+        'k_off_0' : 0.17686159107698207*(1-0.998999999440339),    # 1/s (baseline off-rate) [0.05]
+        'k_catch_0' : 0.17686159107698207*0.998999999440339,  # 1/s (baseline catch-rate) [0.0]
+        'k_on_0' : 30.9044970*0.17686159107698207,   # 1/s (baseline on-rate) [0.0125]
         'CHI' : 0.1,     # Flory-Huggins parameter
         'THETA' : THETA,  # Temperature (K)
-        'dx_kT' : 0.0031819 / (1.38065e-5 * (THETA)),       # Reactive distance for slip bonds over thermal energy: Delta x / (k_B T)
-        'dx_c_kT': 0.03496563733278795 / (1.38065e-5 * (THETA)),  # Reactive distance for catch bonds over thermal energy: Delta x_c / (k_B T)
+        'dx_kT' : 0.00050198 / (1.38065e-5 * (THETA)),       # Reactive distance for slip bonds over thermal energy: Delta x / (k_B T)
+        'dx_c_kT': 0.009333 / (1.38065e-5 * (THETA)),  # Reactive distance for catch bonds over thermal energy: Delta x_c / (k_B T)
         'D' : 0.1,
         'MU0' : 0.0,
         'VMOL' : 0.15,
@@ -255,13 +280,13 @@ if __name__ == "__main__":
     mech_props = {
         'filament': 'ext',  # 'inext' for inextensible, 'ext' for extensible
         'KBULK': 1.e3,
-        'LAMBDA0': 1.0189982389690193,
+        'LAMBDA0': 1.0113904611496767,
         'MU0STRETCH': 38600.0, # 38600
         'Lp': 16.0,
         'BETA': 0.438, # 0.5,
         'R0C': 0.014,
         'ETA': 1., # 2./3.,
-        'a_ratio': 1.0189982389690193*1.0762521719357976, # 1.2,  # L / r0f ratio
+        'a_ratio': 1.0113904611496767*1.080591339670614, # 1.2,  # L / r0f ratio
         'b_disp': 0.000001, # Dispersion parameter
         'prefdir': np.array([1.0, 0.0, 0.0]),  # Preferred direction for anisotropy
         'stretch_free_binding': True, # True: reference state updated each increment
@@ -295,7 +320,7 @@ if __name__ == "__main__":
         'def_init': 0.0,  # Initial deformation magnitude
         'def_max': 0.126,  # Maximum deformation magnitude
         't_init': 0.0,  # Initial time
-        't_max': 60.0,  # Maximum time
+        't_max': 100.0,  # Maximum time
         'delta_t': 0.05,  # Time step
         'factor': 3,  # Sphere discretization factor
         'max_iter': 50,  # Maximum iterations for solvers
@@ -332,55 +357,100 @@ if __name__ == "__main__":
     # Extract the P11 component of stress (sigma_11)
     stress_11 = [s[0, 0] for s in results['stress']]
     stress_12 = [s[0, 1] for s in results['stress']]
-  
-    plt.figure(figsize=(8, 6))
-    plt.plot(stretches, stress_12, linewidth=2)
-    d = np.loadtxt('validation_data/unterberger2013_fig4a_laos.csv', delimiter=',')
-    gamma, sigma, branch = d[:, 0], d[:, 1], d[:, 2]
-    plt.plot(gamma, sigma, 'kx', ms=5, label='Unterberger et al. 2013 (LAOS)')
-    plt.xlabel('Shear strain ($\\gamma$)')
-    # plt.xlabel('Shear Strain ($\\gamma$)')
-    plt.ylabel('Shear stress ($\\sigma_{12}$)')
-    plt.title(f'Dynamic Crosslinking: {sim_props["deformation_type"].capitalize()}')
-    plt.legend()
-    plt.grid(True)
-    # plt.savefig(f'figures/{sim_props["deformation_type"]}/uni_results.pdf', bbox_inches='tight')
-    plt.savefig(f'figures/validation/0.pdf', bbox_inches='tight')
-    # plt.show()
 
-    # LAST CYCLE PLOT
-    t_hist = np.array(results['time'])
-    period = 1.0 / frequency
-    last = t_hist >= t_hist[-1] - period - 0.5 * sim_props['delta_t']   # last full cycle (both end points included)
-    gamma_last = np.array(stretches)[last]
-    sigma_last = np.array(stress_12)[last]
 
-    d0 = np.loadtxt('validation_data/unterberger2013_fig4a_laos_dataset0.csv', delimiter=',', comments='#')
-    g0, s0, b0 = d0[:, 0], d0[:, 1], d0[:, 2]
+    # ----------- LAOS (Fig. 4a) -----------
+    run_laos = True
+    if run_laos:
+        plt.figure(figsize=(8, 6))
+        plt.plot(stretches, stress_12, linewidth=2)
+        d = np.loadtxt('validation_data/unterberger2013_fig4a_laos.csv', delimiter=',')
+        gamma, sigma, branch = d[:, 0], d[:, 1], d[:, 2]
+        plt.plot(gamma, sigma, 'kx', ms=5, label='Unterberger et al. 2013 (LAOS)')
+        plt.xlabel('Shear strain ($\\gamma$)')
+        # plt.xlabel('Shear Strain ($\\gamma$)')
+        plt.ylabel('Shear stress ($\\sigma_{12}$)')
+        plt.title(f'Dynamic Crosslinking: {sim_props["deformation_type"].capitalize()}')
+        plt.legend()
+        plt.grid(True)
+        # plt.savefig(f'figures/{sim_props["deformation_type"]}/uni_results.pdf', bbox_inches='tight')
+        plt.savefig(f'figures/validation/0.pdf', bbox_inches='tight')
+        # plt.show()
 
-    dg_last = np.gradient(gamma_last)
-    s_model = np.empty_like(s0)
-    for b in (1, -1):
-        msk = dg_last > 0 if b == 1 else dg_last < 0
-        o = np.argsort(gamma_last[msk])
-        s_model[b0 == b] = np.interp(g0[b0 == b], gamma_last[msk][o], sigma_last[msk][o])
-    rmse = np.sqrt(np.mean((s_model - s0)**2))
-    r2 = 1.0 - np.sum((s_model - s0)**2) / np.sum((s0 - np.mean(s0))**2)
+        # LAST CYCLE PLOT
+        t_hist = np.array(results['time'])
+        period = 1.0 / frequency
+        last = t_hist >= t_hist[-1] - period - 0.5 * sim_props['delta_t']   # last full cycle (both end points included)
+        gamma_last = np.array(stretches)[last]
+        sigma_last = np.array(stress_12)[last]
 
-    plt.figure(figsize=(8, 6))
-    plt.plot(gamma_last, sigma_last, linewidth=2,
-             label=f'Model (cycle {int(round(t_hist[-1] / period))}): RMSE = {rmse:.3f} Pa, $R^2$ = {r2:.4f}')    
-    plt.plot(g0, s0, 'kx', ms=5, label='Unterberger et al. 2013')
-    # plt.plot(g0[b0 == 1], s0[b0 == 1], 'kx', ms=5, label='Unterberger et al. 2013 (loading)')
-    # plt.plot(g0[b0 == -1], s0[b0 == -1], 'k+', ms=6, label='Unterberger et al. 2013 (unloading)')
-    plt.xlabel('Shear strain ($\\gamma$)')
-    plt.ylabel('Shear stress ($\\sigma_{12}$)')
-    plt.title(f'Dynamic Crosslinking: {sim_props["deformation_type"].capitalize()} (last cycle)')
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(f'figures/validation/0_last_cycle.pdf', bbox_inches='tight')
+        d0 = np.loadtxt('validation_data/unterberger2013_fig4a_laos_dataset0.csv', delimiter=',', comments='#')
+        g0, s0, b0 = d0[:, 0], d0[:, 1], d0[:, 2]
 
+        dg_last = np.gradient(gamma_last)
+        s_model = np.empty_like(s0)
+        for b in (1, -1):
+            msk = dg_last > 0 if b == 1 else dg_last < 0
+            o = np.argsort(gamma_last[msk])
+            s_model[b0 == b] = np.interp(g0[b0 == b], gamma_last[msk][o], sigma_last[msk][o])
+        rmse = np.sqrt(np.mean((s_model - s0)**2))
+        r2 = 1.0 - np.sum((s_model - s0)**2) / np.sum((s0 - np.mean(s0))**2)
+
+        plt.figure(figsize=(8, 6))
+        plt.plot(gamma_last, sigma_last, linewidth=2,
+                label=f'Model (cycle {int(round(t_hist[-1] / period))}): RMSE = {rmse:.3f} Pa, $R^2$ = {r2:.4f}')    
+        plt.plot(g0, s0, 'kx', ms=5, label='Unterberger et al. 2013')
+        # plt.plot(g0[b0 == 1], s0[b0 == 1], 'kx', ms=5, label='Unterberger et al. 2013 (loading)')
+        # plt.plot(g0[b0 == -1], s0[b0 == -1], 'k+', ms=6, label='Unterberger et al. 2013 (unloading)')
+        plt.xlabel('Shear strain ($\\gamma$)')
+        plt.ylabel('Shear stress ($\\sigma_{12}$)')
+        plt.title(f'Dynamic Crosslinking: {sim_props["deformation_type"].capitalize()} (last cycle)')
+        plt.legend()
+        plt.grid(True)
+        Gp_A, Gpp_A, delta_A = moduli(t_hist[last], gamma_last, sigma_last, frequency)
+        print(f"gamma_A = {sim_props['def_max']}: G' = {Gp_A:.2f} Pa, G'' = {Gpp_A:.2f} Pa, "
+            f"delta = {np.degrees(delta_A):.1f} deg  (Fig. 4b at 0.126: G' = 29.6, G'' = 6.6)")
+        plt.savefig(f'figures/validation/0_last_cycle.pdf', bbox_inches='tight')
+
+    # ----------- AMPLITUDE SWEEP (Fig. 4b) -----------
+    run_sweep = False
+    if run_sweep:
+        dG1 = np.loadtxt('validation_data/4b_G_.csv', delimiter=',')
+        dG2 = np.loadtxt('validation_data/4b_G__.csv', delimiter=',')
+        dG2 = dG2[np.argsort(dG2[:, 0])]
+        gamma_As = dG1[dG1[:, 0] <= 0.16, 0]          # below the taut limit (~0.17) and the authors' fit range
+        n_cycles = 5
+        dt_sweep = 0.1
+        t_sweep = np.arange(0.0, n_cycles / frequency + 0.5 * dt_sweep, dt_sweep)
+        Gp, Gpp = [], []
+        for gA in gamma_As:
+            mat = DynamicCrosslinking(diffusion_props, mech_props, sim_props)     # fresh state for every amplitude
+            prof = lambda t, gA=gA: profile_cyclic(t, amplitude=gA, frequency=frequency,
+                                                   deformation_type=sim_props['deformation_type'])
+            res = run_simulation(mat, t_sweep, prof, mode=sim_props['deformation_type'], mu=mu_fixed)
+            th = np.array(res['time'])
+            gh = np.array(res['def_val'])
+            sh = np.array([s[0, 1] for s in res['stress']])
+            m = th >= th[-1] - 1.0 / frequency - 0.5 * dt_sweep                   # last full cycle
+            G1, G2, _ = moduli(th[m], gh[m], sh[m], frequency)
+            Gp.append(G1)
+            Gpp.append(G2)
+
+        plt.figure(figsize=(8, 6))
+        plt.loglog(gamma_As, Gp, 'b-', lw=2, label="Model $G'$")
+        plt.loglog(gamma_As, Gpp, 'r-', lw=2, label="Model $G''$")
+        plt.loglog(dG1[:, 0], dG1[:, 1], 'bx', ms=6, label="Unterberger et al. 2013 $G'$")
+        plt.loglog(dG2[:, 0], dG2[:, 1], 'r+', ms=7, label="Unterberger et al. 2013 $G''$")
+        plt.xlabel('Amplitude of shear strain $\\gamma_A$')
+        plt.ylabel("Moduli $G'$, $G''$ (Pa)")
+        plt.legend()
+        plt.grid(True, which='both')
+        plt.savefig('figures/validation/0_amplitude_sweep.pdf', bbox_inches='tight')
+
+
+    # --------------------------------------------
     # ----------- SENSITIVITY ANALYSIS -----------
+    # --------------------------------------------
 
     # The values you want to test                                                                                                                                                
     sensitivity_array = [] # np.array([0.01, 0.05, 0.1])  # Frequencies in Hz for cyclic loading                                                                                             
