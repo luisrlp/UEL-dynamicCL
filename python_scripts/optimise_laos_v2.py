@@ -1,7 +1,8 @@
 """Least-squares fit of the stretch-free-binding model to the LAOS loop of Unterberger et al. (2013), Fig. 4a.
 Version 2 of optimise_laos.py: per-cycle diagnostics, candidate parameters keq / beta / mu0stretch, optional
-early-cycle overshoot penalty (Step 2a) and steady-state fits with --cycles N (Step 2b). With the defaults
-(keq, beta, mu0stretch fixed at x0, --overshoot-weight 0, --cycles 3) the residuals equal those of optimise_laos.py.
+early-cycle overshoot penalty (Step 2a), steady-state fits with --cycles N (Step 2b) and an optional joint fit with
+the amplitude sweep of Fig. 4b (--sweep-weight). With the defaults (keq, beta, mu0stretch fixed at x0,
+--overshoot-weight 0, --sweep-weight 0, --cycles 3) the residuals equal those of optimise_laos.py.
 
 Model : python_scripts/material.py (DynamicCrosslinking), simple shear at one material point, closed system,
         gamma(t) = gamma_A sin(2 pi f t), f = 0.05 Hz, started from rest; the last simulated cycle is compared
@@ -28,6 +29,12 @@ which down-weights the near-vertical tips. Units stay Pa (r_w = r where the loop
 Optional overshoot penalty (--overshoot-weight w > 0): 2 extra rows per early cycle k = 1, 2,
 w_eff * max(0, sigma_max,k - sigma_max,last) and w_eff * max(0, sigma_min,last - sigma_min,k),
 w_eff = w * sqrt(N_data / N_pen), so only an overshoot of the early cycles beyond the fitted cycle is penalised.
+Optional amplitude sweep (--sweep-weight w > 0): one extra LAOS run from rest per amplitude of --sweep-gammas (same dt,
+factor and cycles; G', G'' of the last cycle from main.moduli, Eq. (1) of the paper), and 2 rows per amplitude,
+w_eff * log10(G'_model / G'_data) and w_eff * log10(G''_model / G''_data), w_eff = w * sqrt(N_data / N_sweep).
+Data: validation_data/4b_G_.csv, 4b_G__.csv, interpolated in log-log at the requested amplitudes. With w = 1 an RMS
+log10 error of 0.1 (26 %) costs as much as an RMS loop misfit of 0.1 Pa. A failed sweep run (or G' or G'' <= 0)
+gives a log10 error of SWEEP_FAIL.
 
 Usage (from any directory; results go to --out, default python_scripts/optimisation_runs/laos_v2):
   python optimise_laos_v2.py --evaluate-only                  # one LAOS run at x0, residual summary + cycle table
@@ -36,7 +43,9 @@ Usage (from any directory; results go to --out, default python_scripts/optimisat
   python optimise_laos_v2.py --free keq --workers 8           # also fit keq
   python optimise_laos_v2.py --overshoot-weight 1             # Step 2a: penalise the first-cycle overshoot
   python optimise_laos_v2.py --cycles 6                       # Step 2b: fit a (near) steady-state cycle
-Outputs (in --out): evals.csv (every LAOS run, with per-cycle peaks and cycle-to-cycle change),
+  python optimise_laos_v2.py --sweep-weight 1 --workers 16    # joint fit: LAOS loop + amplitude sweep (Fig. 4b)
+  python optimise_laos_v2.py --sweep-weight 1 --sweep-gammas 0.0126 0.1 0.2   # other sweep amplitudes
+Outputs (in --out): evals.csv (every LAOS run, with per-cycle peaks and cycle-to-cycle change, and the sweep moduli),
                     cache.json (residuals per parameter set, reused on restart
                     only with the same settings, fixed constants, data and model source),
                     result.json (optimum, RMS, correlation matrix, standard errors, cycle diagnostics), best_loop.npz,
@@ -51,6 +60,8 @@ from scipy.optimize import least_squares
 
 REPO = os.path.dirname(os.path.abspath(__file__))     # python_scripts/
 DATA = os.path.join(REPO, 'validation_data', 'unterberger2013_fig4a_laos_dataset0.csv')
+SWEEP_DATA = (os.path.join(REPO, 'validation_data', '4b_G_.csv'),     # Fig. 4b: G' and G'' vs gamma_A
+              os.path.join(REPO, 'validation_data', '4b_G__.csv'))
 sys.path.insert(0, REPO)
 
 THETA = 294.0
@@ -59,13 +70,13 @@ FREQ = 0.05                        # Hz
 
 # name: (x0, lower, upper)
 PARAMS = {
-    'lambda0': (1.0172, 1.000, 1.05), # 1.0467
-    's_taut':  (1.072, 1.050, 1.200), # 1.0861 a_ratio/lambda0
-    'koff0':   (0.279,  0.020, 2.00), # [0.08] k_c + k_s
-    'phi':     (0.99876, 0.000, 0.999), # [0.9091] k_c / (k_s + k_c) = k_c / koff0
-    'dxc_nm':  (15.0,    0.5,   35.0), # 2.
-    'dxs_nm':  (1.66,    0.5,   20.0), # 0.5
-    'keq':        (10.0,     4.0,    50.0),    # k_on_0 / koff0
+    'lambda0': (1.08, 1.000, 1.15), # 1.0467
+    's_taut':  (1.1, 1.050, 1.200), # 1.0861 a_ratio/lambda0
+    'koff0':   (0.15,  0.020, 2.00), # [0.08] k_c + k_s
+    'phi':     (0.971, 0.000, 0.9999), # [0.9091] k_c / (k_s + k_c) = k_c / koff0
+    'dxc_nm':  (5.5570,    0.5,   35.0), # 2.
+    'dxs_nm':  (1.566,    0.5,   20.0), # 0.5
+    'keq':        (38.84,     3.0,    50.0),    # k_on_0 / koff0
     'beta':       (0.438,   0.30,   0.70),    # BETA (Unterberger 2013, from Liu & Pollack)
     'mu0stretch': (38600.0, 2.0e4,  6.0e4),   # MU0STRETCH [pN]
 }
@@ -95,6 +106,8 @@ FIXED_MECH = {'filament': 'ext',
 DSIG, DGAM = 0.025, 0. # 0.0007         # extraction uncertainty (Pa, -)
 STEADY_TOL = 0.01                  # Pa: RMS change of the last cycle vs the previous one above which it is not steady
 N_EARLY = 2                        # early cycles checked by the overshoot penalty
+SWEEP_GAMMAS = (0.0126, 0.05, 0.1, 0.158, 0.2)   # default sweep amplitudes (0.126 is the fitted loop itself)
+SWEEP_FAIL = 2.0                   # log10 error assigned to a failed sweep run
 LSQ = {'method': 'trf', 'x_scale': 1.0, 'ftol': 1e-4, 'xtol': 1e-4, 'gtol': 1e-6}   # least_squares settings
 
 
@@ -125,6 +138,27 @@ def n_data(data):
 def n_penalty(cfg):
     """Number of overshoot-penalty rows (0 when the penalty is off)."""
     return 2 * min(N_EARLY, cfg['cycles'] - 1) if cfg['overshoot_weight'] > 0 else 0
+
+
+def n_sweep(cfg):
+    """Number of amplitude-sweep rows (0 when the sweep is off)."""
+    return 2 * len(cfg['sweep_gammas']) if cfg.get('sweep_weight', 0.0) > 0 else 0
+
+
+def load_sweep_data(gammas):
+    """G' and G'' of Fig. 4b at the amplitudes gammas (log-log interpolation); array (n_gammas, 2)."""
+    out = []
+    for f in SWEEP_DATA:
+        d = np.loadtxt(f, delimiter=',', comments='#')
+        d = d[np.argsort(d[:, 0])]                    # 4b_G__.csv is not sorted
+        out.append(10.0**np.interp(np.log10(gammas), np.log10(d[:, 0]), np.log10(d[:, 1])))
+    return np.column_stack(out)
+
+
+def sweep_range():
+    """Amplitude range covered by both sweep data files."""
+    g = [np.loadtxt(f, delimiter=',', comments='#')[:, 0] for f in SWEEP_DATA]
+    return max(x.min() for x in g), min(x.max() for x in g)
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -223,6 +257,33 @@ def run_one(args):
     return r, (gm, sm), diag, time.time() - t0
 
 
+def run_sweep(args):
+    """Worker: one LAOS run from rest at the sweep amplitude gA (same protocol as the fitted loop).
+    Returns (G', G'' of the last cycle, wall time); NaN if the run fails."""
+    from main import moduli
+    p, cfg, gA = args
+    t0 = time.time()
+    try:
+        t, g, s = simulate(p, dict(cfg, gamma_A=gA))
+        last = t >= t[-1] - 1.0 / FREQ - 0.5 * cfg['dt']
+        G1, G2, _ = moduli(t[last], g[last], s[last], FREQ)
+    except Exception as e:
+        print(f'   ! sweep run failed at gamma_A {gA} for {p}: {e!r}', flush=True)
+        G1 = G2 = float('nan')
+    return G1, G2, time.time() - t0
+
+
+def sweep_errors(G, Gd):
+    """log10(model / data), G' rows first, then G''; SWEEP_FAIL where the model modulus is NaN or <= 0."""
+    G, Gd = G.T.ravel(), Gd.T.ravel()
+    ok = np.isfinite(G) & (G > 0)
+    return np.where(ok, np.log10(np.where(ok, G, 1.0) / Gd), SWEEP_FAIL)
+
+
+def sweep_weight_eff(cfg, n_dat):
+    return cfg['sweep_weight'] * math.sqrt(n_dat / n_sweep(cfg))
+
+
 # ---------------------------------------------------------------------------------------------------------------
 # Optimiser wrapper: normalised variables, cache, parallel forward-difference Jacobian
 # ---------------------------------------------------------------------------------------------------------------
@@ -232,11 +293,20 @@ def settings_signature(cfg):
     (or before an edit of material.py) are never reused."""
     h = hashlib.sha1()
     fixed_mech = {k: (v.tolist() if isinstance(v, np.ndarray) else v) for k, v in FIXED_MECH.items()}
-    h.update(json.dumps({'cfg': {k: float(v) for k, v in cfg.items()}, 'diff': FIXED_DIFF, 'mech': fixed_mech,
+    h.update(json.dumps({'cfg': {k: ([float(x) for x in v] if isinstance(v, (list, tuple)) else float(v))
+                                 for k, v in cfg.items()},
+                         'diff': FIXED_DIFF, 'mech': fixed_mech,
                          'FREQ': FREQ, 'DSIG': DSIG, 'DGAM': DGAM, 'N_EARLY': N_EARLY}, sort_keys=True).encode())
     for f in ('material.py', 'kinematics.py', 'dfd.py'):
         h.update(open(os.path.join(REPO, f), 'rb').read())
     h.update(open(DATA, 'rb').read())
+    if n_sweep(cfg):                                  # sweep settings only when it is on (signature unchanged otherwise)
+        import inspect
+        from main import moduli
+        h.update(json.dumps({'SWEEP_FAIL': SWEEP_FAIL}).encode())
+        h.update(inspect.getsource(moduli).encode())
+        for f in SWEEP_DATA:
+            h.update(open(f, 'rb').read())
     return h.hexdigest()[:12]
 
 
@@ -244,6 +314,9 @@ class Problem:
     def __init__(self, free, fixed, cfg, data, out, workers, h):
         self.free, self.fixed, self.cfg, self.data, self.out, self.h = free, fixed, cfg, data, out, h
         self.n_dat = n_data(data)
+        self.n_pen, self.n_sw = n_penalty(cfg), n_sweep(cfg)
+        self.sweep_g = list(cfg['sweep_gammas']) if self.n_sw else []
+        self.sweep_d = load_sweep_data(self.sweep_g) if self.n_sw else None      # (n_gammas, 2): G', G'' data
         self.lo = np.array([PARAMS[k][1] for k in free])
         self.hi = np.array([PARAMS[k][2] for k in free])
         self.pool = ProcessPoolExecutor(max_workers=workers)
@@ -256,7 +329,9 @@ class Problem:
         self.log = os.path.join(out, 'evals.csv')
         ncyc = cfg['cycles']
         header = ','.join(['run'] + list(PARAMS) + ['rms_weighted', 'rms_penalty', 'rms_raw', 'last_cycle_change'] +
-                          [f'{q}_c{k}' for k in range(1, ncyc + 1) for q in ('smax', 'smin', 'dprev')] + ['wall_s'])
+                          [f'{q}_c{k}' for k in range(1, ncyc + 1) for q in ('smax', 'smin', 'dprev')] + ['wall_s'] +
+                          (['rms_sweep_log10'] + [f'{q}_g{g:.4g}' for q in ('G1', 'G2') for g in self.sweep_g] +
+                           ['sweep_wall_s'] if self.n_sw else []))
         if not os.path.exists(self.log):
             with open(self.log, 'w') as fh:
                 fh.write(header + '\n')
@@ -281,24 +356,46 @@ class Problem:
         todo = [p for p in ps if self.key(p) not in self.cache]
         todo = list({self.key(p): p for p in todo}.values())
         if todo:
-            for p, (r, loop, diag, wall) in zip(todo, self.pool.map(run_one, [(p, self.cfg, self.data) for p in todo])):
+            # all LAOS runs and sweep runs of all points in one pool (a point needs 1 + n_gammas runs)
+            laos = [self.pool.submit(run_one, (p, self.cfg, self.data)) for p in todo]
+            sweep = [[self.pool.submit(run_sweep, (p, self.cfg, g)) for g in self.sweep_g] for p in todo]
+            for p, fl, fs in zip(todo, laos, sweep):
+                r, loop, diag, wall = fl.result()
+                sw = np.array([f.result() for f in fs]).reshape(-1, 3)          # rows: G', G'', wall per amplitude
+                if self.n_sw:
+                    e = sweep_errors(sw[:, :2], self.sweep_d)
+                    r = np.concatenate([r, sweep_weight_eff(self.cfg, self.n_dat) * e])
                 k = self.key(p)
                 self.cache[k] = r.tolist()
                 self.loops[k] = loop
                 self.diags[k] = diag
                 self.n_runs += 1
-                rd, rp = r[:self.n_dat], r[self.n_dat:]
+                rd, rp, _ = self.split(r)
                 ncyc = self.cfg['cycles']
                 cyc = ([f'{diag[q][c]:.5g}' for c in range(ncyc) for q in ('smax', 'smin', 'dprev')] if diag
                        else ['nan'] * 3 * ncyc)
                 last = diag['dprev'][-1] if diag else float('nan')
+                swcols = ([f'{np.sqrt(np.mean(e**2)):.5f}'] + [f'{x:.5g}' for x in sw[:, 0]] +
+                          [f'{x:.5g}' for x in sw[:, 1]] + [f'{sw[:, 2].sum():.0f}'] if self.n_sw else [])
                 with open(self.log, 'a') as fh:
                     fh.write(','.join([str(self.n_runs)] + [f'{p[q]:.6g}' for q in PARAMS] +
                                       [f'{np.sqrt(np.mean(rd**2)):.5f}',
                                        f'{np.sqrt(np.mean(rp**2)) if len(rp) else 0.0:.5f}',
-                                       f'{self.raw_rms(loop):.5f}', f'{last:.5f}'] + cyc + [f'{wall:.0f}']) + '\n')
+                                       f'{self.raw_rms(loop):.5f}', f'{last:.5f}'] + cyc + [f'{wall:.0f}'] +
+                                      swcols) + '\n')
             json.dump(self.cache, open(self.cache_file, 'w'))
         return [np.array(self.cache[self.key(p)]) for p in ps]
+
+    def split(self, r):
+        """Residual blocks: loop data, overshoot penalty, amplitude sweep."""
+        n1 = self.n_dat + self.n_pen
+        return r[:self.n_dat], r[self.n_dat:n1], r[n1:]
+
+    def sweep_moduli(self, r):
+        """Model G', G'' (n_gammas, 2) and log10 errors recovered from the sweep rows of a residual vector
+        (a failed run shows as G = data * 10**SWEEP_FAIL)."""
+        e = self.split(r)[2] / sweep_weight_eff(self.cfg, self.n_dat)
+        return self.sweep_d * 10.0**e.reshape(2, -1).T, e
 
     def raw_rms(self, loop):
         gm, sm = loop
@@ -310,9 +407,10 @@ class Problem:
 
     def fun(self, z):
         r = self.evaluate([z])[0]
-        rd, rp = r[:self.n_dat], r[self.n_dat:]
+        rd, rp, rs = self.split(r)
         pen = f', penalty RMS {np.sqrt(np.mean(rp**2)):.4f}' if len(rp) else ''
-        print(f'   f: {self.fmt(z)} -> RMS_w {np.sqrt(np.mean(rd**2)):.4f} Pa{pen}  (LAOS runs so far: {self.n_runs})', flush=True)
+        pen += f', sweep RMS log10 {np.sqrt(np.mean(self.sweep_moduli(r)[1]**2)):.4f}' if len(rs) else ''
+        print(f'   f: {self.fmt(z)} -> RMS_w {np.sqrt(np.mean(rd**2)):.4f} Pa{pen}  (points so far: {self.n_runs})', flush=True)
         diag = self.diags.get(self.key(self.phys(z)))
         if diag and self.cfg['cycles'] > 1 and diag['dprev'][-1] > STEADY_TOL:
             print(f'   ! fitted cycle not steady: RMS change vs previous cycle {diag["dprev"][-1]:.3f} Pa > {STEADY_TOL} Pa', flush=True)
@@ -337,6 +435,13 @@ def print_cycles(diag):
         print(f'   {c + 1:5d} | {diag["smax"][c]:9.3f} {diag["smin"][c]:9.3f} | {diag["dprev"][c]:.4f}')
 
 
+def print_sweep(prob, r):
+    G, e = prob.sweep_moduli(r)
+    print(f"   gamma_A |  G' model  G' data | G'' model G'' data   [Pa]   (RMS log10 error {np.sqrt(np.mean(e**2)):.4f})")
+    for g, (G1, G2), (d1, d2) in zip(prob.sweep_g, G, prob.sweep_d):
+        print(f'   {g:7.4f} | {G1:9.3f} {d1:8.3f} | {G2:9.3f} {d2:9.3f}')
+
+
 # ---------------------------------------------------------------------------------------------------------------
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -348,6 +453,9 @@ def main():
     ap.add_argument('--factor', type=int, default=3)
     ap.add_argument('--cycles', type=int, default=3, help='simulated cycles from rest; the last one is fitted')
     ap.add_argument('--overshoot-weight', type=float, default=0.0, help='weight of the early-cycle overshoot penalty (0 = off)')
+    ap.add_argument('--sweep-weight', type=float, default=0.0, help='weight of the amplitude-sweep rows (Fig. 4b, 0 = off)')
+    ap.add_argument('--sweep-gammas', type=float, nargs='+', default=list(SWEEP_GAMMAS),
+                    help='sweep amplitudes (one extra LAOS run each)')
     ap.add_argument('--workers', type=int, default=7)
     ap.add_argument('--max-nfev', type=int, default=25, help='max residual evaluations of least_squares (Jacobians not counted)')
     ap.add_argument('--h', type=float, default=0.01, help='finite-difference step in normalised variables (fraction of the bound range)')
@@ -357,6 +465,11 @@ def main():
 
     data, gamma_A = load_data()
     cfg = {'dt': a.dt, 'factor': a.factor, 'cycles': a.cycles, 'gamma_A': gamma_A, 'overshoot_weight': a.overshoot_weight}
+    if a.sweep_weight > 0:                           # only when on, so the cache signature of loop-only fits is unchanged
+        lo, hi = sweep_range()
+        if not all(lo <= g <= hi for g in a.sweep_gammas):
+            sys.exit(f'--sweep-gammas outside the data range [{lo:.4g}, {hi:.4g}]')
+        cfg.update(sweep_weight=a.sweep_weight, sweep_gammas=sorted(a.sweep_gammas))
     x0 = {k: PARAMS[k][0] for k in PARAMS}
     x0.update({k: float(v) for k, v in (s.split('=') for s in a.x0)})
     for k in a.free:
@@ -386,7 +499,9 @@ def main():
              'constants': {'FIXED_DIFF': FIXED_DIFF,
                            'FIXED_MECH': {k: (v.tolist() if isinstance(v, np.ndarray) else v) for k, v in FIXED_MECH.items()},
                            'FREQ': FREQ, 'THETA': THETA},
-             'weights': {'DSIG': DSIG, 'DGAM': DGAM, 'N_EARLY': N_EARLY, 'n_penalty_rows': n_penalty(cfg)},
+             'weights': {'DSIG': DSIG, 'DGAM': DGAM, 'N_EARLY': N_EARLY, 'n_penalty_rows': n_penalty(cfg),
+                         'n_sweep_rows': n_sweep(cfg), 'SWEEP_FAIL': SWEEP_FAIL},
+             'sweep_data_files': list(SWEEP_DATA) if n_sweep(cfg) else [],
              'steady_tol': STEADY_TOL,
              'optimiser': {**LSQ, 'max_nfev': a.max_nfev, 'h': a.h, 'workers': a.workers, 'evaluate_only': a.evaluate_only},
              'versions': {'numpy': np.__version__, 'scipy': scipy.__version__, 'python': sys.version.split()[0]}}
@@ -400,6 +515,8 @@ def main():
               f'raw RMS {prob.raw_rms(prob.loops[k]) if k in prob.loops else float("nan"):.4f} Pa')
         if prob.diags.get(k):
             print_cycles(prob.diags[k])
+        if prob.n_sw:
+            print_sweep(prob, r)
         prob.pool.shutdown()
         return
 
@@ -425,7 +542,12 @@ def main():
     if loop is None or diag is None:                                     # optimum from the cache of an earlier session
         _, loop, diag, _ = run_one((p_opt, cfg, data))
     np.savez(os.path.join(a.out, 'best_loop.npz'), gamma=loop[0], sigma=loop[1])
-    rd, rp = res.fun[:prob.n_dat], res.fun[prob.n_dat:]
+    rd, rp, rs = prob.split(res.fun)
+    if len(rs):
+        G, e = prob.sweep_moduli(res.fun)
+        sweep = {'gamma_A': prob.sweep_g, 'G1_model': G[:, 0].tolist(), 'G1_data': prob.sweep_d[:, 0].tolist(),
+                 'G2_model': G[:, 1].tolist(), 'G2_data': prob.sweep_d[:, 1].tolist(),
+                 'rms_log10': float(np.sqrt(np.mean(e**2)))}
     out = {'status': res.status, 'message': res.message, 'nfev': res.nfev, 'njev': res.njev, 'laos_runs': prob.n_runs,
            'wall_h': (time.time() - t0) / 3600, 'cfg': cfg, 'free': free, 'fixed': fixed,
            'optimum': p_opt, 'a_ratio': p_opt['s_taut'] * p_opt['lambda0'],
@@ -435,6 +557,7 @@ def main():
            'rms_penalty': float(np.sqrt(np.mean(rp**2))) if len(rp) else 0.0,
            'rms_raw': prob.raw_rms(loop),
            'cycles': diag,
+           **({'sweep_runs': prob.n_runs * len(prob.sweep_g), 'sweep': sweep} if len(rs) else {}),
            'std_error': dict(zip(free, se.tolist())), 'correlation': corr.tolist(),
            'at_bound': [k for k, z in zip(free, res.x) if z < 1e-3 or z > 1 - 1e-3]}
     json.dump(out, open(os.path.join(a.out, 'result.json'), 'w'), indent=2)
@@ -448,6 +571,8 @@ def main():
     print('correlation matrix:\n' + '\n'.join(f'  {k:10s} ' + ' '.join(f'{c:+.2f}' for c in row) for k, row in zip(free, corr)))
     if diag:
         print_cycles(diag)
+    if len(rs):
+        print_sweep(prob, res.fun)
     prob.pool.shutdown()
 
 
