@@ -27,6 +27,9 @@ from dfd import generate_icosahedron, apply_dispersion
 from material import DynamicCrosslinking
 from plotting import plot_microsphere
 import matplotlib.pyplot as plt
+import contextlib, os
+from concurrent.futures import ProcessPoolExecutor
+
 
 tex_fonts = {
     # Use LaTeX to write all text
@@ -252,6 +255,22 @@ def moduli(t, gamma, sigma, frequency, both_halves=False):
         out.append((gA, sA, 2.0 * np.pi * frequency * (tg - ts)))
     gA, sA, delta = np.mean(out, axis=0)
     return sA / gA * np.cos(delta), sA / gA * np.sin(delta), delta
+
+def sweep_worker(args):
+    """One amplitude of the sweep from rest (fresh material): gamma_A, G', G'', delta of the last cycle."""
+    gA, diffusion_props, mech_props, sim_props, frequency, n_cycles, dt, mu = args
+    t = np.arange(0.0, n_cycles / frequency + 0.5 * dt, dt)
+    with open(os.devnull, 'w') as devnull, contextlib.redirect_stdout(devnull):     # silence the per-step prints
+        mat = DynamicCrosslinking(diffusion_props, mech_props, sim_props)
+        prof = lambda tt: profile_cyclic(tt, amplitude=gA, frequency=frequency,
+                                         deformation_type=sim_props['deformation_type'])
+        res = run_simulation(mat, t, prof, mode=sim_props['deformation_type'], mu=mu)
+    th = np.array(res['time'])
+    gh = np.array(res['def_val'])
+    sh = np.array([s[0, 1] for s in res['stress']])
+    m = th >= th[-1] - 1.0 / frequency - 0.5 * dt                                    # last full cycle
+    G1, G2, delta = moduli(th[m], gh[m], sh[m], frequency)
+    return gA, G1, G2, delta
     
 
 if __name__ == "__main__":
@@ -327,41 +346,34 @@ if __name__ == "__main__":
         'tol': 1.0e-12  # Tolerance for solvers
     }
 
-    factor = sim_props['factor']
-    material = DynamicCrosslinking(diffusion_props, 
-                                   mech_props,
-                                   sim_props)
-    mu_fixed = None # material.INITMU  # Keeping mu constant for now          
-  
-    # Time array
-    t_array = np.arange(sim_props['t_init'], sim_props['t_max'] + sim_props['delta_t'], sim_props['delta_t'])
-        
-    # Define stretch rate and profile     
-    # stretch_rate = (sim_props['def_max'] - sim_props['def_init']) / sim_props['t_max']
-    frequency = 0.05
-    my_profile = lambda t: profile_cyclic(t, 
-                                          amplitude=sim_props['def_max'], 
-                                          frequency=frequency, 
-                                          deformation_type=sim_props['deformation_type'])      
-  
-    # Get results
-    print(f"\n--- Running {sim_props['deformation_type']} Simulation ---")
-    results = run_simulation(material, 
-                             t_array, 
-                             my_profile,
-                             mode=sim_props['deformation_type'], mu=mu_fixed)
-  
-    # Extract data and plot
-    stretches = results['def_val']
-        
-    # Extract the P11 component of stress (sigma_11)
-    stress_11 = [s[0, 0] for s in results['stress']]
-    stress_12 = [s[0, 1] for s in results['stress']]
-
-
     # ----------- LAOS (Fig. 4a) -----------
-    run_laos = True
+    run_laos = False
+    mu_fixed = None # material.INITMU  # Keeping mu constant for now          
+    frequency = 0.05
     if run_laos:
+        factor = sim_props['factor']
+        material = DynamicCrosslinking(diffusion_props, 
+                                    mech_props,
+                                    sim_props)
+        # Time array
+        t_array = np.arange(sim_props['t_init'], sim_props['t_max'] + sim_props['delta_t'], sim_props['delta_t'])
+        # Define stretch rate and profile     
+        # stretch_rate = (sim_props['def_max'] - sim_props['def_init']) / sim_props['t_max']
+        my_profile = lambda t: profile_cyclic(t, 
+                                            amplitude=sim_props['def_max'], 
+                                            frequency=frequency, 
+                                            deformation_type=sim_props['deformation_type'])      
+        # Get results
+        print(f"\n--- Running {sim_props['deformation_type']} Simulation ---")
+        results = run_simulation(material, 
+                                t_array, 
+                                my_profile,
+                                mode=sim_props['deformation_type'], mu=mu_fixed)
+        # Extract data and plot
+        stretches = results['def_val']
+        # Extract the P11 component of stress (sigma_11)
+        stress_11 = [s[0, 0] for s in results['stress']]
+        stress_12 = [s[0, 1] for s in results['stress']]
         plt.figure(figsize=(8, 6))
         plt.plot(stretches, stress_12, linewidth=2)
         d = np.loadtxt('validation_data/unterberger2013_fig4a_laos.csv', delimiter=',')
@@ -413,39 +425,35 @@ if __name__ == "__main__":
         plt.savefig(f'figures/validation/0_last_cycle.pdf', bbox_inches='tight')
 
     # ----------- AMPLITUDE SWEEP (Fig. 4b) -----------
-    run_sweep = False
+    run_sweep = True
     if run_sweep:
         dG1 = np.loadtxt('validation_data/4b_G_.csv', delimiter=',')
         dG2 = np.loadtxt('validation_data/4b_G__.csv', delimiter=',')
         dG2 = dG2[np.argsort(dG2[:, 0])]
-        gamma_As = dG1[dG1[:, 0] <= 0.16, 0]          # below the taut limit (~0.17) and the authors' fit range
-        n_cycles = 5
+        max_gamma = 0.2
+        gamma_As = dG1[dG1[:, 0] <= max_gamma, 0]
+        n_cycles = 3
         dt_sweep = 0.1
-        t_sweep = np.arange(0.0, n_cycles / frequency + 0.5 * dt_sweep, dt_sweep)
-        Gp, Gpp = [], []
-        for gA in gamma_As:
-            mat = DynamicCrosslinking(diffusion_props, mech_props, sim_props)     # fresh state for every amplitude
-            prof = lambda t, gA=gA: profile_cyclic(t, amplitude=gA, frequency=frequency,
-                                                   deformation_type=sim_props['deformation_type'])
-            res = run_simulation(mat, t_sweep, prof, mode=sim_props['deformation_type'], mu=mu_fixed)
-            th = np.array(res['time'])
-            gh = np.array(res['def_val'])
-            sh = np.array([s[0, 1] for s in res['stress']])
-            m = th >= th[-1] - 1.0 / frequency - 0.5 * dt_sweep                   # last full cycle
-            G1, G2, _ = moduli(th[m], gh[m], sh[m], frequency)
-            Gp.append(G1)
-            Gpp.append(G2)
+        jobs = [(gA, diffusion_props, mech_props, sim_props, frequency, n_cycles, dt_sweep, mu_fixed)
+                for gA in gamma_As]
+        n_workers = 16
+        with ProcessPoolExecutor(max_workers=n_workers) as ex:
+            out = list(ex.map(sweep_worker, jobs))                 # same order as gamma_As
+        Gp = [o[1] for o in out]
+        Gpp = [o[2] for o in out]
 
-        plt.figure(figsize=(8, 6))
-        plt.loglog(gamma_As, Gp, 'b-', lw=2, label="Model $G'$")
-        plt.loglog(gamma_As, Gpp, 'r-', lw=2, label="Model $G''$")
-        plt.loglog(dG1[:, 0], dG1[:, 1], 'bx', ms=6, label="Unterberger et al. 2013 $G'$")
-        plt.loglog(dG2[:, 0], dG2[:, 1], 'r+', ms=7, label="Unterberger et al. 2013 $G''$")
-        plt.xlabel('Amplitude of shear strain $\\gamma_A$')
-        plt.ylabel("Moduli $G'$, $G''$ (Pa)")
-        plt.legend()
-        plt.grid(True, which='both')
-        plt.savefig('figures/validation/0_amplitude_sweep.pdf', bbox_inches='tight')
+        np.savetxt('validation/0_amplitude_sweep.csv', np.column_stack([gamma_As, Gp, Gpp]),
+           delimiter=',', header="gamma_A, G' (Pa), G'' (Pa)")
+        # plt.figure(figsize=(8, 6))
+        # plt.loglog(gamma_As, Gp, 'b-', lw=2, label="Model $G'$")
+        # plt.loglog(gamma_As, Gpp, 'r-', lw=2, label="Model $G''$")
+        # plt.loglog(dG1[:, 0], dG1[:, 1], 'bx', ms=6, label="Unterberger et al. 2013 $G'$")
+        # plt.loglog(dG2[:, 0], dG2[:, 1], 'r+', ms=7, label="Unterberger et al. 2013 $G''$")
+        # plt.xlabel('Amplitude of shear strain $\\gamma_A$')
+        # plt.ylabel("Moduli $G'$, $G''$ (Pa)")
+        # plt.legend()
+        # plt.grid(True, which='both')
+        # plt.savefig('validation/0_amplitude_sweep.pdf', bbox_inches='tight')
 
 
     # --------------------------------------------
