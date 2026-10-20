@@ -87,7 +87,7 @@ DOUBLE PRECISION :: c10,c01,sseiso,diso(5),pkmatfic(ndi,ndi),  &
     smatfic(ndi,ndi),sisomatfic(ndi,ndi), cmisomatfic(ndi,ndi,ndi,ndi),  &
     cisomatfic(ndi,ndi,ndi,ndi)
 !     FILAMENTS NETWORK CONTRIBUTION
-DOUBLE PRECISION :: filprops(10), affprops(5), chemprops(10) ! affprops(6)
+DOUBLE PRECISION :: filprops(10), affprops(5), chemprops(10), eqprops(11)
 DOUBLE PRECISION :: cactin,cabp,ll,lambda0,mu0str,beta,nn,b0,bb
 DOUBLE PRECISION :: phinet,r0,r0c,r0f,a,p,etac,na,mactin,rhoactin
 DOUBLE PRECISION :: pknetfic(ndi,ndi),cmnetfic(ndi,ndi,ndi,ndi)
@@ -246,8 +246,7 @@ cbmax = Rbmax * cactin
 filprops = (/a, r0c, etac, mu0str, beta, Lp, theta, dx, kb, NA/)
 affprops = (/bb, lambda0, cactin, Mactin, rhoactin/)
 chemprops = (/cbmax, cfmax, CHI, D, MU0, VMOL, Koff0, Keq, Kcatch0, dxc/)
-
-
+eqprops = (/a, r0c, etac, mu0str, beta, b0, lambda0, Koff0, Kcatch0, dx/(kb*theta), dxc/(kb*theta)/)
 
 
 !        STATE VARIABLES AND CHEMICAL PARAMETERS
@@ -260,7 +259,7 @@ IF (STATEV(1) == 0.0d0) THEN
   machep = 2.22d-16
   tol = 1.0d-12
   ! write(*,*) 'Calling pullchem at t=0'
-  CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq)
+  CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq, eqprops)
   ! write(*,*) 'cb0 = ', cb0
   thetaf0 = (cabp - cb0) / cfmax
   ! write(*,*) 'thetaf0 = ', thetaf0

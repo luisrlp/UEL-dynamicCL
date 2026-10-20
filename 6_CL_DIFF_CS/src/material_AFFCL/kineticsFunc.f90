@@ -41,7 +41,7 @@ subroutine kineticsFunc(cbtau, f, df, dHdlambda, args, nargs)
     kcatch0 = args(18)
     dxc_kT  = args(19)
 
-    r0f = 1.6 * (cbtau*1.d3)**(- two / 5.d0)
+    r0f = 1.6d0 * (cbtau*1.d3)**(- two / 5.d0)
     l = aratio * r0f
     r0 = r0f + r0c
     

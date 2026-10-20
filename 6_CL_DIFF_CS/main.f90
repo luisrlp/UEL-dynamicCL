@@ -37,6 +37,8 @@ PROGRAM TEST
       REAL(8) :: CR_EQ, CB0_EQ, THETAF0_EQ, JC_EQ, INITMU
       REAL(8), PARAMETER :: RGAS_EQ = 8.314462618d0
       INTEGER :: INODE
+      REAL(8) :: EQPROPS(11)
+      REAL(8), PARAMETER :: KB_EQ = 1.380649d-5
 
       ! Initialize LFLAGS
       LFLAGS(1) = 1
@@ -143,8 +145,10 @@ PROGRAM TEST
       ! Chemical potential DOFs (4th DOF of each node) at the initial equilibrium INITMU, so that
       ! thetaf starts at its equilibrium value (mu = 0 would impose thetaf ~ 0.5 and drive binding)
       CR_EQ = PROPS(15) * PROPS(16)
+      EQPROPS = (/PROPS(5), PROPS(6), PROPS(7), PROPS(8), PROPS(9), PROPS(10)*PROPS(11)*KB_EQ, &
+                  PROPS(14), PROPS(23), PROPS(25), PROPS(12)/(KB_EQ*PROPS(11)), PROPS(26)/(KB_EQ*PROPS(11))/)
       CALL pullchem(CB0_EQ, 0.d0, MIN(CR_EQ, PROPS(18)*PROPS(15)), 2.22d-16, 1.0d-12, &
-                    CR_EQ, PROPS(17)*PROPS(15), PROPS(18)*PROPS(15), PROPS(19), PROPS(24))
+                    CR_EQ, PROPS(17)*PROPS(15), PROPS(18)*PROPS(15), PROPS(19), PROPS(24), EQPROPS)
       THETAF0_EQ = (CR_EQ - CB0_EQ) / (PROPS(17)*PROPS(15))
       JC_EQ = 1.d0    ! J^c is measured from the initial content (1 + VMOL*(c - c0) at c = c0)
       INITMU = PROPS(21) + RGAS_EQ * PROPS(11) * ( LOG(THETAF0_EQ / (1.d0 - THETAF0_EQ)) &

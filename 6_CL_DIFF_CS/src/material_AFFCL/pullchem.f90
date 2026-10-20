@@ -1,5 +1,5 @@
 SUBROUTINE pullchem(zero0, a, b, machep, t,  &
-        cabp,cfmax,cbmax,chi,Keq)
+        cabp,cfmax,cbmax,chi,Keq,eqprops)
 
 
 
@@ -67,6 +67,7 @@ DOUBLE PRECISION, INTENT(IN)             :: cfmax
 DOUBLE PRECISION, INTENT(IN)             :: cbmax
 DOUBLE PRECISION, INTENT(IN)             :: chi
 DOUBLE PRECISION, INTENT(IN)             :: Keq
+DOUBLE PRECISION, INTENT(IN)             :: eqprops(11)
 DOUBLE PRECISION :: c
 DOUBLE PRECISION :: d
 DOUBLE PRECISION :: e
@@ -98,8 +99,8 @@ DOUBLE PRECISION :: tol
 
 sa = a
 sb = b
-CALL evalh(fa,sa,cabp,cfmax,cbmax,chi,Keq)
-CALL evalh(fb,sb,cabp,cfmax,cbmax,chi,Keq)
+CALL evalh(fa,sa,cabp,cfmax,cbmax,chi,Keq,eqprops)
+CALL evalh(fb,sb,cabp,cfmax,cbmax,chi,Keq,eqprops)
 !      FA = F ( SA )
 !      FB = F ( SB )
 
@@ -195,7 +196,7 @@ sb = sb - tol
 130   CONTINUE
 
 !      FB = F ( SB )
-CALL evalh(fb,sb,cabp,cfmax,cbmax,chi,Keq)
+CALL evalh(fb,sb,cabp,cfmax,cbmax,chi,Keq,eqprops)
 IF ( fb > 0.0D+00 .AND. fc > 0.0D+00 ) GO TO 10
 IF ( fb <= 0.0D+00 .AND. fc <= 0.0D+00 ) GO TO 10
 GO TO 20

@@ -326,7 +326,7 @@ do face = 1, face_num/2
         thetab_i = cbtau_i / cbmax
 
         ! FINAL STATE UPDATE
-        r0f = 1.6 * (1.0d3 * cb(node_num))**(-two/5.0d0)
+        r0f = 1.6d0 * (1.0d3 * cb(node_num))**(-two/5.0d0)
         l = aratio * r0f
         r0 = r0f + r0c
         n = l**(-1) * (cactin * NA * Mactin / rhoactin)
