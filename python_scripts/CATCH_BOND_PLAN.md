@@ -739,6 +739,102 @@ $$
   - The volumetric stress depends on $c_{b,\mathrm{tot}}^{\tau}$ through $J^c$, so the term $\partial\boldsymbol\sigma_{\mathrm{vol}}/\partial c_{b,\mathrm{tot}}\cdot\partial c_{b,\mathrm{tot}}/\partial\mathbf C$ (`cvolchem`, currently commented out in `_umat_.f90`) becomes necessary in $K_{uu}$.
 - **Assessment.** It removes an error of about $10^{-4}$ Pa per increment, far below the solver tolerances and the effects studied, at roughly twice the material cost. Not worth it for the current parameters. Reconsider only if $V_{\mathrm{mol}}$ or the bound content were orders of magnitude larger, i.e. if $aG$ were no longer small.
 
+### Algorithmic sequences (strategy 1: fixed point; strategy 2: nested root on $\theta_f$)
+A monolithic local Newton on $(\theta_f, c_{b,1},\dots,c_{b,N})$ (strategy 3) is not considered: it would lose the per-direction safeguards of `solveKinetics` (marching to the first sign change, branch continuation for catch bonds) and the per-direction sub-stepping. Both strategies below keep all existing solvers unchanged and converge to the same state, so the consistent tangent (Tangent impact above) is the same for both.
+
+**Scope: with and without stretch-free rebinding.** The sequences are written for `6_CL_DIFF_CS` (no SFR) and hold unchanged for `7_CL_DIFF_CS_SFR`. SFR only adds a per-direction state inside KIN; the outer iteration (on $c_{b,\mathrm{tot}}$ or $\theta_f$) does not see it. The differences are listed after the comparison table ("With SFR").
+
+**Building blocks** (per material point; the state at $t$ is $\theta_f^t$, $c_{b,i}^t$, $c_{b,\mathrm{tot}}^t$, and with SFR also $\lambda_{n,i}^t$):
+- $\Theta(c)$: `SOLVETHETAF` with `ARGS(9)` $= c$, i.e. the root of $H(\theta_f;\,\mu^\tau, \bar J^\tau, c) = 0$, together with `df` $= \partial H/\partial\theta_f$ and `dHdcb` $= \partial H/\partial c_{b,\mathrm{tot}}$ (`thetafFunc`, `_umat_.f90`). Cheap (scalar, bracketed).
+- $\mathrm{KIN}(\theta_f)$: the kinetics part of `affclnetfic_discrete`, i.e. the sub-stepped Backward-Euler solves of all directions **from the state at $t$**, at the given $\theta_f$ and the end-of-increment stretches. Returns $c_{b,i}^\tau$, $c_{b,\mathrm{tot}}^\tau$, $G = \mathrm dc_{b,\mathrm{tot}}/\mathrm d\theta_f$ (`dcbdthetaf`), the per-direction sensitivities $s_i$, $s^\theta_i$ (and $\lambda_{n,i}^\tau$, $q_i$, $q^\theta_i$ with SFR), and the failure flag (`nhard`). Expensive (all directions, with sub-stepping).
+- $\mathrm{NET}$: the stress and tangent part of `affclnetfic_discrete` (`sfic`, `cfic`, `dsficdthetaf`, `dcbdc`) for a given state. Called once, at the end.
+
+**Required split of `affclnetfic_discrete`.** Today the direction loop does KIN and NET together and overwrites `cb` (and `lamn`) in place. Both strategies call KIN several times, so:
+- KIN must work on copies (`cb_try = cb_t`, `lamn_try = lamn_t` before every call), never on the state at $t$;
+- NET must be skippable (e.g. an integer flag argument: 1 = kinetics only, 2 = kinetics + stress/tangent), so that the stress assembly is paid only once.
+
+**Current staggered sequence (reference):**
+```
+θ_f   = Θ(c_tot^t)                                   ! lagged c_b in J^c
+c^τ   = KIN(θ_f)
+J^c   = 1 + V_mol (c_tot^t + c_f^max θ_f − c0)        ! lagged
+NET, pressure, DTHETAFDMU/DJ, mobility, sources; write SDVs
+```
+
+**Strategy 1 — fixed point.** The convergence test is done on $\theta_f$, which is cheap, before the kinetics are repeated: if a new $\Theta$ solve barely moves $\theta_f$, the kinetics just computed are already consistent and no extra KIN call is needed.
+```
+θ_old = Θ(c_tot^t)                                   ! = the current staggered value
+for k = 1 .. KMAX:
+    (c_new, G, s_i, s^θ_i, …) = KIN(θ_old)           ! from the state at t
+    if hard kinetics failure: PNEWDT = 0.5, return
+    θ_new = Θ(c_new)
+    if G·|θ_new − θ_old| ≤ TOL_C · max(c_new, CB_SCALE·cbmax):   ! kinetics change it would cause
+        accept θ_f^τ = θ_new, c^τ = c_new; exit
+    if k ≥ 2 and |θ_new − θ_old| ≥ |θ_old − θ_prev|:  ! not contracting (aG ≥ 1)
+        switch to strategy 2 (or PNEWDT); exit
+    θ_prev = θ_old;  θ_old = θ_new
+J^c = 1 + V_mol (c^τ_tot + c_f^max θ_f^τ − c0)        ! consistent
+NET with (θ_f^τ, c^τ, λ_n^τ); pressure; DTHETAFDMU/DJ, mobility at (θ_f^τ, c^τ_tot);
+fully implicit tangent terms (1/(1−aG), aQ, cvolchem); write SDVs
+```
+- Accepted state: the $\theta_f$ equation is satisfied exactly (with $c^\tau$); the kinetics were solved with $\theta_{old}$, an error of $G\,|\theta_{new}-\theta_{old}|$ in $c_{b,\mathrm{tot}}$, which the test bounds.
+- Convergence: linear with factor $aG$. With $aG \sim 10^{-8}$ the test passes at $k = 1$: cost = current cost + one extra $\Theta$ solve. A second KIN call happens only when the coupling is strong.
+- Failure mode: $aG \ge 1$ (no contraction). Detected by the second test.
+
+**Strategy 2 — nested root on $\theta_f$ (kinetics inside).** One scalar equation in $\theta_f$, with $c_{b,\mathrm{tot}}$ obtained from the kinetics at every trial value:
+$$
+F(\theta_f) = H\big(\theta_f;\,\mu^\tau, \bar J^\tau, c_{b,\mathrm{tot}}(\theta_f)\big),
+\qquad
+F'(\theta_f) = \underbrace{\frac{\partial H}{\partial\theta_f}}_{\texttt{df}} + \underbrace{\frac{\partial H}{\partial c_{b,\mathrm{tot}}}}_{\texttt{dHdcb}}\, G = d_f\,(1 - aG),
+$$
+i.e. $F' = H'_{\mathrm{eff}}$, the same factor as in the fully implicit tangent. $d_f > 0$, `dHdcb` $> 0$ (more bound content raises $J^c$ and the volumetric term) and, without SFR, $G > 0$ (more free crosslinkers bind more, $s^\theta_i > 0$ in every direction), so $F' > d_f > 0$: $F$ is strictly increasing with a **unique root**. (With SFR, $G$ also contains the path through $\lambda_n(\theta_f)$, which can in principle have either sign; $F' = d_f(1 - aG) > 0$ then holds whenever $aG < 1$, see "With SFR".) As in `SOLVETHETAF`, $F \to -\infty$ for $\theta_f \to 0$ and $F \to +\infty$ for $\theta_f \to 1$ (the $\ln[\theta_f/(1-\theta_f)]$ term, $c_{b,\mathrm{tot}}$ bounded), so the bracket $[10^{-8},\,1-10^{-8}]$ is known **without** evaluating $F$ (no KIN calls at the ends).
+```
+θ   = Θ(c_tot^t)                                     ! staggered value: start within a·|Δc| of the root
+xl  = 1e-8 (F < 0),  xh = 1 − 1e-8 (F > 0)
+for j = 1 .. JMAX:                                   ! safeguarded Newton (RTSAFE), as SOLVETHETAF
+    (c(θ), G, s_i, s^θ_i, …) = KIN(θ)                ! from the state at t
+    if hard kinetics failure: PNEWDT = 0.5, return
+    F  = H(θ; μ^τ, J̄, c_tot(θ));   F' = df + dHdcb · G
+    if |F| < TOL_F: exit                              ! (θ, c(θ)) consistent to round-off
+    update the bracket with the sign of F
+    Newton step θ − F/F' if inside (xl, xh) and decreasing fast enough, else bisection
+    if |Δθ| < TOL_θ: re-evaluate KIN at the final θ (if it moved); exit
+θ_f^τ = θ,  c^τ = c(θ)
+J^c, NET, pressure, DTHETAFDMU/DJ, mobility, sources, fully implicit tangent terms; write SDVs
+```
+- Accepted state: KIN was evaluated at the accepted $\theta_f$, so the kinetics are exact and the $\theta_f$ equation holds to `TOL_F`.
+- Convergence: quadratic. From the staggered start the first Newton step already lands within $\mathcal O((aG)^2)$; typically 2 KIN calls (the one of the current scheme + 1), independent of how strong the coupling is.
+- No failure mode from the coupling (unique root, bracket always valid); only the kinetics failures that exist today (→ PNEWDT).
+
+**Comparison**
+
+| | Strategy 1 (fixed point) | Strategy 2 (nested root) |
+|---|---|---|
+| Unknown iterated | $c_{b,\mathrm{tot}}$ (through $\theta_f$) | $\theta_f$ |
+| Convergence | linear, factor $aG$; needs $aG < 1$ | quadratic; always (monotone $F$, known bracket) |
+| KIN calls (current parameters) | 1 (+ 1 cheap $\Theta$ solve) | 2 |
+| KIN calls (strong coupling) | $\approx 1 + \log(\mathrm{tol})/\log(aG)$, or failure | 2–4 |
+| Exact at acceptance | $\theta_f$ equation | kinetics |
+| New code | loop around $\Theta$/KIN, two tests | RTSAFE on $F$ (template: `SOLVETHETAF`), $F'$ from `df`, `dHdcb`, $G$ |
+| Common changes | split KIN/NET with copies of `cb`/`lamn`; consistent $J^c$; fully implicit tangent terms | same |
+
+Suggested use: strategy 1 for the current parameters (practically free, since it stops at $k = 1$), with strategy 2 as the fallback when the contraction test fails. Strategy 2 alone is the safe choice if larger $V_{\mathrm{mol}}$, $K$ or bound contents are planned.
+
+**With SFR (`7_CL_DIFF_CS_SFR`, Part D).** Nothing changes in the two outer loops; the differences are all inside KIN and in what it returns:
+
+| | Without SFR (`6_CL_DIFF_CS`) | With SFR (`7_CL_DIFF_CS_SFR`) |
+|---|---|---|
+| State at $t$ copied before every KIN call | `cb` | `cb` **and** `lamn` (KIN updates both per sub-step) |
+| How $\theta_f$ enters KIN | $k_{on}$, $B$ in the residual | also the $\lambda_n$ update ($B$ weights the new bonds), so $\lambda_{n,i}^\tau$ changes with every trial $\theta_f$ |
+| KIN returns | $c_{b,i}^\tau$, $c_{b,\mathrm{tot}}^\tau$, $G$, $s_i$, $s^\theta_i$ | also $\lambda_{n,i}^\tau$, $q_i$, $q^\theta_i$ (D.9) |
+| $G = \sum_i \rho\,a_i\,s^\theta_i$ | direct binding path only; $G > 0$ | includes the $\lambda_n(\theta_f)$ path of D.9.4 (already in `dcbdthetaf_i`); no new code |
+| Monotonicity of $F$ (strategy 2) | $F' > d_f > 0$ always | $F' = d_f(1 - aG) > 0$ if $aG < 1$; with $aG \sim 10^{-8}$ this always holds. If ever $aG \ge 1$, the coupling itself is the problem (strategy 1 would not contract either) |
+| Accepted state | $\theta_f^\tau$, $c_{b,i}^\tau$ | $\theta_f^\tau$, $c_{b,i}^\tau$ **and** $\lambda_{n,i}^\tau$, all from the **same** (last accepted) KIN call; never mix $\lambda_n$ from one call with $c_b$ from another |
+| NET at the end | stress with $\bar\lambda_i$ | stress with the $\xi_t$ split, $\lambda_{n,i}^\tau$, `ddw_tot`, `dwdth` (D.9.5) |
+| Fully implicit tangent | the terms of "Tangent impact" | the same terms; $G$, $s$, $s^\theta$, `dsficdthetaf`, `dcbdc` already contain the $\lambda_n$ paths, so no SFR-specific addition |
+
+So the SFR version needs no extra iteration logic: copy `lamn` with `cb`, take $\lambda_n^\tau$ from the accepted KIN call, and the strategies are otherwise identical.
+
 # Part D — Transient network (stress-free rebinding)
 
 ## D.1 Motivation and target
@@ -811,10 +907,11 @@ $$
 - `affclnetfic_discrete_imp.f90`:
   - $\lambda_{n,i}$ per direction in the state variables: the `NSDV` value in `global.f90` grows by `NDIR` (106 → 196; changing the value only, no new global variable);
   - the same explicit update; $\lambda_{rel}$ in the `kineticsFunc` arguments and in `fil`; $w'/\lambda_n$ and $w''/\lambda_n^2$ in `sigfilfic`/`csfilfic`; the $\xi_t$ split.
-- Input: `uel_variables` 848 → 1568 and `*User output variables` 106 → 196 in the `test_in_abaqus` builders; a new property (e.g. `PROPS(27)` = `XI_T`, `NPROPS` 26 → 27).
+- Input: `uel_variables` 848 → 1568 and `*User output variables` 106 → 196 in the `test_in_abaqus` builders; two new properties, `PROPS(27)` = SFR flag (1 on, 0 off) and `PROPS(28)` = $\xi_t$ (`NPROPS` 26 → 28; with `NPROPS` < 28 the UMAT runs with SFR off).
 - **Tangents** (Part C machinery):
   - $\partial\lambda_n^\tau/\partial\bar\lambda = \Delta t\,B/(c_b^t + \Delta t\,B)$, so $\mathrm d\lambda_{rel}/\mathrm d\bar\lambda = \big(1 - \lambda_{rel}\,\partial\lambda_n/\partial\bar\lambda\big)/\lambda_n$, which enters Term 1 ($\bar{\mathbb c}^{net}$) and $S_i$ (Term 3, and $\mathbf Q$ in $K_{\mu u}$ 1c);
   - $\partial\lambda_n/\partial\theta_f$ through $B(\theta_f)$ adds contributions to the G-type terms (Term 4, item 4 $K_{u\mu}$, item 1a, item 3).
+  - These are the single-step ($n_{sub} = 1$) values; the full derivation with sub-stepping is in D.9.
   - Verify with the FD kit and the sign-flip test, as for Part C.
 
 ## D.6 Verification
@@ -855,3 +952,174 @@ Qian, Tian, Liu, Lin & Fang (2026), *A visco-elasto-plastic constitutive theory 
   2. Where the response is linear in the history, no mean-field approximation is needed; for us this holds only at small strain (nonlinear filament force near locking).
   3. A physically motivated route to a relaxation spectrum (Fig. 5, where Unterberger needed three Maxwell elements): several bound populations per direction with different $k_{off}$ (e.g. fast and slow), as an alternative to a CGD-type spectrum (D.6).
   4. Their irreversible deformation comes from inter-filament slip, absent in our model; not needed for Unterberger's in vitro network, but relevant for cell-level unloading tests.
+
+## D.9 Consistent tangent of the natural stretch (Fortran, `affclnetfic_discrete_imp.f90`)
+The Python model needs no tangent: `evaluate_state` returns the stress for a prescribed $\mathbf F$, and the local problems use only their own scalar derivative $\partial H/\partial c_b$. The quantities below are new in the Fortran port, where the Newton iterations of Abaqus need the derivatives of the stress and of the source with respect to the stretches (displacements) and $\theta_f$ (chemical potential).
+
+### D.9.1 Setting (one direction; index $i$ dropped)
+- The increment $t \to \tau$ is integrated with $n$ sub-steps $k = 1,\dots,n$ of length $\Delta t_k = \Delta t/n$ (per-direction sub-stepping, Part B F5). Over the sub-steps the end-of-increment values $\bar\lambda = \bar\lambda^\tau$ and $\theta_f = \theta_f^\tau$ are frozen (every sub-step is Backward Euler).
+- Notation: $c_k$ = bound content after sub-step $k$ ($c_0 = c_b^t$); $\lambda_{n,k}$ = natural stretch used in sub-step $k$ ($\lambda_{n,0} = \lambda_n^t$); $\lambda_{r,k} = \bar\lambda/\lambda_{n,k}$ = relative stretch seen by the kinetics in sub-step $k$.
+- Binding rate (independent of $c_b$ and of the force) and its derivative:
+  $$
+  B(\theta_f) = k_{on}(\theta_f)\, c_f^{max}\, \frac{\theta_f}{1-\theta_f}, \quad k_{on} = k_{on,0}\, e^{\chi(1-2\theta_f)}
+  \quad\Rightarrow\quad
+  B' = \frac{\mathrm dB}{\mathrm d\theta_f} = c_f^{max}\, k_{on} \Big[\frac{1}{(1-\theta_f)^2} - \frac{2\chi\,\theta_f}{1-\theta_f}\Big]
+  $$
+  (from $\mathrm dk_{on}/\mathrm d\theta_f = -2\chi\,k_{on}$ and $\mathrm d[\theta_f/(1-\theta_f)]/\mathrm d\theta_f = 1/(1-\theta_f)^2$). This is the factor already used in `dHdthetaf_i` $= -\Delta t_k B'$.
+- **Natural-stretch update** (D.3, per sub-step, with the content at the start of the sub-step):
+  $$
+  \lambda_{n,k} = \frac{c_{k-1}\,\lambda_{n,k-1} + \Delta t_k\, B\, \bar\lambda}{D_k}, \qquad D_k = c_{k-1} + \Delta t_k\, B .
+  $$
+- **Kinetics** (Backward Euler residual, `kineticsFunc`), solved for $c_k$:
+  $$
+  H_k\big(c_k;\, c_{k-1},\, \lambda_{r,k},\, \theta_f\big) = c_k - c_{k-1} - \Delta t_k\,\big[B(\theta_f) - U(c_k, \lambda_{r,k})\big] = 0 .
+  $$
+- **Wanted** (total derivatives with respect to the end-of-increment $\bar\lambda$ and $\theta_f$; the state at $t$ is fixed):
+  $$
+  s_k = \frac{\mathrm dc_k}{\mathrm d\bar\lambda}, \quad q_k = \frac{\mathrm d\lambda_{n,k}}{\mathrm d\bar\lambda}, \quad s^\theta_k = \frac{\mathrm dc_k}{\mathrm d\theta_f}, \quad q^\theta_k = \frac{\mathrm d\lambda_{n,k}}{\mathrm d\theta_f}, \qquad s_0 = q_0 = s^\theta_0 = q^\theta_0 = 0 .
+  $$
+  At the end of the increment: $\lambda_n^\tau = \lambda_{n,n}$, $s = s_n$, $q = q_n$, $s^\theta = s^\theta_n$, $q^\theta = q^\theta_n$.
+
+### D.9.2 Derivatives of the natural stretch ($q_k$, $q^\theta_k$)
+$\lambda_{n,k} = N_k/D_k$ with $N_k = c_{k-1}\lambda_{n,k-1} + \Delta t_k B\bar\lambda$ depends on four quantities. Partial derivatives (quotient rule, using $N_k/D_k = \lambda_{n,k}$):
+$$
+\frac{\partial\lambda_{n,k}}{\partial\bar\lambda} = \frac{\Delta t_k B}{D_k}, \qquad
+\frac{\partial\lambda_{n,k}}{\partial\lambda_{n,k-1}} = \frac{c_{k-1}}{D_k},
+$$
+$$
+\frac{\partial\lambda_{n,k}}{\partial c_{k-1}} = \frac{\lambda_{n,k-1} D_k - N_k}{D_k^2} = \frac{\lambda_{n,k-1} - \lambda_{n,k}}{D_k}, \qquad
+\frac{\partial\lambda_{n,k}}{\partial B} = \frac{\Delta t_k\,\bar\lambda\, D_k - \Delta t_k N_k}{D_k^2} = \frac{\Delta t_k\,(\bar\lambda - \lambda_{n,k})}{D_k} .
+$$
+Chain rule. For $\bar\lambda$: $\lambda_{n,k-1}$ and $c_{k-1}$ depend on $\bar\lambda$ through the previous sub-steps, $B$ does not. For $\theta_f$: $\bar\lambda$ is fixed, $\lambda_{n,k-1}$, $c_{k-1}$ and $B$ depend on $\theta_f$:
+$$
+\boxed{\; q_k = \frac{c_{k-1}\, q_{k-1} + \Delta t_k B + (\lambda_{n,k-1} - \lambda_{n,k})\, s_{k-1}}{D_k} \;}
+\qquad
+\boxed{\; q^\theta_k = \frac{c_{k-1}\, q^\theta_{k-1} + (\lambda_{n,k-1} - \lambda_{n,k})\, s^\theta_{k-1} + \Delta t_k B'\, (\bar\lambda - \lambda_{n,k})}{D_k} \;}
+$$
+Remarks:
+- $q_k$ needs $s_{k-1}$ (the content sensitivity of the **previous** sub-step): in the code, $\lambda_{n,k}$, $q_k$, $q^\theta_k$ are updated **before** the kinetics of sub-step $k$ update $s$ and $s^\theta$.
+- Single step ($n = 1$, $s_0 = q_0 = 0$): $q = \Delta t B/(c_b^t + \Delta t B)$ and $q^\theta = \Delta t B'(\bar\lambda - \lambda_n^\tau)/(c_b^t + \Delta t B)$ (the values of D.5).
+- $0 \le \Delta t_k B/D_k \le 1$: the update is a convex combination; for $\Delta t \to 0$, $q \to 0$ (the reference does not follow the stretch within an increment), for $\Delta t \gg c_b/B$, $q \to 1$ (the bonds re-form at the current stretch: $\lambda_r \to 1$).
+
+### D.9.3 Derivatives of the relative stretch
+$$
+\frac{\mathrm d\lambda_{r,k}}{\mathrm d\bar\lambda} = \frac{1}{\lambda_{n,k}} - \frac{\bar\lambda}{\lambda_{n,k}^2}\, q_k = \frac{1 - \lambda_{r,k}\, q_k}{\lambda_{n,k}}, \qquad
+\frac{\mathrm d\lambda_{r,k}}{\mathrm d\theta_f} = -\frac{\bar\lambda}{\lambda_{n,k}^2}\, q^\theta_k = -\frac{\lambda_{r,k}}{\lambda_{n,k}}\, q^\theta_k .
+$$
+
+### D.9.4 Content sensitivities ($s_k$, $s^\theta_k$)
+Implicit function theorem on $H_k = 0$. Partial derivatives (all available from `kineticsFunc`/`solveKinetics`):
+$$
+\frac{\partial H_k}{\partial c_k} = H'_k \;(\texttt{dHdcb\_i}), \quad
+\frac{\partial H_k}{\partial c_{k-1}} = -1, \quad
+\frac{\partial H_k}{\partial\lambda_r} = \Delta t_k\, \frac{\partial U}{\partial\lambda_r} \;(\texttt{dHdlambda\_i}), \quad
+\frac{\partial H_k}{\partial\theta_f}\Big|_{\lambda_r} = -\Delta t_k B' \;(\texttt{dHdthetaf\_i}) .
+$$
+`kineticsFunc` receives $\lambda_r$ in `args(1)`, so `dHdlambda_i` is the derivative with respect to the **relative** stretch. Differentiating $H_k = 0$:
+$$
+0 = H'_k\, s_k - s_{k-1} + \frac{\partial H_k}{\partial\lambda_r}\,\frac{\mathrm d\lambda_{r,k}}{\mathrm d\bar\lambda}
+\quad\Rightarrow\quad
+\boxed{\; s_k = \frac{s_{k-1} - \dfrac{\partial H_k}{\partial\lambda_r}\,\dfrac{\mathrm d\lambda_{r,k}}{\mathrm d\bar\lambda}}{H'_k} \;}
+$$
+$$
+0 = H'_k\, s^\theta_k - s^\theta_{k-1} + \frac{\partial H_k}{\partial\theta_f}\Big|_{\lambda_r} + \frac{\partial H_k}{\partial\lambda_r}\,\frac{\mathrm d\lambda_{r,k}}{\mathrm d\theta_f}
+\quad\Rightarrow\quad
+\boxed{\; s^\theta_k = \frac{s^\theta_{k-1} - \dfrac{\partial H_k}{\partial\theta_f}\Big|_{\lambda_r} - \dfrac{\partial H_k}{\partial\lambda_r}\,\dfrac{\mathrm d\lambda_{r,k}}{\mathrm d\theta_f}}{H'_k} \;}
+$$
+These are the sub-step recursions of Part B (F5) and Part C (item 1) with two changes: the factor $\mathrm d\lambda_r/\mathrm d\bar\lambda$ on the stretch term, and the new term through $\lambda_n(\theta_f)$ in $s^\theta$. Without SFR ($\lambda_n \equiv 1$, $q = q^\theta = 0$): $\mathrm d\lambda_r/\mathrm d\bar\lambda = 1$, $\mathrm d\lambda_r/\mathrm d\theta_f = 0$, and the recursions are exactly the previous ones (bit-identical results).
+
+### D.9.5 Stress and its tangents (per direction)
+With $w'(\lambda) = \lambda_0\, r_0\, f(\lambda)$ (`dwi`) and $w''$ (`ddwi`) from `fil` (at fixed $c_b$), the stress derivative of the direction (D.2, $\xi_t$ split; $\xi = \xi_t$ with SFR, $\xi = 0$ without) is
+$$
+\frac{\partial w}{\partial\bar\lambda} = \xi\, \frac{w'(\lambda_r)}{\lambda_n} + (1-\xi)\, w'(\bar\lambda) \qquad (\texttt{dw\_tot}),
+$$
+evaluated with $\lambda_n = \lambda_n^\tau$, $\lambda_r = \bar\lambda/\lambda_n^\tau$, $c_b = c_b^\tau$. It replaces $w'$ in `sigfilfic`. Its derivatives:
+
+1. **Term 1** ($\bar{\mathbb c}^{net}$, `csfilfic`): total derivative with respect to $\bar\lambda$ at fixed $c_b$ (the $c_b$ path is Term 3). With $\mathrm d\lambda_n/\mathrm d\bar\lambda = q$ and D.9.3:
+   $$
+   \frac{\mathrm d}{\mathrm d\bar\lambda}\Big[\frac{w'(\lambda_r)}{\lambda_n}\Big] = \frac{w''(\lambda_r)}{\lambda_n}\,\frac{1 - \lambda_r q}{\lambda_n} - \frac{w'(\lambda_r)}{\lambda_n^2}\, q
+   \quad\Rightarrow\quad
+   \frac{\mathrm d^2 w}{\mathrm d\bar\lambda^2}\Big|_{c_b} = \frac{\xi}{\lambda_n^2}\Big[w''(\lambda_r)\,(1 - \lambda_r q) - w'(\lambda_r)\, q\Big] + (1-\xi)\, w''(\bar\lambda) \qquad (\texttt{ddw\_tot}).
+   $$
+   For $q = 0$ this is $w''(\lambda_r)/\lambda_n^2$ (D.2); the $q$ terms are the relaxation of the reference within the increment.
+2. **Term 3** (through $c_b$, `auxdwdcb`): $\lambda_n^\tau$ does not depend on $c_b^\tau$ (it uses $c_{k-1}$), so with the network density $n \propto c_b^{2/5}$:
+   $$
+   \frac{1}{n}\frac{\partial(n\, \partial w/\partial\bar\lambda)}{\partial c_b}
+   = \frac{\xi}{\lambda_n}\Big[\frac{2}{5}\frac{w'(\lambda_r)}{c_b} + \frac{\partial w'}{\partial c_b}\Big|_{\lambda_r}\Big]
+   + (1-\xi)\Big[\frac{2}{5}\frac{w'(\bar\lambda)}{c_b} + \frac{\partial w'}{\partial c_b}\Big|_{\bar\lambda}\Big],
+   \qquad \frac{\partial w'}{\partial c_b} = \lambda_0\Big(r_0\, \frac{\partial f}{\partial c_b} + f\, \frac{\partial r_0}{\partial c_b}\Big) .
+   $$
+   It multiplies $s$ (the total $\mathrm dc_b/\mathrm d\bar\lambda$ of D.9.4) in the chemical part of $\bar{\mathbb c}^{net}$ (`cfilficchem`) and $s^\theta$ in $K_{u\mu}$ (item 4), as before.
+3. **$K_{u\mu}$ through $\lambda_n(\theta_f)$** (new, `dwdth`): at fixed $c_b$ and $\bar\lambda$, with D.9.3:
+   $$
+   \frac{\partial}{\partial\theta_f}\Big(\frac{\partial w}{\partial\bar\lambda}\Big)\Big|_{c_b,\bar\lambda}
+   = \xi\Big[\frac{w''(\lambda_r)}{\lambda_n}\Big(-\frac{\lambda_r}{\lambda_n} q^\theta\Big) - \frac{w'(\lambda_r)}{\lambda_n^2}\, q^\theta\Big]
+   = -\frac{\xi}{\lambda_n^2}\Big[\lambda_r\, w''(\lambda_r) + w'(\lambda_r)\Big]\, q^\theta ,
+   $$
+   added to `dsficdthetaf` (through `sigfilfic`) next to the existing $s^\theta\,\partial\bar{\boldsymbol\sigma}/\partial c_b$ term. The permanent fraction has no $\theta_f$ dependence at fixed $c_b$.
+4. **$\partial c_{b,tot}/\partial\mathbf C$** (`dcbdc`, source term in $K_{\mu u}$) and **$G = \mathrm dc_{b,tot}/\mathrm d\theta_f$** (`dcbdthetaf`): unchanged formulas, now with the total $s$ and $s^\theta$ of D.9.4. `dcbdc` is accumulated for every direction, not only those with non-zero stress: with SFR and $\xi < 1$ a direction can be slack in $\bar\lambda$ (no stress) while its kinetics see a loaded $\lambda_r$ ($s \ne 0$).
+
+### D.9.6 Symbols and code variables
+| Symbol | Fortran variable |
+|---|---|
+| $B$, $B'$ | `bind`, `dbinddthetaf` |
+| $D_k$ | `den_n` |
+| $\lambda_n^t$, $\lambda_{n,k}$, $\lambda_{n,k-1}$ | `lamn_t`, `lamn_sub`, `lamn_prev` |
+| $q_k$, $q^\theta_k$ | `dlamndlambda_i`, `dlamndthetaf_i` |
+| $\lambda_{r,k}$, $\mathrm d\lambda_r/\mathrm d\bar\lambda$, $\mathrm d\lambda_r/\mathrm d\theta_f$ | `lambdar`, `dlrdl`, `dlrdth` |
+| $s_k$, $s^\theta_k$ | `dcbdlambda_i`, `dcbdthetaf_i` |
+| $H'_k$, $\partial H/\partial\lambda_r$, $\partial H/\partial\theta_f\vert_{\lambda_r}$ | `dHdcb_i`, `dHdlambda_i`, `dHdthetaf_i` |
+| $\partial w/\partial\bar\lambda$, $\mathrm d^2w/\mathrm d\bar\lambda^2$, Term 3 factor, $\theta_f$ path | `dw_tot`, `ddw_tot`, `auxdwdcb`, `dwdth` |
+| SFR flag, $\xi_t$ | `affprops(6)` = `PROPS(27)`, `affprops(7)` = `PROPS(28)` |
+
+### D.9.7 New and modified derivatives: where they enter the code
+All new derivatives are computed per direction in `affclnetfic_discrete_imp.f90`. They reach the global tangent only through the existing outputs of that routine (`cfic`, `dsficdthetaf`, `dcbdthetaf`, `dcbdc`), so `_umat_.f90` (apart from passing `lamn` and the two properties) and the element (`u3d8.f90`) need no changes. The free-fraction quantities ($\theta_f$, `DTHETAFDMU`, `DTHETAFDJ`, mobility, volumetric terms) do not depend on $\lambda_n$ and are unchanged.
+
+**New derivatives**
+
+| Derivative | Variable | Computed (in `affclnetfic_discrete`) | Used in |
+|---|---|---|---|
+| $B' = \mathrm dB/\mathrm d\theta_f$ | `dbinddthetaf` | once per direction, before the sub-step loop | $q^\theta_k$ (D.9.2) |
+| $q_k = \mathrm d\lambda_{n,k}/\mathrm d\bar\lambda$ | `dlamndlambda_i` | sub-step loop, with the $\lambda_n$ update, **before** `solveKinetics` (uses $s_{k-1}$) | `dlrdl` (→ $s_k$); after the loop, `ddw_tot` |
+| $q^\theta_k = \mathrm d\lambda_{n,k}/\mathrm d\theta_f$ | `dlamndthetaf_i` | same place (uses $s^\theta_{k-1}$) | `dlrdth` (→ $s^\theta_k$); after the loop, `dwdth` |
+| $\mathrm d\lambda_{r,k}/\mathrm d\bar\lambda$ | `dlrdl` | sub-step loop, after the $\lambda_n$ update | $s_k$ recursion |
+| $\mathrm d\lambda_{r,k}/\mathrm d\theta_f$ | `dlrdth` | same place | $s^\theta_k$ recursion |
+| $\partial(\partial w/\partial\bar\lambda)/\partial\theta_f\vert_{c_b,\bar\lambda}$ | `dwdth` | stress block, rebinding fraction | `dsficdthetaf` (via `sigfilfic`, array `dsfilficdth`) |
+
+**Modified derivatives** (existing variables, new content)
+
+| Derivative | Variable | Change | Used in |
+|---|---|---|---|
+| $s = \mathrm dc_b/\mathrm d\bar\lambda$ | `dcbdlambda_i` | stretch term multiplied by `dlrdl` | chemical part of `cfic` (via `auxchem`); `dcbdC` |
+| $s^\theta = \mathrm dc_b/\mathrm d\theta_f$ | `dcbdthetaf_i` | extra term $-\partial H/\partial\lambda_r \cdot$ `dlrdth` | `dcbdthetaf` ($G$); `dsficdthetaf` |
+| $\partial w/\partial\bar\lambda$ | `dw_tot` (was `dwi`) | $\xi$ split, $w'(\lambda_r)/\lambda_n$ | `sigfilfic` (stress), `csfilfic` |
+| $\mathrm d^2w/\mathrm d\bar\lambda^2\vert_{c_b}$ | `ddw_tot` (was `ddwi`) | $\xi$ split, $1/\lambda_n^2$ and $q$ terms | `csfilfic` (elastic part of `cfic`) |
+| $(1/n)\,\partial(n\,\partial w/\partial\bar\lambda)/\partial c_b$ | `auxdwdcb` | $\xi$ split, $1/\lambda_n$ | chemical part of `cfic` (`cfilficchem`); `dsficdthetaf` (via `dsfilficdcb`); `dPK2ficdcb` (returned, but not used further in the UMAT) |
+| $\partial c_{b,tot}/\partial\mathbf C$ | `dcbdC` | uses the new $s$; accumulated for every direction (also with zero stress) | `DSRCDGU` |
+
+**From the routine outputs to the element tangent blocks**
+
+| Output of `affclnetfic_discrete` | Contains | UMAT (`_umat_.f90`) | Element (`u3d8.f90`) |
+|---|---|---|---|
+| `cfic` (→ `cnetficaf`) | `ddw_tot`; `auxdwdcb` $\times\, s$ | `cfic` → `setiso` → `ddsigdde` → `DDSDDE` | $K_{uu}$ (Terms 1 and 3) |
+| `dsficdthetaf` | `auxdwdcb` $\times\, s^\theta$; `dwdth` | `dsigisodthetaf` → `DSIGDMU` | $K_{u\mu}$ (`AmatUC`, item 4) |
+| | | `dsigisodthetaf` $\times$ `DET*DTHETAFDJ` → `ddsigdde` | $K_{uu}$ (Term 4, $\theta_f$ through $J$) |
+| `dcbdthetaf` ($G$) | $\sum s^\theta \rho\, a$ | `DSRCDMU` $= (c_f^{max} + G)\,\partial\theta_f/\partial\mu/\Delta t$ | $K_{\mu\mu}$ (`TanFac`, item 3) |
+| | | `DSRCDJ` $= (c_f^{max} + G)\,\partial\theta_f/\partial J/\Delta t$ | $K_{\mu u}$ (`srcAlpha`, item 1a) |
+| `dcbdc` | $\sum s$ (deviatoric) | `DSRCDGU` $= -$`dcbdc`$/\Delta t$ | $K_{\mu u}$ (`srcA`, item 1c, $\mathbf Q$) |
+| `snetficaf`, `cb_tot_new` | stress with `dw_tot`; $c_b^\tau$ | `sigma`; `RMACRO` | residuals $R_u$, $R_\mu$ (not tangents) |
+
+Without SFR ($\lambda_n \equiv 1$): $q = q^\theta = 0$, `dlrdl` = 1, `dlrdth` = 0, `dwdth` = 0, $\xi = 0$, so every row above reduces to the previous expression (bit-identical results).
+
+### D.9.8 Verification (scratch build, 2026-10-19)
+- **Regression:** SFR off (`main_umat.f90`, 1200 increments): output byte-identical to `6_CL_DIFF_CS`.
+- **Finite differences** (`affclnetfic_discrete` called directly, `laos_v2_3` parameters, 12 s of LAOS history so that $\lambda_n$ spans $1 \pm 0.03$; central differences on $\bar{\mathbf F} \to (\mathbf I \pm \epsilon\,\mathrm{sym}(\mathbf e_k\otimes\mathbf e_l))\bar{\mathbf F}$ and on $\theta_f$):
+
+  | Case | $\bar{\mathbb c}^{net}$ | `dcbdc` | $G$ | `dsficdthetaf` |
+  |---|---|---|---|---|
+  | SFR off, $\Delta t$ = 0.1 / 3 | 1e-8 / 2e-8 | 3e-5 / 4e-8 | 4e-7 / 6e-9 | 1e-6 / 3e-9 |
+  | SFR, $\xi$ = 1, $\Delta t$ = 0.1 / 3 | 2e-8 / 5e-8 | 6e-7 / 6e-8 | 3e-7 / 5e-7 | 5e-7 / 5e-7 |
+  | SFR, $\xi$ = 0.5, $\Delta t$ = 0.1 / 3 | 2e-8 / 5e-8 | 6e-7 / 6e-8 | 3e-7 / 5e-7 | 5e-7 / 1e-6 |
+
+  (relative errors). Sensitivity of the check: removing the $q$ terms from `ddw_tot` and the `dwdth` term gives errors of 1–33% ($\bar{\mathbb c}^{net}$) and 50–340% (`dsficdthetaf`).
+- **Python parity** (full `MATERIAL` routine vs `material.py::evaluate_state`, open system at the initial $\mu$, LAOS $\gamma_A$ = 0.126, 0.05 Hz, 3 cycles, $\Delta t$ = 0.2): max $|\Delta\sigma_{12}|$ = 0.05 Pa (about 1% of the peak) for SFR off, $\xi$ = 1 and $\xi$ = 0.5 alike. The difference does not come from SFR: it is the same without SFR, and it is below the time-discretisation error at this step (Fortran $\Delta t$ 0.2 vs 0.05: 0.4 Pa); the two codes use different sub-stepping criteria.
