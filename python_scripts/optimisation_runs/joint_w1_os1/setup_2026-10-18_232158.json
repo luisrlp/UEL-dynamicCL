@@ -1,0 +1,148 @@
+{
+  "started": "2026-10-18_232158",
+  "command": "optimise_laos_v2.py --sweep-weight 1 --overshoot-weight 1 --free keq --x0 lambda0=1.01139 --x0 s_taut=1.08059 --x0 koff0=0.17686 --x0 phi=0.999 --x0 dxc_nm=9.333 --x0 dxs_nm=0.502 --x0 keq=30.9045 --workers 16 --max-nfev 40 --out optimisation_runs/joint_w1_os1",
+  "signature": "3bf77a99f6bf",
+  "data_file": "/home/lpacheco/UEL-dynamicCL/python_scripts/validation_data/unterberger2013_fig4a_laos_dataset0.csv",
+  "cfg": {
+    "dt": 0.1,
+    "factor": 3,
+    "cycles": 3,
+    "gamma_A": 0.125875,
+    "overshoot_weight": 1.0,
+    "sweep_weight": 1.0,
+    "sweep_gammas": [
+      0.0126,
+      0.05,
+      0.1,
+      0.158,
+      0.2
+    ]
+  },
+  "free": [
+    "lambda0",
+    "s_taut",
+    "koff0",
+    "phi",
+    "dxc_nm",
+    "dxs_nm",
+    "keq"
+  ],
+  "fixed": {
+    "beta": 0.438,
+    "mu0stretch": 38600.0
+  },
+  "default_fixed": [
+    "keq",
+    "beta",
+    "mu0stretch"
+  ],
+  "x0": {
+    "lambda0": 1.01139,
+    "s_taut": 1.08059,
+    "koff0": 0.17686,
+    "phi": 0.999,
+    "dxc_nm": 9.333,
+    "dxs_nm": 0.502,
+    "keq": 30.9045,
+    "beta": 0.438,
+    "mu0stretch": 38600.0
+  },
+  "bounds": {
+    "lambda0": [
+      1.0,
+      1.05
+    ],
+    "s_taut": [
+      1.05,
+      1.2
+    ],
+    "koff0": [
+      0.02,
+      2.0
+    ],
+    "phi": [
+      0.0,
+      0.999
+    ],
+    "dxc_nm": [
+      0.5,
+      35.0
+    ],
+    "dxs_nm": [
+      0.5,
+      20.0
+    ],
+    "keq": [
+      3.0,
+      50.0
+    ],
+    "beta": [
+      0.3,
+      0.7
+    ],
+    "mu0stretch": [
+      20000.0,
+      60000.0
+    ]
+  },
+  "constants": {
+    "FIXED_DIFF": {
+      "CHI": 0.1,
+      "THETA": 294.0,
+      "D": 0.1,
+      "MU0": 0.0,
+      "VMOL": 0.15,
+      "RGAS": 8.31446261815324,
+      "CACTIN": 0.0095,
+      "R": 0.1,
+      "RBMAX": 0.25,
+      "RFMAX": 1.0
+    },
+    "FIXED_MECH": {
+      "filament": "ext",
+      "KBULK": 1000.0,
+      "Lp": 16.0,
+      "R0C": 0.014,
+      "ETA": 1.0,
+      "b_disp": 1e-06,
+      "prefdir": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "stretch_free_binding": true,
+      "xi_t": 1.0
+    },
+    "FREQ": 0.05,
+    "THETA": 294.0
+  },
+  "weights": {
+    "DSIG": 0.025,
+    "DGAM": 0.0,
+    "N_EARLY": 2,
+    "n_penalty_rows": 4,
+    "n_sweep_rows": 10,
+    "SWEEP_FAIL": 2.0
+  },
+  "sweep_data_files": [
+    "/home/lpacheco/UEL-dynamicCL/python_scripts/validation_data/4b_G_.csv",
+    "/home/lpacheco/UEL-dynamicCL/python_scripts/validation_data/4b_G__.csv"
+  ],
+  "steady_tol": 0.01,
+  "optimiser": {
+    "method": "trf",
+    "x_scale": 1.0,
+    "ftol": 0.0001,
+    "xtol": 0.0001,
+    "gtol": 1e-06,
+    "max_nfev": 40,
+    "h": 0.01,
+    "workers": 16,
+    "evaluate_only": false
+  },
+  "versions": {
+    "numpy": "2.0.2",
+    "scipy": "1.13.1",
+    "python": "3.9.25"
+  }
+}
