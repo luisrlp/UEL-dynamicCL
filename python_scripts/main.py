@@ -29,6 +29,7 @@ from plotting import plot_microsphere
 import matplotlib.pyplot as plt
 import contextlib, os
 from concurrent.futures import ProcessPoolExecutor
+import sys
 
 
 tex_fonts = {
@@ -275,6 +276,8 @@ def sweep_worker(args):
 
 if __name__ == "__main__":
 
+    RUN = sys.argv[1] if len(sys.argv) > 1 else None
+
     # --- MATERIAL PARAMETERS ---
     THETA = 294. # 21 + 273.0  # Temperature (K)
     diffusion_props = {
@@ -350,6 +353,13 @@ if __name__ == "__main__":
     run_laos = False
     mu_fixed = None # material.INITMU  # Keeping mu constant for now          
     frequency = 0.05
+    tag = '0'                                                   # prefix of the saved figures and CSV
+    if RUN is not None:
+        from amplitude_sweep_runs import load_run
+        diffusion_props, mech_props, cfg = load_run(RUN)        # optimum + fixed constants of that run
+        sim_props.update(def_max=cfg['gamma_A'], delta_t=cfg['dt'], factor=cfg['factor'],
+                         t_max=cfg['cycles'] / frequency)       # same protocol as the fit (cycle 3)
+        tag = RUN
     if run_laos:
         factor = sim_props['factor']
         material = DynamicCrosslinking(diffusion_props, 
@@ -386,7 +396,7 @@ if __name__ == "__main__":
         plt.legend()
         plt.grid(True)
         # plt.savefig(f'figures/{sim_props["deformation_type"]}/uni_results.pdf', bbox_inches='tight')
-        plt.savefig(f'figures/validation/0.pdf', bbox_inches='tight')
+        plt.savefig(f'figures/validation/{tag}.pdf', bbox_inches='tight')
         # plt.show()
 
         # LAST CYCLE PLOT
@@ -422,7 +432,7 @@ if __name__ == "__main__":
         Gp_A, Gpp_A, delta_A = moduli(t_hist[last], gamma_last, sigma_last, frequency)
         print(f"gamma_A = {sim_props['def_max']}: G' = {Gp_A:.2f} Pa, G'' = {Gpp_A:.2f} Pa, "
             f"delta = {np.degrees(delta_A):.1f} deg  (Fig. 4b at 0.126: G' = 29.6, G'' = 6.6)")
-        plt.savefig(f'figures/validation/0_last_cycle.pdf', bbox_inches='tight')
+        plt.savefig(f'figures/validation/{tag}_last_cycle.pdf', bbox_inches='tight')
 
     # ----------- AMPLITUDE SWEEP (Fig. 4b) -----------
     run_sweep = True
@@ -432,8 +442,8 @@ if __name__ == "__main__":
         dG2 = dG2[np.argsort(dG2[:, 0])]
         max_gamma = 0.2
         gamma_As = dG1[dG1[:, 0] <= max_gamma, 0]
-        n_cycles = 3
-        dt_sweep = 0.1
+        n_cycles = cfg['cycles'] if RUN else 3
+        dt_sweep = cfg['dt'] if RUN else 0.1
         jobs = [(gA, diffusion_props, mech_props, sim_props, frequency, n_cycles, dt_sweep, mu_fixed)
                 for gA in gamma_As]
         n_workers = 16
@@ -442,18 +452,19 @@ if __name__ == "__main__":
         Gp = [o[1] for o in out]
         Gpp = [o[2] for o in out]
 
-        np.savetxt('validation/0_amplitude_sweep.csv', np.column_stack([gamma_As, Gp, Gpp]),
+        np.savetxt(f'validation/{tag}_amplitude_sweep.csv', np.column_stack([gamma_As, Gp, Gpp]),
            delimiter=',', header="gamma_A, G' (Pa), G'' (Pa)")
-        # plt.figure(figsize=(8, 6))
-        # plt.loglog(gamma_As, Gp, 'b-', lw=2, label="Model $G'$")
-        # plt.loglog(gamma_As, Gpp, 'r-', lw=2, label="Model $G''$")
-        # plt.loglog(dG1[:, 0], dG1[:, 1], 'bx', ms=6, label="Unterberger et al. 2013 $G'$")
-        # plt.loglog(dG2[:, 0], dG2[:, 1], 'r+', ms=7, label="Unterberger et al. 2013 $G''$")
-        # plt.xlabel('Amplitude of shear strain $\\gamma_A$')
-        # plt.ylabel("Moduli $G'$, $G''$ (Pa)")
-        # plt.legend()
-        # plt.grid(True, which='both')
-        # plt.savefig('validation/0_amplitude_sweep.pdf', bbox_inches='tight')
+        plt.figure(figsize=(8, 6))
+        plt.loglog(gamma_As, Gp, 'b-', lw=2, label="Model $G'$")
+        plt.loglog(gamma_As, Gpp, 'r-', lw=2, label="Model $G''$")
+        plt.loglog(dG1[:, 0], dG1[:, 1], 'bx', ms=6, label="Unterberger et al. 2013 $G'$")
+        plt.loglog(dG2[:, 0], dG2[:, 1], 'r+', ms=7, label="Unterberger et al. 2013 $G''$")
+        plt.xlabel('Amplitude of shear strain $\\gamma_A$')
+        plt.ylabel("Moduli $G'$, $G''$ (Pa)")
+        plt.title(f'Amplitude sweep ({tag})'.replace('_', '\\_'))
+        plt.legend()
+        plt.grid(True, which='both')
+        plt.savefig(f'figures/validation/{tag}_amplitude_sweep.pdf', bbox_inches='tight')
 
 
     # --------------------------------------------

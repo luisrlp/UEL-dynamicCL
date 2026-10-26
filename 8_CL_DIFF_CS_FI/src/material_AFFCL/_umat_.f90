@@ -393,7 +393,7 @@ CALL projlag(c,unit4,projl,ndi)
       CALL thetafFunc(THETAF_TAU, f, df, ARGS, NARGS)
       dHdcb = k * vmol**two / (RGAS * THETA) * (one + DLOG(det/Jc)) / Jc**two
       Heff = df + dHdcb * dcbdthetaf
-      Hth0 = df - dHdcb * cfmax
+      Hth0 = one / THETAF_TAU + one / (one - THETAF_TAU) - two * CHI
       DTHETAFDMU = one / (RGAS * THETA * Heff)
 
       ! write(*,*) 'kinc = ', kinc

@@ -58,15 +58,20 @@ def loop_worker(args):
     name, eta = args
     from material import DynamicCrosslinking
     diff, mech, cfg = load_run(name, eta)
-    sim = {'deformation_type': 'shear', 'factor': cfg['factor'], 'max_iter': 50, 'tol': 1.0e-12}
-    t = np.arange(0.0, cfg['cycles'] / FREQ + 0.5 * cfg['dt'], cfg['dt'])
-    g = cfg['gamma_A'] * np.sin(2 * np.pi * FREQ * t)
-    s = np.empty_like(t)
-    with contextlib.redirect_stdout(io.StringIO()), np.errstate(all='ignore'):
-        m = DynamicCrosslinking(diff, mech, sim)
-        for i in range(len(t)):
-            F = np.array([[1.0, g[i], 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-            s[i] = m.evaluate_state(F, None, 0.0 if i == 0 else t[i] - t[i - 1])[0, 1]
+    if cfg.get('plate_nodes'):                # plate-averaged loop, as in the fit
+        import optimise_laos_v2 as O
+        p = json.load(open(os.path.join(RUNS, name, 'result.json')))['optimum']
+        t, g, s = O.simulate(p, cfg)
+    else:
+        sim = {'deformation_type': 'shear', 'factor': cfg['factor'], 'max_iter': 50, 'tol': 1.0e-12}
+        t = np.arange(0.0, cfg['cycles'] / FREQ + 0.5 * cfg['dt'], cfg['dt'])
+        g = cfg['gamma_A'] * np.sin(2 * np.pi * FREQ * t)
+        s = np.empty_like(t)
+        with contextlib.redirect_stdout(io.StringIO()), np.errstate(all='ignore'):
+            m = DynamicCrosslinking(diff, mech, sim)
+            for i in range(len(t)):
+                F = np.array([[1.0, g[i], 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+                s[i] = m.evaluate_state(F, None, 0.0 if i == 0 else t[i] - t[i - 1])[0, 1]
     last = t >= t[-1] - 1.0 / FREQ - 0.5 * cfg['dt']
     ref = np.load(os.path.join(RUNS, name, 'best_loop.npz'))
     n = min(len(ref['sigma']), int(last.sum()))
@@ -80,7 +85,14 @@ def sweep_job(args):
     diff, mech, cfg = load_run(name)
     sim = {'deformation_type': 'shear', 'factor': cfg['factor'], 'max_iter': 50, 'tol': 1.0e-12}
     try:
-        _, G1, G2, delta = main.sweep_worker((gA, diff, mech, sim, FREQ, cfg['cycles'], cfg['dt'], None))
+        if cfg.get('plate_nodes'):            # plate-averaged sweep, as in the fit
+            import optimise_laos_v2 as O
+            p = json.load(open(os.path.join(RUNS, name, 'result.json')))['optimum']
+            t, g, s = O.simulate(p, dict(cfg, gamma_A=gA))
+            last = t >= t[-1] - 1.0 / FREQ - 0.5 * cfg['dt']
+            G1, G2, delta = main.moduli(t[last], g[last], s[last], FREQ)
+        else:
+            _, G1, G2, delta = main.sweep_worker((gA, diff, mech, sim, FREQ, cfg['cycles'], cfg['dt'], None))
     except Exception as e:                    # keep the other amplitudes if one fails
         print(f'{name} gamma_A {gA:.4f} failed: {e}', flush=True)
         G1 = G2 = delta = np.nan
@@ -108,7 +120,7 @@ def plot_run(name, gA, Gp, Gpp, dG1, dG2, cfg):
 def main_cli():
     ap = argparse.ArgumentParser()
     ap.add_argument('--runs', nargs='*', default=None, help='run folders (default: all with result.json)')
-    ap.add_argument('--workers', type=int, default=min(15, os.cpu_count() or 1))
+    ap.add_argument('--workers', type=int, default=min(6, os.cpu_count() or 1))
     ap.add_argument('--verify', action='store_true', help='only reproduce best_loop.npz of each run')
     a = ap.parse_args()
     os.chdir(HERE)

@@ -57,6 +57,7 @@ from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 import scipy
 from scipy.optimize import least_squares
+from scipy.special import roots_jacobi
 
 REPO = os.path.dirname(os.path.abspath(__file__))     # python_scripts/
 DATA = os.path.join(REPO, 'validation_data', 'unterberger2013_fig4a_laos_dataset0.csv')
@@ -70,7 +71,7 @@ FREQ = 0.05                        # Hz
 
 # name: (x0, lower, upper)
 PARAMS = {
-    'lambda0': (1.08, 1.000, 1.15), # 1.0467
+    'lambda0': (1.02, 1.000, 1.05), # 1.0467
     's_taut':  (1.1, 1.050, 1.200), # 1.0861 a_ratio/lambda0
     'koff0':   (0.15,  0.020, 2.00), # [0.08] k_c + k_s
     'phi':     (0.971, 0.000, 0.9999), # [0.9091] k_c / (k_s + k_c) = k_c / koff0
@@ -173,8 +174,18 @@ def material_props(p):
     return diff, mech
 
 
+def plate_nodes(n):
+    """Nodes x = r/R and weights of the parallel-plate stress sigma_a = 4 int_0^1 sigma(x gamma_A) x^2 dx."""
+    u, w = roots_jacobi(n, 0.0, 2.0)          # weight (1 + u)^2 on [-1, 1]; x = (1 + u)/2
+    return 0.5 * (1.0 + u), 0.5 * w           # sum(w * x) = 1: a linear material gives sigma(gamma_A)
+
 def simulate(p, cfg):
     """Strain-controlled LAOS from rest; returns time, gamma and sigma_xy of all cycles."""
+    if cfg.get('plate_nodes', 0) > 0:         # parallel plate: torque-averaged stress vs edge strain
+        x, w = plate_nodes(cfg['plate_nodes'])
+        runs = [simulate(p, dict(cfg, gamma_A=xi * cfg['gamma_A'], plate_nodes=0)) for xi in x]
+        t = runs[0][0]
+        return t, cfg['gamma_A'] * np.sin(2 * np.pi * FREQ * t), sum(wi * r[2] for wi, r in zip(w, runs))
     from material import DynamicCrosslinking
     diff, mech = material_props(p)
     sim = {'deformation_type': 'shear', 'factor': cfg['factor'], 'max_iter': 50, 'tol': 1.0e-12}
@@ -256,6 +267,17 @@ def run_one(args):
         r = np.full(n_data(data) + n_penalty(cfg), 10.0)
     return r, (gm, sm), diag, time.time() - t0
 
+REUSE_TOL = 1e-3       # sweep amplitudes within this of gamma_A reuse the fitted loop
+
+def loop_moduli(loop, cfg):
+    """G', G'' of the fitted loop's last cycle, computed as run_sweep does (third entry: no extra wall time)."""
+    from main import moduli
+    gm, sm = loop
+    if len(gm) == 0:                                    # failed run
+        return float('nan'), float('nan'), 0.0
+    t = np.arange(len(gm)) * cfg['dt']
+    G1, G2, _ = moduli(t, gm, sm, FREQ)
+    return G1, G2, 0.0
 
 def run_sweep(args):
     """Worker: one LAOS run from rest at the sweep amplitude gA (same protocol as the fitted loop).
@@ -303,7 +325,7 @@ def settings_signature(cfg):
     if n_sweep(cfg):                                  # sweep settings only when it is on (signature unchanged otherwise)
         import inspect
         from main import moduli
-        h.update(json.dumps({'SWEEP_FAIL': SWEEP_FAIL}).encode())
+        h.update(json.dumps({'SWEEP_FAIL': SWEEP_FAIL, 'REUSE_TOL': REUSE_TOL}).encode())
         h.update(inspect.getsource(moduli).encode())
         for f in SWEEP_DATA:
             h.update(open(f, 'rb').read())
@@ -356,12 +378,15 @@ class Problem:
         todo = [p for p in ps if self.key(p) not in self.cache]
         todo = list({self.key(p): p for p in todo}.values())
         if todo:
-            # all LAOS runs and sweep runs of all points in one pool (a point needs 1 + n_gammas runs)
+            # all LAOS runs and sweep runs of all points in one pool (a point needs 1 + n_gammas runs, minus a reused one)
             laos = [self.pool.submit(run_one, (p, self.cfg, self.data)) for p in todo]
-            sweep = [[self.pool.submit(run_sweep, (p, self.cfg, g)) for g in self.sweep_g] for p in todo]
+            # (a sweep amplitude equal to gamma_A reuses the fitted loop: None instead of a run)
+            sweep = [[None if abs(g - self.cfg['gamma_A']) < REUSE_TOL else self.pool.submit(run_sweep, (p, self.cfg, g))
+                      for g in self.sweep_g] for p in todo]
             for p, fl, fs in zip(todo, laos, sweep):
                 r, loop, diag, wall = fl.result()
-                sw = np.array([f.result() for f in fs]).reshape(-1, 3)          # rows: G', G'', wall per amplitude
+                sw = np.array([loop_moduli(loop, self.cfg) if f is None else f.result()
+                               for f in fs]).reshape(-1, 3)                     # rows: G', G'', wall per amplitude
                 if self.n_sw:
                     e = sweep_errors(sw[:, :2], self.sweep_d)
                     r = np.concatenate([r, sweep_weight_eff(self.cfg, self.n_dat) * e])
@@ -460,16 +485,19 @@ def main():
     ap.add_argument('--max-nfev', type=int, default=25, help='max residual evaluations of least_squares (Jacobians not counted)')
     ap.add_argument('--h', type=float, default=0.01, help='finite-difference step in normalised variables (fraction of the bound range)')
     ap.add_argument('--evaluate-only', action='store_true')
+    ap.add_argument('--plate-nodes', type=int, default=0, help='radial Gauss nodes of the parallel-plate average (0 = single point at gamma_A)')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
 
     data, gamma_A = load_data()
     cfg = {'dt': a.dt, 'factor': a.factor, 'cycles': a.cycles, 'gamma_A': gamma_A, 'overshoot_weight': a.overshoot_weight}
-    if a.sweep_weight > 0:                           # only when on, so the cache signature of loop-only fits is unchanged
+    if a.sweep_weight > 0:   # only when on, so the cache signature of loop-only fits is unchanged
         lo, hi = sweep_range()
         if not all(lo <= g <= hi for g in a.sweep_gammas):
             sys.exit(f'--sweep-gammas outside the data range [{lo:.4g}, {hi:.4g}]')
         cfg.update(sweep_weight=a.sweep_weight, sweep_gammas=sorted(a.sweep_gammas))
+    if a.plate_nodes > 0:    # only when on, so the cache signature of earlier fits is unchanged
+        cfg['plate_nodes'] = a.plate_nodes
     x0 = {k: PARAMS[k][0] for k in PARAMS}
     x0.update({k: float(v) for k, v in (s.split('=') for s in a.x0)})
     for k in a.free:

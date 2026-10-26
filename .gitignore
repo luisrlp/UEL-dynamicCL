@@ -8,6 +8,8 @@ workplan/
 reports/
 research_notes/
 paper/
+python_scripts/optimisation_runs
+python_scripts/validation
 
 # =========================
 # Specific Files to Ignore

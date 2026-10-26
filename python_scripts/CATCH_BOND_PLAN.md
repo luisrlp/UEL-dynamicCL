@@ -1123,3 +1123,53 @@ Without SFR ($\lambda_n \equiv 1$): $q = q^\theta = 0$, `dlrdl` = 1, `dlrdth` = 
 
   (relative errors). Sensitivity of the check: removing the $q$ terms from `ddw_tot` and the `dwdth` term gives errors of 1–33% ($\bar{\mathbb c}^{net}$) and 50–340% (`dsficdthetaf`).
 - **Python parity** (full `MATERIAL` routine vs `material.py::evaluate_state`, open system at the initial $\mu$, LAOS $\gamma_A$ = 0.126, 0.05 Hz, 3 cycles, $\Delta t$ = 0.2): max $|\Delta\sigma_{12}|$ = 0.05 Pa (about 1% of the peak) for SFR off, $\xi$ = 1 and $\xi$ = 0.5 alike. The difference does not come from SFR: it is the same without SFR, and it is below the time-discretisation error at this step (Fortran $\Delta t$ 0.2 vs 0.05: 0.4 Pa); the two codes use different sub-stepping criteria.
+
+$$
+\frac{\partial (R^{\mathrm{src}}{\mu_f})^A}{\partial u^B_k}
+= \int{\Omega^e} N^A \Bigg[
+\underbrace{\Big( \frac{\partial s}{\partial \theta_f} + \frac{\partial s}{\partial c_{b,\mathrm{tot}}},\frac{\partial c_{b,\mathrm{tot}}}{\partial \theta_f} \Big) \frac{\partial \theta_f}{\partial \bar J}, \frac{\partial \bar J}{\partial u^B_k}; \frac{1}{\bar J}}_{\text{1a}}
+- \underbrace{\frac{\partial s}{\partial c_{b,\mathrm{tot}}} \sum_i \frac{\partial c_{b,\mathrm{tot}}}{\partial \bar\lambda_i}, \frac{\partial \bar\lambda_i}{\partial u^B_k}; \frac{1}{\bar J}}_{\text{1c}}
+- \underbrace{s, \frac{\partial (\mathrm{d}v/\bar J)}{\partial u^B_k}, \frac{1}{\mathrm{d}v}}_{\text{1b}}
+  \Bigg] \mathrm{d}v
+  $$
+
+  $$\frac{\partial\bar\lambda_i}{\partial u^B_k} = \frac{1}{\bar\lambda_i}\Big(\bar m_{i,k},\bar m_{i,l} - \frac{\bar\lambda_i^2}{3},\delta_{kl}\Big)\frac{\partial N^B}{\partial x_l} = \bar\lambda_i\Big(\hat m_{i,k}\hat m_{i,l} - \tfrac13\delta_{kl}\Big)\frac{\partial N^B}{\partial x_l}$$
+
+---
+You're right: the chain rule I wrote was the staggered one (folder 6). There θ_f = θ_f(μ, J̄) only, so a stretch change cannot reach θ_f. In the fully implicit scheme, θ_f also depends on c_b,tot, because H contains J^c(c_b,tot). The path is a loop, not a chain:
+
+$$\bar\lambda_i ;\to; c_{b,\mathrm{tot}} ;\to; J^c ;\to; \theta_f ;\to; c_{b,\mathrm{tot}}\ (\text{via }G);\to;\dots$$
+
+So the chain rule has to be applied to the two coupled local equations, not to s alone.
+
+Full dependence at fixed μ and J̄ (folders 8/9)
+
+$$s = -\frac{c_f^{max}(\theta_f-\theta_f^t) + c_{b,\mathrm{tot}} - c_{b,\mathrm{tot}}^t}{\Delta t}$$
+
+θ_f and c_b,tot are the joint solution of:
+
+$$\text{(i) equilibrium:}\quad H(\theta_f,,c_{b,\mathrm{tot}}) = 0, \qquad \text{(ii) kinetics:}\quad c_{b,\mathrm{tot}} = \big\langle c_b(\bar\lambda_i,\theta_f)\big\rangle$$
+
+The chain rule for s with respect to L ($\mathbf L = \frac{\partial,\delta\mathbf u}{\partial\mathbf x}\Big|{\mathbf x_q} = \delta\mathbf F,\mathbf F^{-1}, \qquad L{kl} = \frac{\partial,\delta u_k}{\partial x_l} = \sum_B \frac{\partial N^B}{\partial x_l},\delta u^B_k$) is:
+
+$$\frac{\mathrm ds}{\mathrm d\mathbf L} = \frac{\partial s}{\partial\theta_f},\frac{\mathrm d\theta_f}{\mathrm d\mathbf L} + \frac{\partial s}{\partial c_{b,\mathrm{tot}}},\frac{\mathrm dc_{b,\mathrm{tot}}}{\mathrm d\mathbf L}, \qquad \frac{\partial s}{\partial\theta_f} = -\frac{c_f^{max}}{\Delta t},\quad \frac{\partial s}{\partial c_{b,\mathrm{tot}}} = -\frac1{\Delta t}$$
+
+The staggered version had dθ_f/dL = 0. Here both total derivatives follow from differentiating (i) and (ii):
+
+$$\text{(ii)}\quad \frac{\mathrm dc_{b,\mathrm{tot}}}{\mathrm d\mathbf L} = \underbrace{\sum_i\rho_ia_iS_i\frac{\partial\bar\lambda_i}{\partial\mathbf L}}_{\mathbf Q} + G,\frac{\mathrm d\theta_f}{\mathrm d\mathbf L}$$
+
+$$\text{(i)}\quad \underbrace{\frac{\partial H}{\partial\theta_f}}{\texttt{df}}\frac{\mathrm d\theta_f}{\mathrm d\mathbf L} + \underbrace{\frac{\partial H}{\partial c{b,\mathrm{tot}}}}{\texttt{dHdcb}}\frac{\mathrm dc{b,\mathrm{tot}}}{\mathrm d\mathbf L} = 0$$
+
+Substituting (ii) into (i):
+
+$$\texttt{df},\frac{\mathrm d\theta_f}{\mathrm d\mathbf L} + \texttt{dHdcb}\Big(\mathbf Q + G\frac{\mathrm d\theta_f}{\mathrm d\mathbf L}\Big) = 0 ;\Rightarrow; \frac{\mathrm d\theta_f}{\mathrm d\mathbf L} = -\frac{\texttt{dHdcb}}{\underbrace{\texttt{df}+\texttt{dHdcb},G}{H'{\mathrm{eff}}}},\mathbf Q$$
+
+Putting this back into (ii):
+
+$$\frac{\mathrm dc_{b,\mathrm{tot}}}{\mathrm d\mathbf L} = \Big(1 - \frac{G,\texttt{dHdcb}}{H'{\mathrm{eff}}}\Big)\mathbf Q = \frac{\texttt{df}}{H'{\mathrm{eff}}},\mathbf Q$$
+
+And finally into the chain rule for s:
+
+$$-\frac{\mathrm ds}{\mathrm d\mathbf L} = \frac{1}{\Delta t}\Big(c_f^{max}\frac{\mathrm d\theta_f}{\mathrm d\mathbf L} + \frac{\mathrm dc_{b,\mathrm{tot}}}{\mathrm d\mathbf L}\Big) = \frac{1}{\Delta t},\frac{\texttt{df} - \texttt{dHdcb},c_f^{max}}{H'{\mathrm{eff}}},\mathbf Q = \frac{\mathbf Q}{\Delta t},\frac{H{\theta0}}{H'_{\mathrm{eff}}} = \texttt{DSRCDGU}$$
+
+
