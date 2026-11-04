@@ -48,6 +48,8 @@ def load_run(name, eta=None):
         mech['BETA'] = p['beta']
     if 'mu0stretch' in p:
         mech['MU0STRETCH'] = p['mu0stretch']
+    if 'eta' in p:
+        mech['ETA'] = p['eta']
     if eta is not None:
         mech['ETA'] = eta
     return diff, mech, res['cfg']
@@ -58,7 +60,7 @@ def loop_worker(args):
     name, eta = args
     from material import DynamicCrosslinking
     diff, mech, cfg = load_run(name, eta)
-    if cfg.get('plate_nodes'):                # plate-averaged loop, as in the fit
+    if cfg.get('plate_nodes') or cfg.get('consistent_kinetics'):   # same model as the fit (optimise_laos_v2.simulate)
         import optimise_laos_v2 as O
         p = json.load(open(os.path.join(RUNS, name, 'result.json')))['optimum']
         t, g, s = O.simulate(p, cfg)
@@ -85,7 +87,7 @@ def sweep_job(args):
     diff, mech, cfg = load_run(name)
     sim = {'deformation_type': 'shear', 'factor': cfg['factor'], 'max_iter': 50, 'tol': 1.0e-12}
     try:
-        if cfg.get('plate_nodes'):            # plate-averaged sweep, as in the fit
+        if cfg.get('plate_nodes') or cfg.get('consistent_kinetics'):   # same model as the fit (optimise_laos_v2.simulate)
             import optimise_laos_v2 as O
             p = json.load(open(os.path.join(RUNS, name, 'result.json')))['optimum']
             t, g, s = O.simulate(p, dict(cfg, gamma_A=gA))
@@ -120,7 +122,7 @@ def plot_run(name, gA, Gp, Gpp, dG1, dG2, cfg):
 def main_cli():
     ap = argparse.ArgumentParser()
     ap.add_argument('--runs', nargs='*', default=None, help='run folders (default: all with result.json)')
-    ap.add_argument('--workers', type=int, default=min(6, os.cpu_count() or 1))
+    ap.add_argument('--workers', type=int, default=min(4, os.cpu_count() or 1))
     ap.add_argument('--verify', action='store_true', help='only reproduce best_loop.npz of each run')
     a = ap.parse_args()
     os.chdir(HERE)

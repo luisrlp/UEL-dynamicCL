@@ -21,6 +21,7 @@ Parameters (PARAMS; free by default unless listed in DEFAULT_FIXED):
   keq         k_on_0 / koff0                                   (default fixed; release with --free keq)
   beta        effective extensional number BETA                (default fixed; release with --free beta)
   mu0stretch  stretch modulus MU0STRETCH [pN]                  (default fixed; release with --free mu0stretch)
+  eta         relative linker stiffness ETA (Holzapfel 2014), (0, 1], 1 = rigid linker (default fixed; --free eta)
 Any parameter can be fixed with --fix name=value. All other material constants: FIXED_DIFF / FIXED_MECH.
 
 Residuals: model - data at the data points of both branches, weighted for the extraction uncertainty
@@ -45,6 +46,13 @@ Usage (from any directory; results go to --out, default python_scripts/optimisat
   python optimise_laos_v2.py --cycles 6                       # Step 2b: fit a (near) steady-state cycle
   python optimise_laos_v2.py --sweep-weight 1 --workers 16    # joint fit: LAOS loop + amplitude sweep (Fig. 4b)
   python optimise_laos_v2.py --sweep-weight 1 --sweep-gammas 0.0126 0.1 0.2   # other sweep amplitudes
+  python optimise_laos_v2.py --consistent-kinetics --engine fortran ...        # simulations with the Fortran driver
+Engines: --engine python (default) runs material.py / material_TC.py; --engine fortran (consistent kinetics only)
+runs the closed-system driver 10_CL_DIFF_CS_SFR_FI_TC/main_closed.f90 (same model and integration directions as the
+UMAT, about 200x faster), compiled from that folder with
+  cat global.f90 > umat.f90; find . -type f -path '*src/material_AFFCL*' -name '*.f90' -exec cat {} >> umat.f90 \\;
+  gfortran -O2 -o laos_closed umat.f90 main_closed.f90
+The executable is FORTRAN_DIR/laos_closed, or --fortran-exe / the environment variable LAOS_CLOSED_EXE.
 Outputs (in --out): evals.csv (every LAOS run, with per-cycle peaks and cycle-to-cycle change, and the sweep moduli),
                     cache.json (residuals per parameter set, reused on restart
                     only with the same settings, fixed constants, data and model source),
@@ -52,7 +60,7 @@ Outputs (in --out): evals.csv (every LAOS run, with per-cycle peaks and cycle-to
                     setup.json (full setup of the latest session, written before the first LAOS run) and
                     setup_<start time>.json (one copy per session, kept when the folder is reused).
 """
-import argparse, contextlib, hashlib, io, json, math, os, sys, time
+import argparse, contextlib, glob, hashlib, io, json, math, os, re, subprocess, sys, time
 from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 import scipy
@@ -71,17 +79,18 @@ FREQ = 0.05                        # Hz
 
 # name: (x0, lower, upper)
 PARAMS = {
-    'lambda0': (1.02, 1.000, 1.05), # 1.0467
+    'lambda0': (1.02, 1.000, 1.07), # 1.0467 (starts kept <= 1.05)
     's_taut':  (1.1, 1.050, 1.200), # 1.0861 a_ratio/lambda0
     'koff0':   (0.15,  0.020, 2.00), # [0.08] k_c + k_s
     'phi':     (0.971, 0.000, 0.9999), # [0.9091] k_c / (k_s + k_c) = k_c / koff0
-    'dxc_nm':  (5.5570,    0.5,   35.0), # 2.
-    'dxs_nm':  (1.566,    0.5,   20.0), # 0.5
+    'dxc_nm':  (5.5570,    0.1,   35.0), # 2.
+    'dxs_nm':  (1.566,    0.1,   20.0), # 0.5
     'keq':        (38.84,     3.0,    50.0),    # k_on_0 / koff0
     'beta':       (0.438,   0.30,   0.70),    # BETA (Unterberger 2013, from Liu & Pollack)
     'mu0stretch': (38600.0, 2.0e4,  6.0e4),   # MU0STRETCH [pN]
+    'eta':        (1.0,     0.60,   1.00),    # ETA, relative linker stiffness (Holzapfel 2014); rigor HMM nearly rigid
 }
-DEFAULT_FIXED = ('keq', 'beta', 'mu0stretch')     # fixed at their x0 unless released with --free
+DEFAULT_FIXED = ('keq', 'beta', 'mu0stretch', 'eta')     # fixed at their x0 unless released with --free
 
 FIXED_DIFF = {'CHI': 0.1,
               'THETA': THETA,
@@ -109,7 +118,12 @@ STEADY_TOL = 0.01                  # Pa: RMS change of the last cycle vs the pre
 N_EARLY = 2                        # early cycles checked by the overshoot penalty
 SWEEP_GAMMAS = (0.0126, 0.05, 0.1, 0.158, 0.2)   # default sweep amplitudes (0.126 is the fitted loop itself)
 SWEEP_FAIL = 2.0                   # log10 error assigned to a failed sweep run
-LSQ = {'method': 'trf', 'x_scale': 1.0, 'ftol': 1e-4, 'xtol': 1e-4, 'gtol': 1e-6}   # least_squares settings
+LSQ = {'method': 'trf', 'x_scale': 1.0, 'ftol': 1e-5, 'xtol': 1e-5, 'gtol': 1e-6}   # least_squares settings
+
+# Fortran engine (closed-system driver main_closed.f90 of the C4 UMAT)
+FORTRAN_DIR = os.path.join(os.path.dirname(REPO), '10_CL_DIFF_CS_SFR_FI_TC')
+FORTRAN_EXE_ENV = 'LAOS_CLOSED_EXE'  # path of the compiled driver (default FORTRAN_DIR/laos_closed)
+KB_FORTRAN = 1.380649e-5           # k_B of the Fortran code [pN um/K] (Python: 1.38065e-5, see fortran_props)
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -171,6 +185,8 @@ def material_props(p):
                 dx_kT=p['dxs_nm'] * 1e-3 / KT, dx_c_kT=p['dxc_nm'] * 1e-3 / KT)
     mech = dict(FIXED_MECH, LAMBDA0=p['lambda0'], a_ratio=p['s_taut'] * p['lambda0'],
                 BETA=p['beta'], MU0STRETCH=p['mu0stretch'])
+    if 'eta' in p:                            # results saved before eta was a parameter use FIXED_MECH['ETA']
+        mech['ETA'] = p['eta']
     return diff, mech
 
 
@@ -179,6 +195,54 @@ def plate_nodes(n):
     u, w = roots_jacobi(n, 0.0, 2.0)          # weight (1 + u)^2 on [-1, 1]; x = (1 + u)/2
     return 0.5 * (1.0 + u), 0.5 * w           # sum(w * x) = 1: a linear material gives sigma(gamma_A)
 
+def fortran_exe():
+    return os.environ.get(FORTRAN_EXE_ENV, os.path.join(FORTRAN_DIR, 'laos_closed'))
+
+
+def fortran_sources():
+    """Source files of the Fortran driver (hashed into the settings signature, checked against the executable)."""
+    return ([os.path.join(FORTRAN_DIR, f) for f in ('global.f90', 'main_closed.f90')] +
+            sorted(glob.glob(os.path.join(FORTRAN_DIR, 'src', 'material_AFFCL', '*.f90'))))
+
+
+def check_fortran(factor):
+    """Stop if the Fortran driver is missing, older than its sources, or compiled for another factor."""
+    exe = fortran_exe()
+    if not os.access(exe, os.X_OK):
+        sys.exit(f'--engine fortran: executable {exe} not found (see the compile line in the docstring)')
+    newest = max(fortran_sources(), key=os.path.getmtime)
+    if os.path.getmtime(exe) < os.path.getmtime(newest):
+        sys.exit(f'--engine fortran: {exe} is older than {newest}: recompile')
+    m = re.search(r'PARAMETER\s*\(\s*FACTOR\s*=\s*(\d+)', open(fortran_sources()[0]).read(), re.I)
+    if not m or int(m.group(1)) != factor:
+        sys.exit(f'--engine fortran: FACTOR in global.f90 is {m.group(1) if m else "?"}, but --factor {factor}')
+
+
+def fortran_props(p):
+    """PROPS(1:28) of the UMAT / main_closed.f90 for the parameter dict p (network only: phinet = 1, C10 = C01 = 0).
+    The Fortran code uses k_B = 1.380649e-5 instead of 1.38065e-5 (KT): Lp and the reaction distances are rescaled
+    so that B0 = Lp THETA k_B and dx / (k_B THETA) equal the Python values."""
+    diff, mech = material_props(p)
+    kt_f = KB_FORTRAN * diff['THETA']
+    return [mech['KBULK'], 0.0, 0.0, 1.0, mech['a_ratio'], mech['R0C'], mech['ETA'], mech['MU0STRETCH'], mech['BETA'],
+            mech['Lp'] * KT / kt_f, diff['THETA'], diff['dx_kT'] * kt_f, mech['b_disp'], mech['LAMBDA0'],
+            diff['CACTIN'], diff['R'], diff['RFMAX'], diff['RBMAX'], diff['CHI'], diff['D'], diff['MU0'], diff['VMOL'],
+            diff['k_off_0'], p['keq'], diff['k_catch_0'], diff['dx_c_kT'] * kt_f,
+            1.0 if mech['stretch_free_binding'] else 0.0, mech['xi_t']]
+
+
+def simulate_fortran(p, cfg, t):
+    """sigma_xy at the times t (t[0] = 0, constant step dt) from the closed-system Fortran driver main_closed.f90
+    (preferred direction (1, 0, 0) hard-coded there, as FIXED_MECH['prefdir'])."""
+    inp = (' '.join(repr(float(v)) for v in fortran_props(p)) + '\n' +
+           f"{float(cfg['gamma_A'])!r} {FREQ!r} {float(cfg['dt'])!r} {len(t) - 1}\n")
+    r = subprocess.run([fortran_exe()], input=inp, capture_output=True, text=True, check=True)
+    out = np.array([[float(x) for x in line.split()] for line in r.stdout.splitlines() if line.strip()])
+    if out.shape != (len(t) - 1, 5):
+        raise RuntimeError(f'Fortran driver returned {out.shape} values: {r.stderr.strip()[-300:]}')
+    return np.concatenate([[0.0], out[:, 2]])          # rest state at t = 0: sigma_xy = 0
+
+
 def simulate(p, cfg):
     """Strain-controlled LAOS from rest; returns time, gamma and sigma_xy of all cycles."""
     if cfg.get('plate_nodes', 0) > 0:         # parallel plate: torque-averaged stress vs edge strain
@@ -186,12 +250,18 @@ def simulate(p, cfg):
         runs = [simulate(p, dict(cfg, gamma_A=xi * cfg['gamma_A'], plate_nodes=0)) for xi in x]
         t = runs[0][0]
         return t, cfg['gamma_A'] * np.sin(2 * np.pi * FREQ * t), sum(wi * r[2] for wi, r in zip(w, runs))
-    from material import DynamicCrosslinking
-    diff, mech = material_props(p)
-    sim = {'deformation_type': 'shear', 'factor': cfg['factor'], 'max_iter': 50, 'tol': 1.0e-12}
     period = 1.0 / FREQ
     t = np.arange(0.0, cfg['cycles'] * period + 0.5 * cfg['dt'], cfg['dt'])
     g = cfg['gamma_A'] * np.sin(2 * np.pi * FREQ * t)
+    if cfg.get('fortran_engine'):             # closed-system Fortran driver (C4 UMAT routines)
+        return t, g, simulate_fortran(p, cfg, t)
+    diff, mech = material_props(p)
+    if cfg.get('consistent_kinetics'):        # thermodynamically consistent kinetics (material_TC.py)
+        from material_TC import DynamicCrosslinking
+        mech['kinetics'] = 'consistent'
+    else:
+        from material import DynamicCrosslinking
+    sim = {'deformation_type': 'shear', 'factor': cfg['factor'], 'max_iter': 50, 'tol': 1.0e-12}
     s = np.empty_like(t)
     with contextlib.redirect_stdout(io.StringIO()), np.errstate(all='ignore'):
         m = DynamicCrosslinking(diff, mech, sim)
@@ -319,8 +389,12 @@ def settings_signature(cfg):
                                  for k, v in cfg.items()},
                          'diff': FIXED_DIFF, 'mech': fixed_mech,
                          'FREQ': FREQ, 'DSIG': DSIG, 'DGAM': DGAM, 'N_EARLY': N_EARLY}, sort_keys=True).encode())
-    for f in ('material.py', 'kinematics.py', 'dfd.py'):
-        h.update(open(os.path.join(REPO, f), 'rb').read())
+    if cfg.get('fortran_engine'):                     # Fortran model source (driver and UMAT routines)
+        for f in fortran_sources():
+            h.update(open(f, 'rb').read())
+    else:
+        for f in ('material.py', 'kinematics.py', 'dfd.py') + (('material_TC.py',) if cfg.get('consistent_kinetics') else ()):
+            h.update(open(os.path.join(REPO, f), 'rb').read())
     h.update(open(DATA, 'rb').read())
     if n_sweep(cfg):                                  # sweep settings only when it is on (signature unchanged otherwise)
         import inspect
@@ -486,6 +560,11 @@ def main():
     ap.add_argument('--h', type=float, default=0.01, help='finite-difference step in normalised variables (fraction of the bound range)')
     ap.add_argument('--evaluate-only', action='store_true')
     ap.add_argument('--plate-nodes', type=int, default=0, help='radial Gauss nodes of the parallel-plate average (0 = single point at gamma_A)')
+    ap.add_argument('--consistent-kinetics', action='store_true',
+                    help='thermodynamically consistent kinetics (material_TC.py, kinetics = consistent)')
+    ap.add_argument('--engine', choices=('python', 'fortran'), default='python',
+                    help='simulations with material*.py or with the Fortran driver main_closed.f90 (consistent kinetics)')
+    ap.add_argument('--fortran-exe', default=None, help=f'Fortran driver (default: ${FORTRAN_EXE_ENV} or FORTRAN_DIR/laos_closed)')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
 
@@ -498,6 +577,15 @@ def main():
         cfg.update(sweep_weight=a.sweep_weight, sweep_gammas=sorted(a.sweep_gammas))
     if a.plate_nodes > 0:    # only when on, so the cache signature of earlier fits is unchanged
         cfg['plate_nodes'] = a.plate_nodes
+    if a.consistent_kinetics:  # only when on, so the cache signature of earlier fits is unchanged
+        cfg['consistent_kinetics'] = 1
+    if a.engine == 'fortran':  # only when on, so the cache signature of Python-engine fits is unchanged
+        if not a.consistent_kinetics:
+            sys.exit('--engine fortran implements the consistent kinetics only: add --consistent-kinetics')
+        if a.fortran_exe:      # environment: also seen by the worker processes
+            os.environ[FORTRAN_EXE_ENV] = os.path.abspath(a.fortran_exe)
+        check_fortran(a.factor)
+        cfg['fortran_engine'] = 1
     x0 = {k: PARAMS[k][0] for k in PARAMS}
     x0.update({k: float(v) for k, v in (s.split('=') for s in a.x0)})
     for k in a.free:
@@ -531,6 +619,8 @@ def main():
                          'n_sweep_rows': n_sweep(cfg), 'SWEEP_FAIL': SWEEP_FAIL},
              'sweep_data_files': list(SWEEP_DATA) if n_sweep(cfg) else [],
              'steady_tol': STEADY_TOL,
+             'engine': ({'name': 'fortran', 'exe': fortran_exe(), 'fortran_dir': FORTRAN_DIR, 'kb_fortran': KB_FORTRAN}
+                        if a.engine == 'fortran' else {'name': 'python'}),
              'optimiser': {**LSQ, 'max_nfev': a.max_nfev, 'h': a.h, 'workers': a.workers, 'evaluate_only': a.evaluate_only},
              'versions': {'numpy': np.__version__, 'scipy': scipy.__version__, 'python': sys.version.split()[0]}}
     for name in ('setup.json', f'setup_{started}.json'):

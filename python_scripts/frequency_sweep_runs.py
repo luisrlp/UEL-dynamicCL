@@ -20,7 +20,8 @@ from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 from amplitude_sweep_runs import HERE, RUNS, FREQ, load_run
 
-GAMMA_A = 0.005
+
+GAMMA_A = 0.126
 
 
 def sweep_job(args):
@@ -31,10 +32,16 @@ def sweep_job(args):
     sim = {'deformation_type': 'shear', 'factor': cfg['factor'], 'max_iter': 50, 'tol': 1.0e-12}
     n_cycles = n_cycles or cfg['cycles']
     dt = cfg['dt'] * FREQ / f                   # same number of steps per cycle as the fit
+    if cfg.get('consistent_kinetics'):          # thermodynamically consistent kinetics, as in the fit
+        import material_TC
+        Material = material_TC.DynamicCrosslinking
+        mech = dict(mech, kinetics='consistent')
+    else:
+        Material = main.DynamicCrosslinking
     try:
         t = np.arange(0.0, n_cycles / f + 0.5 * dt, dt)
         with open(os.devnull, 'w') as devnull, contextlib.redirect_stdout(devnull), np.errstate(all='ignore'):
-            mat = main.DynamicCrosslinking(diff, mech, sim)
+            mat = Material(diff, mech, sim)
             prof = lambda tt: main.profile_cyclic(tt, amplitude=GAMMA_A, frequency=f, deformation_type='shear')
             res = main.run_simulation(mat, t, prof, mode='shear', mu=None)
         th = np.array(res['time'])
@@ -71,7 +78,7 @@ def plot_run(name, f, Gp, Gpp, dG1, dG2, n_cycles):
 def main_cli():
     ap = argparse.ArgumentParser()
     ap.add_argument('--runs', nargs='*', default=None, help='run folders (default: all with result.json)')
-    ap.add_argument('--workers', type=int, default=min(6, os.cpu_count() or 1))
+    ap.add_argument('--workers', type=int, default=min(4, os.cpu_count() or 1))
     ap.add_argument('--cycles', type=int, default=None, help="cycles per frequency (default: the run's cfg)")
     a = ap.parse_args()
     os.chdir(HERE)

@@ -73,12 +73,14 @@ def generate_icosahedron(factor=1):
                 
                 # Subtriangle Type 1 (pointing "up")
                 p1, p2, p3 = (i+1, j, k-1), (i, j+1, k-1), (i, j, k)
-                
-                c1 = project((p1[0]*vA + p1[1]*vB + p1[2]*vC) / factor)
-                c2 = project((p2[0]*vA + p2[1]*vB + p2[2]*vC) / factor)
-                c3 = project((p3[0]*vA + p3[1]*vB + p3[2]*vC) / factor)
-                
-                centroid = project(c1 + c2 + c3)
+
+                u1 = (p1[0]*vA + p1[1]*vB + p1[2]*vC) / factor
+                u2 = (p2[0]*vA + p2[1]*vB + p2[2]*vC) / factor
+                u3 = (p3[0]*vA + p3[1]*vB + p3[2]*vC) / factor
+                c1, c2, c3 = project(u1), project(u2), project(u3)
+
+                # direction: projection of the flat sub-triangle centroid (as sphere01_triangle_project in Fortran)
+                centroid = project(u1 + u2 + u3)
                 area = spherical_area(c1, c2, c3)
                 
                 directions.append(centroid)
@@ -88,11 +90,12 @@ def generate_icosahedron(factor=1):
                 if k - 2 >= 0:
                     p1, p2, p3 = (i+1, j, k-1), (i+1, j+1, k-2), (i, j+1, k-1)
                     
-                    c1 = project((p1[0]*vA + p1[1]*vB + p1[2]*vC) / factor)
-                    c2 = project((p2[0]*vA + p2[1]*vB + p2[2]*vC) / factor)
-                    c3 = project((p3[0]*vA + p3[1]*vB + p3[2]*vC) / factor)
-                    
-                    centroid = project(c1 + c2 + c3)
+                    u1 = (p1[0]*vA + p1[1]*vB + p1[2]*vC) / factor
+                    u2 = (p2[0]*vA + p2[1]*vB + p2[2]*vC) / factor
+                    u3 = (p3[0]*vA + p3[1]*vB + p3[2]*vC) / factor
+                    c1, c2, c3 = project(u1), project(u2), project(u3)
+
+                    centroid = project(u1 + u2 + u3)
                     area = spherical_area(c1, c2, c3)
                     
                     directions.append(centroid)

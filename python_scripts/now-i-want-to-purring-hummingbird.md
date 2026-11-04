@@ -358,3 +358,400 @@ $$J(\omega) = J_\infty\Big[1 + R\sum_k\frac{a_k}{1 + i\omega\tau_k}\Big] + \frac
 | Force-free terminal target | thermodynamic consistency (see SFR dissipation section) |
 | Amplitude ratio $R$ | Broedersz Eq. (5) prefactor and the WLC segment modulus: uncertain, to be checked in Step 0 |
 | Number of modes $K$ | numerical resolution only |
+
+## Consistent SFR with an isotensional prestress reservoir
+
+This section supersedes the conclusions of "SFR dissipation with prestretch", §5–6. The two-population alternative (permanent prestressed fraction plus force-free relaxing fraction) was tested and fails (§5 below).
+
+### 1. Physical picture
+When a crosslink rebinds, the freed segment re-equilibrates with its neighbours (Broedersz 2010, local re-equilibration). The neighbours are still prestressed, so the segment returns to the prevailing filament tension, i.e. $f_0$, not zero. The energy to re-tension it is supplied by the rest of the filament: the long-wavelength, filament-scale prestress. On the time scale of the experiments this prestress is large and slow. Rigor-HMM networks keep their internal stress over hours (Lieleg 2011), and Fig. 5 shows no flow down to 0.01 Hz.
+
+The negative dissipation of the plain SFR derivation appears because the free energy contained no such reservoir. It is added as an isotensional (constant-tension) reservoir, the mechanical analogue of a chemostat at fixed chemical potential.
+
+### 2. Free energy
+With $F(\lambda_e) \equiv w'(\lambda_e)\,\lambda_e = f\lambda_0 r_0\lambda_e \ge 0$ (energy units per filament) and $F_0 = F(1) = f_0\lambda_0 r_0$:
+$$\Psi = \Psi_{chem}(c_b, c_f) + \sum_i\rho_i\,n_i(c_{b,i})\Big[w(\lambda_{e,i}; c_{b,i}) + F_0(c_{b,i})\,\ln\lambda_{n,i}\Big], \qquad \lambda_{e,i} = \bar\lambda_i/\lambda_{n,i}.$$
+The reservoir term depends only on $\lambda_{n,i}$ (and $c_{b,i}$), not on the deformation.
+
+### 3. Stress
+At fixed internal variables, $\partial\Psi_{res}/\partial\mathbf C = \mathbf 0$, so the stress (Eqs. 4.24–4.27 with SFR), the tangent, and the code's `dw = f*l0*r0/lamn` are unchanged.
+
+### 4. Dissipation
+**Thermodynamic force on $\ln\lambda_{n,i}$.** With $\partial\lambda_{e,i}/\partial\ln\lambda_{n,i} = -\lambda_{e,i}$:
+$$X_i = -\frac{\partial\Psi}{\partial\ln\lambda_{n,i}} = \rho_i n_i\Big[w'(\lambda_{e,i})\,\lambda_{e,i} - F_0\Big] = \rho_i n_i\big[F(\lambda_{e,i}) - F(1)\big].$$
+**SFR evolution** (unchanged), in logarithmic form:
+$$\frac{d\ln\lambda_{n,i}}{dt} = \frac{\dot\lambda_{n,i}}{\lambda_{n,i}} = \Gamma_i\Big(\frac{\bar\lambda_i}{\lambda_{n,i}} - 1\Big) = \Gamma_i\,(\lambda_{e,i} - 1), \qquad \Gamma_i = \frac{B}{c_{b,i}} > 0 .$$
+**Dissipation:**
+$$\boxed{\;\mathcal D_i = X_i\,\frac{d\ln\lambda_{n,i}}{dt} = \rho_i n_i\,\Gamma_i\,\big[F(\lambda_{e,i}) - F(1)\big]\big(\lambda_{e,i} - 1\big) \;\ge 0\;}$$
+**Proof of the sign.** $F$ is non-decreasing in $\lambda_e$: $F = 0$ when slack ($\lambda_e \le \lambda_e^*$), and for $\lambda_e > \lambda_e^*$ it is the product of the non-negative, increasing filament force and $\lambda_e > 0$. Hence $F(\lambda_e) - F(1)$ has the sign of $\lambda_e - 1$ (or vanishes), so $\mathcal D_i \ge 0$ in every state, including the band $\lambda_e^* < \lambda_e < 1$ that was negative without the reservoir. In that band, the reservoir supplies the energy that re-tensions the segment: $F_0\,|d\ln\lambda_n| > F(\lambda_e)\,|d\ln\lambda_n|$.
+
+**Comparison with the plain derivation:** $\mathcal D_i^{plain} = \rho_i n_i\Gamma_i F(\lambda_{e,i})(\lambda_{e,i}-1)$, and the reservoir contributes $-\rho_i n_i\Gamma_i F_0(\lambda_{e,i}-1)$, i.e. the work exchanged with the tension bath.
+
+### 5. Why the two-population alternative was dropped
+Quick check (single point at the `plate_guo_dxs` parameters, not refitted; scratchpad `twopop/`):
+
+| Variant | $G'_{lin}$ | $G''_{lin}$ | Loop area (data 0.30) | $G'(0.158)$/data |
+|---|---|---|---|---|
+| current SFR | 10.66 | 2.90 | 0.434 | 1.37 |
+| permanent $(1-\xi)$ + force-free $\xi = 0.53$ | 6.38 | **0.31** | **0.031** | **7.48** |
+| force-free for all bonds | **1.84** | 0.57 | 0.066 | 0.23 |
+
+- The force-free relaxing population drains to zero force and dissipates almost nothing.
+- The permanent population never relaxes or ruptures, so the large-amplitude stiffness explodes.
+
+The linear dissipation of the model comes from re-referencing around the prestressed state, which is exactly what the reservoir formulation keeps.
+
+### 6. Consequences and assumptions
+- **No change to the model equations, the fit, or the Fortran implementation.** Only the free-energy bookkeeping (and its statement in the paper) changes. No new parameter.
+- **Assumption:** the filament-scale prestress is an infinitely large, slow reservoir on the experimental time scale. A finite reservoir would drain slowly (terminal relaxation over minutes to hours), which is outside the data.
+- **Chemistry:** $\Psi_{res}$ depends on $c_{b,i}$ through $n_i$ and $F_0$, so it contributes to
+$$\mu^{mech}_{b,i} = \frac{1}{\rho_i}\frac{\partial}{\partial c_{b,i}}\Big[\rho_i n_i\big(w + F_0\ln\lambda_{n,i}\big)\Big],$$
+  which is the quantity the paired reaction kinetics need.
+- **Remaining inconsistency:** the reaction kinetics. The catch–slip $k_{off}$ with a constant $k_{on}$ violates detailed balance. The consistent form has the catch–slip shape $g$ in both rates, $k_{off,i} = g$, $k_{on,i} = K_0\,e^{\chi(1-2\theta_f)}\,e^{-\mu^{mech}_{b,i}/RT}\,g$, with $\mu^{mech}_{b,i}$ including the reservoir term above.
+
+## Finite (slowly draining) prestress reservoir
+
+### 1. Should the prestress decrease over long times?
+For a passive network, yes in principle. Without an energy source, stored elastic energy can only be dissipated, so a prestress must eventually relax. The infinite reservoir of the previous section is the limit in which that relaxation is much slower than any simulated process.
+
+What the literature says for long times:
+- **Slow relaxation does occur:**
+  - Lieleg 2011: fascin-bundled networks release internal stress over hours, with power-law-like dynamics.
+  - Burla 2019: stresses frozen in by kinetic trapping during network formation relax over hours.
+- **Mechanism (CGD, Broedersz 2010):** uniform tension along a filament relaxes only through many local unbinding events. The mean-field terminal time is $\tau_r \approx (2/\pi^2)\,\tau_{off}(L/\ell_c)^2$, about 2 min for $\tau_{off} \approx 4$ s, $L = 20\,\mu$m and $\ell_c = 1.69\,\mu$m. That is faster than observed, so real networks relax more slowly than this estimate.
+- **Rigor-HMM networks stiffen with age** (Lieleg 2011), the opposite trend, probably because of ongoing consolidation (late rigor-bond formation, kinetic trapping) that acts as a source. For our system the net long-time trend is therefore not clearly a decrease.
+- **Our data:** Fig. 5 shows no terminal flow down to 0.01 Hz, so any reservoir relaxation time is $\gg 100$ s.
+
+### 2. Formulation
+Replace the constant reservoir tension $F_0$ by a reservoir tension $F_{res,i}$ per direction that relaxes slowly. Its initial value is $F_{res,i}(0) = F_0$.
+
+- **Local rebinding (unchanged rate $\Gamma_i = B/c_{b,i}$):** $\lambda_{n,i}$ relaxes toward the state with $F(\lambda_{e,i}) = F_{res,i}$ instead of $F(\lambda_{e,i}) = F_0$. In the free energy, $+F_0\ln\lambda_{n,i}$ becomes $+F_{res,i}\ln\lambda_{n,i}$, so the thermodynamic force on $\ln\lambda_{n,i}$ is
+$$X_i = \rho_i n_i\big[F(\lambda_{e,i}) - F_{res,i}\big],$$
+  and the evolution must have the same sign as $X_i$. For example, in logarithmic form,
+$$\frac{d\ln\lambda_{n,i}}{dt} = \Gamma_i\,\big(\lambda_{e,i} - \lambda_{e,i}^{res}\big), \qquad F(\lambda_{e,i}^{res}) = F_{res,i},$$
+  which reduces to the current SFR update when $F_{res,i} = F_0$ ($\lambda_e^{res} = 1$). Because $F$ is non-decreasing, $X_i$ and $\lambda_{e,i} - \lambda_{e,i}^{res}$ share a sign, so
+$$\mathcal D_{\lambda,i} = \rho_i n_i\,\Gamma_i\,\big[F(\lambda_{e,i}) - F_{res,i}\big]\big(\lambda_{e,i} - \lambda_{e,i}^{res}\big) \ge 0 .$$
+- **The reservoir itself:** two options.
+  1. **Simple decay:** $\dot F_{res,i} = -F_{res,i}/\tau_{res}$. This is easy, but the reservoir energy is not explicit, and consistency is not guaranteed: with $F_{res,i}$ inside $\Psi$, the dissipation gains the term $-\rho_i n_i\,\ln\lambda_{n,i}\,\dot F_{res,i}$, which has no definite sign.
+  2. **Explicit reservoir energy (preferred for consistency):** give the filament-scale reservoir a finite stored energy, e.g. a filament-scale spring of stretch $\lambda_{s,i}$ with energy $\psi_{res}(\lambda_{s,i})$ and tension $F_{res,i} = \psi'_{res}\lambda_{s,i}$. Let it relax by a gradient flow with a positive mobility $1/\tau_{res}$. Its dissipation is then $\ge 0$ by construction, and the energy it supplies to local re-tensioning is accounted for explicitly.
+- **Limit:** $\tau_{res}\to\infty$ recovers the infinite reservoir, $F_{res} = F_0$ (previous section).
+
+### 3. Microstructural meaning and parameter
+- $\tau_{res}$ is the terminal relaxation time of filament-scale tension, i.e. the CGD terminal mode. It is set by the turnover time, the filament length and the crosslink spacing, but the mean-field estimate (about 2 min) appears too short compared with observations.
+- **Constraint from data:** only a lower bound, $\tau_{res} \gg 100$ s (Fig. 5), possibly hours (Lieleg 2011, Burla 2019).
+- **One new parameter,** weakly constrained.
+
+### 4. Assessment
+- **LAOS and amplitude sweep (100 s per test):** no effect. The fits are unchanged.
+- **Long UEL simulations** (holds, creep or stress relaxation over many minutes, diffusion-dominated problems over $\sim 10^3$ s): the finite reservoir would add a slow loss of stiffness and prestress.
+- **For rigor HMM the long-time trend is uncertain** (stiffening with age), so a decreasing reservoir is not clearly right for this system.
+
+**Recommendation:** keep the infinite reservoir ($\tau_{res}\to\infty$) in the current model. State in the paper that it is the limit of a slowly draining filament-scale prestress, justified by Fig. 5 and the persistent prestress of rigor-HMM networks. Implement the finite version (option 2) only if a UEL application runs long enough for it to matter and data are available to constrain $\tau_{res}$.
+
+## Thermodynamically consistent reaction kinetics: all admissible $k_{on}$/$k_{off}$ configurations
+
+**Notation:** $r_i$ = net binding rate of direction $i$ (per unit volume; written $w_i$ or $R_i$ elsewhere, renamed here to avoid clashing with the filament energy $w$ and the gas constant $R$). $RT$ = gas constant times temperature.
+
+### 1. Ingredients
+**Free energy** (seminar Eqs. 5.25–5.28, with separate reference energies for free and bound crosslinkers, and the SFR prestress reservoir):
+$$\Psi = \mu^0_f c_f + \sum_i\rho_i\mu^0_b c_{b,i} + \Psi_{mix}(\theta_f, \theta_{b,i}) + \sum_i\rho_i\,n_i(c_{b,i})\Big[w(\lambda_{e,i}; c_{b,i}) + F_0(c_{b,i})\ln\lambda_{n,i}\Big]$$
+
+**Chemical potentials:**
+$$\mu_f = \mu^0_f + RT\Big[\ln\frac{\theta_f}{1-\theta_f} + \chi(1-2\theta_f)\Big], \qquad
+\mu_{b,i} = \mu^0_b + RT\ln\frac{\theta_{b,i}}{1-\theta_{b,i}} + \mu^{mech}_{b,i},$$
+$$\mu^{mech}_{b,i} = \frac{1}{\rho_i}\frac{\partial}{\partial c_{b,i}}\Big[\rho_i n_i\big(w + F_0\ln\lambda_{n,i}\big)\Big] \quad\text{(at fixed } \bar\lambda_i, \lambda_{n,i}\text{)}, \qquad x_i \equiv \frac{\mu^{mech}_{b,i}}{RT}.$$
+
+**Affinity and reaction dissipation:** $\mathcal A_i = \mu_f - \mu_{b,i}$, with $\mathcal D_{reac} = \sum_i\rho_i\,\mathcal A_i\,r_i \ge 0$ required.
+
+**Mass-action rate law** (seminar Eq. 5.33):
+$$r_i = k_{on,i}\,\frac{\theta_f}{1-\theta_f} - k_{off,i}\,\frac{\theta_{b,i}}{1-\theta_{b,i}} .$$
+
+### 2. The consistency theorem
+Shown before: $r_i = P_i\,(\kappa_i\,e^{\mathcal A_i/RT} - 1)$ with $P_i = k_{off,i}\,\theta_{b,i}/(1-\theta_{b,i}) > 0$, and $\mathcal A_i r_i \ge 0$ in all admissible states **if and only if** $\kappa_i \equiv 1$, i.e.
+$$\boxed{\;\frac{k_{on,i}}{k_{off,i}} = K_0\;e^{\chi(1-2\theta_f)}\;e^{-x_i}, \qquad K_0 = e^{(\mu^0_f-\mu^0_b)/RT}\;}$$
+In the dissociation convention, $K_d = 1/K_0 = k^0_{off}/k^0_{on}$. In the code's normalisation, $K_0 = k^0_{on}C_{F,max}/(k^0_{off}C_{B,max})$.
+
+**Only the ratio is constrained.** The complete family of consistent mass-action kinetics is
+$$k_{off,i} = h_i, \qquad k_{on,i} = K_0\,e^{\chi(1-2\theta_f)}\,e^{-x_i}\,h_i, \qquad h_i > 0 \text{ any function of the state}$$
+(force, stretch, $\theta$'s, temperature, ...). Equivalently, with a split factor $\phi_i$ (any real; physically $0 \le \phi_i \le 1$):
+$$k_{off,i} = \Gamma_i\,e^{\phi_i x_i}, \qquad k_{on,i} = \Gamma_i\,K_0\,e^{\chi(1-2\theta_f)}\,e^{-(1-\phi_i)x_i}, \qquad \Gamma_i > 0 .$$
+- **The prefactor $\Gamma_i$ sets the turnover speed,** i.e. how fast equilibrium is approached.
+- **The ratio sets the equilibrium occupancy:**
+$$\frac{\theta_{b,i}}{1-\theta_{b,i}} = K_0\,e^{\chi(1-2\theta_f)}\,\frac{\theta_f}{1-\theta_f}\,e^{-x_i}.$$
+  So mechanics shifts occupancy only through $x_i$, i.e. through the free energy.
+- **The Flory–Huggins factor $e^{\chi(1-2\theta_f)}$** may likewise be put on $k_{on}$ (as in Eq. 5.34), on $k_{off}$, or split. Only its presence in the ratio matters.
+
+### 3. Admissible configurations
+
+Recall $x_i = \frac{\mu^{mech}_{b,i}}{RT}, \qquad \mu^{mech}_{b,i} = \frac{1}{\rho_i}\frac{\partial}{\partial c_{b,i}}\Big[\rho_i\,n_i\big(w(\lambda_{e,i}) + F_0\ln\lambda_{n,i}\big)\Big]$
+
+| # | $k_{off,i}$ | $k_{on,i}$ | Consistent? | Remarks |
+|---|---|---|---|---|
+| C0 | catch–slip in filament force $g(f_i)$ | $k^0_{on}e^{\chi(1-2\theta_f)}$ (no mechanics) | **✗** | current implementation: ratio $\propto 1/g(f_i)$, not $e^{-x_i}$ |
+| C1 | $k^0_{off}\,e^{x_i}$ | $k^0_{on}e^{\chi(1-2\theta_f)}$ | ✓ | seminar Eq. (5.35); $\phi = 1$; pure slip-type, set by $\Psi$ |
+| C2 | $k^0_{off}\,e^{\phi x_i}$ | $k^0_{on}e^{\chi(1-2\theta_f)}e^{-(1-\phi)x_i}$ | ✓ | Bell-type split of the $\Psi$ bias; $\phi = 0$: all bias in binding (force-suppressed binding only) |
+| C3 | $g_i\,e^{\phi x_i}$ | $g_i\,K_0e^{\chi(1-2\theta_f)}e^{-(1-\phi)x_i}$ | ✓ | **catch–slip (or any law) $g_i$ in the shared prefactor**: catch–slip controls turnover, $\Psi$ controls occupancy |
+| C4 | $g_i$ (any, e.g. catch–slip or Bell in $f$) | $K_0e^{\chi(1-2\theta_f)}e^{-x_i}\,g_i$ | ✓ | C3 with $\phi = 0$ (all of the $\Psi$ bias in binding, $k_{off}$ unchanged); earlier "version B" |
+| C5 | $k^0_{off}\,e^{f_i x_b/k_BT}$ | $k^0_{on}e^{\chi(1-2\theta_f)}\,e^{-f_i x_u/k_BT}$ | ✓ **only if** $\Psi$ gives $x_i = f_i(x_b+x_u)/k_BT$ | classic Bell in force; requires a crosslinker-work term in $\Psi$ (which also enters the stress); $x_u = 0$ gives Bell on $k_{off}$ only |
+| C6 | $\sum_p k_{p0}\,e^{f_i x_p/k_BT}$ ($x_c<0$ catch, $x_s>0$ slip) | $K_0\sum_p k_{p0}\,e^{f_i(x_p-\Delta)/k_BT}$ | ✓ **only if** $\Psi$ gives $x_i = f_i\Delta/k_BT$ | two-pathway Bell with microscopic reversibility per pathway (earlier "version A"); force-suppressed binding is then automatic |
+| C7 | any $g_i$ | $K_0e^{\chi(1-2\theta_f)}\,g_i$ (no $e^{-x}$) | ✓ **only if** $x_i \equiv 0$ | mechanics-independent equilibrium; consistent only if $\Psi_{mech}$ does not depend on $c_b$ (not our model) |
+| ✗ | Bell or catch–slip in $f$ on $k_{off}$ only, free $\Delta x$ | constant | ✗ | unless $\Psi$ is changed as in C5 |
+| ✗ | constant | Bell on $k_{on}$ only (free $\Delta x_u$; Wolff-type probe) | ✗ | unless $\Psi$ is changed as in C5 |
+| ✗ | seminar Eq. (5.36) (catch–slip in $\mu^{mech}$) | constant | ✗ | only the pure-slip limit $k_{catch}^0 = 0$, $\alpha_s = 1$ (= C1) is consistent |
+
+**Non-mass-action forms** that are consistent by construction:
+- **Linear (Onsager):** $r_i = L_i\,\mathcal A_i$ with $L_i \ge 0$ any state function (Salvadori et al.). Exact near equilibrium, a simplification far from it.
+- **General dissipation potential:** $r_i = \partial\varphi_i/\partial\mathcal A_i$ with $\varphi_i$ convex in $\mathcal A_i$ and $\varphi_i(0)$ minimal, or any $r_i = \eta_i(\mathcal A_i)$ with $\mathcal A_i\,\eta_i(\mathcal A_i) \ge 0$.
+- **Butler–Volmer form:** $r_i = \Gamma'_i\,[e^{(1-\phi)\mathcal A_i/RT} - e^{-\phi\mathcal A_i/RT}]$. This is the mass-action family of §2 rewritten in the affinity; same content.
+
+### 4. Size of $x_i$ in our model
+Computed at the `plate_guo_dxs` parameters (scratchpad `kin/mu.py`), per direction, with the energy $w$ obtained by integrating $w' = f\lambda_0 r_0$ from the slack state and $\mu^{mech}_b = \partial(n w)/\partial c_b$ at fixed $\lambda_e$ (units: $n w$ in J/m³, $c_b$ in mol/m³, so $\mu$ in J/mol; $RT = 2444$ J/mol):
+
+| $\lambda_e$ | 0.98 | 1.00 (rest) | 1.02 | 1.04 | 1.06 | 1.07 |
+|---|---|---|---|---|---|---|
+| $f$ (pN) | 0.03 | 0.185 | 0.57 | 2.0 | 15.8 | 97.7 |
+| $x = \mu^{mech}_b/RT$ | 0.0005 | 0.011 | 0.048 | 0.17 | 0.81 | 2.64 |
+| effective Bell length $x\,k_BT/f$ (nm) | | 0.24 | 0.34 | 0.34 | 0.21 | 0.11 |
+
+- **Reservoir contribution** ($\lambda_n \ne 1$): $|x_{res}| \approx 0.01$ for $|\ln\lambda_n| = 0.01$, about 0.03 for $\lambda_n = 1.03$. Small.
+- **Comparison:** Bell with $\Delta x = 1$ nm gives $f\Delta x/k_BT = 0.25$ at 1 pN and 2.5 at 10 pN. So the $\Psi$-based bias acts like a weak Bell factor with an effective length of about 0.1–0.35 nm.
+- **Consequences:**
+  - Near rest the consistent kinetics barely differ from the current ones ($e^{-x} \approx 0.99$).
+  - In the most loaded directions at $\gamma \approx 0.126$–0.158 (peak forces about 7–18 pN, depending on the fit and on single-point vs plate-edge strain), $x \approx 0.5$–0.9, so $e^{-x} \approx 0.4$–0.6. The equilibrium occupancy there drops by a factor of up to about 2: a moderate, thermodynamically required bond loss under load. The force-dependent-binding probe showed that such redistribution tends to raise $G_M/G'_{lin}$, so its effect on the fit has to be checked.
+
+### 5. Implementation notes
+- **Needed quantity:** $x_i(\lambda_{e,i}, c_{b,i}, \lambda_{n,i})$ per direction and step. The code computes $w' = f\lambda_0 r_0$ and $w''$, but not $w$ itself. $w$ requires integrating the (implicit) β-model force from the slack state, $w(\lambda_e) = \lambda_0 r_0\int_{\lambda_e^*}^{\lambda_e} f\,d\lambda$, either numerically per evaluation or from a pre-tabulated function of $(\lambda_e, r_{0f})$. Its $c_b$-derivative includes the $n(c_b)$, $r_{0f}(c_b)$ (and $L = a\,r_{0f}$) dependences, which the code already differentiates for $f$ (`dfdcb_ext`).
+- **Kinetics residual:** $k_{on}$ becomes direction-dependent and enters the backward-Euler residual $H(c_b)$ through $r_i$. Its derivative $\partial k_{on,i}/\partial c_{b,i}$ (via $x_i$) must be added to $dH/dc_b$, which affects convergence and uniqueness.
+- **SFR update:** the binding flux $B$ that drives $\lambda_n$ becomes $B_i$ (direction-dependent), as in the force-dependent-binding probe.
+- **Fortran (folders 7 and 9):** the same changes in the local kinetics (`kineticsFunc.f90`, `solveKinetics`), and new tangent contributions through $k_{on,i}$ in the chemo-mechanical coupling terms (Terms 3 and 5–6 of the tangent split). This adds no `global.f90` variables; per-direction quantities are state variables or are recomputed.
+- **Recommended configuration:** **C4** (or C3 with $\phi$ chosen), with the current catch–slip law as $g_i$. It keeps all fitted kinetics as the turnover law, adds no parameter (with C4), and makes the occupancy follow $\Psi$. Before any Fortran work, test it in Python at the reference parameters, then refit $k^0_{off}$ and $\Delta x_s$.
+
+### 6. Computation of $\mu^{mech}_b$ (chain rule)
+Implemented in `material_TC._x_mech` (Python) and `xmech.f90` (Fortran, folder 10). Per direction (index $i$ dropped):
+$$\mu^{mech}_b = \frac{\partial}{\partial c_b}\Big[n\,\big(w + F_0\ln\lambda_n\big)\Big]_{\bar\lambda,\,\lambda_n}, \qquad x = \frac{\mu^{mech}_b}{RT}.$$
+Fixed $\bar\lambda$ and $\lambda_n$ (the other state variables) is the same as fixed $\lambda_e = \bar\lambda/\lambda_n$ and $\lambda_n$. By the product rule:
+$$\mu^{mech}_b = \underbrace{n'\,w + n\,\frac{\partial w}{\partial c_b}\Big|_{\lambda_e}}_{\text{compound energy}} \;+\; \underbrace{\ln\lambda_n\,\big(n'\,F_0 + n\,F_0'\big)}_{\text{prestress reservoir}}, \qquad (\cdot)' = \frac{d}{dc_b}.$$
+
+**Step 1: where $c_b$ enters.** Only through the crosslink spacing $r_{0f} = 1.6\,(10^3 c_b)^{-2/5}$ (Tharmann et al.). Everything else is a chain of geometric quantities:
+
+| quantity | definition | derivative with respect to $c_b$ |
+|---|---|---|
+| $r_{0f}$ | $1.6\,(10^3 c_b)^{-2/5}$ | $r_{0f}' = -\tfrac25\,r_{0f}/c_b$ |
+| $r_0$ | $r_{0f} + r_{0c}$ | $r_0' = r_{0f}'$ |
+| $L$ | $a\,r_{0f}$ | $L' = -\tfrac25\,L/c_b$ |
+| $n$ | $K_{actin}/L$ | $n' = +\tfrac25\,n/c_b$ |
+| $\kappa$ | $\eta\,r_0/r_{0f}$ (filament share of the compound stretch) | $\kappa' = -\eta\,r_{0c}\,r_{0f}'/r_{0f}^2$ |
+| $\lambda_{0f}$ | $\kappa(\lambda_0 - 1) + 1$ | $\lambda_{0f}' = \kappa'(\lambda_0 - 1)$ |
+| $\lambda_f$ | $\kappa(\lambda_e - 1) + 1$ | $\lambda_f' = \kappa'(\lambda_e - 1)$ (at fixed $\lambda_e$) |
+| $c$ | $L^2/(\pi^2 B_0)$ | $c' = -\tfrac45\,c/c_b$ |
+| $A$ | $\lambda_0 r_0/\kappa$ | $A' = \lambda_0\,(r_{0f}'\kappa - r_0\kappa')/\kappa^2$ |
+
+**Step 2: the compound energy $w$ in force space.** The code only has the force law, $w' = dw/d\lambda_e = f\lambda_0 r_0$, with $f$ given implicitly by $G(f, \lambda_f) = 0$ (`evalg.f90`). Integrating from the slack state ($f = 0$ at $\lambda_f\lambda_{0f} = 1$), with $d\lambda_e = d\lambda_f/\kappa$ and integration by parts:
+$$w = \frac{\lambda_0 r_0}{\kappa}\int f\,d\lambda_f = A\,\Big[f\lambda_f - I\Big], \qquad I = \int_0^{f}\lambda_f(f')\,df'.$$
+The inverse force law is explicit, which is why the force-space form is used:
+$$\lambda_f(f') = \frac{a}{\lambda_{0f}}\,\mathrm{rhs}(f'), \qquad \mathrm{rhs} = u - K\,u^\beta\,v\,D^{-\beta},$$
+$$u = 1 + f'/\mu_0, \quad v = 1 + 2f'/\mu_0, \quad D = 1 + c\,f'u, \quad K = 1 - 1/a .$$
+Check: $\lambda_f(0) = 1/\lambda_{0f}$, the slack threshold.
+
+**Step 3: differentiate $w$ at fixed $\lambda_e$.** The upper limit $f$ of $I$ depends on $c_b$. By Leibniz's rule:
+$$I' = \lambda_f(f)\,f' + J, \qquad J = \int_0^{f}\frac{\partial\lambda_f(f')}{\partial c_b}\Big|_{f'}\,df'.$$
+The term $\lambda_f(f)\,f'$ cancels the $\lambda_f f'$ from $(f\lambda_f)'$. So **no $\partial f/\partial c_b$ is needed for $w$**:
+$$\frac{\partial w}{\partial c_b}\Big|_{\lambda_e} = A'\,\big[f\lambda_f - I\big] + A\,\big[f\,\kappa'(\lambda_e - 1) - J\big].$$
+The integrand of $J$ follows from the explicit inverse law ($c_b$ enters through $c$ and $\lambda_{0f}$):
+$$\frac{\partial\lambda_f}{\partial c_b}\Big|_{f'} = \frac{a}{\lambda_{0f}}\,\beta K\,u^{\beta+1}\,v\,f'\,D^{-\beta-1}\,c' \;-\; \lambda_f\,\frac{\lambda_{0f}'}{\lambda_{0f}} .$$
+
+**Step 4: quadrature.** Both $I$ and $J$ use 16-point Gauss–Legendre in $s = \ln(1 + c f')$, $s \in [0, \ln(1 + c f)]$:
+$$f' = \frac{e^s - 1}{c}, \qquad df' = \frac{e^s}{c}\,ds .$$
+The logarithmic variable puts the nodes where $\lambda_f(f')$ varies fastest, in the entropic regime at small force. The relative error is about $10^{-10}$ up to more than 200 pN. One force solve at $\lambda_e$ is needed (`fil`), plus 16 explicit evaluations.
+
+**Step 5: the reservoir term.** $F_0 = f_0\,\lambda_0 r_0$, with $f_0$ the force at $\lambda_e = 1$ ($\lambda_f = 1$). Here the force itself is differentiated, so the implicit-function derivative is needed:
+$$F_0' = \lambda_0\big(r_{0f}'\,f_0 + r_0\,f_0'\big), \qquad f_0' = -\frac{\partial G/\partial c_b}{\partial G/\partial f}\Big|_{\lambda_e = 1},$$
+with $f_0'$ from `fil` (`DfDcb`) or `dfdcb_ext`. The term is skipped when $\lambda_n = 1$.
+
+**Step 6: assemble.**
+$$\mu^{mech}_b = n'\,w + n\,\frac{\partial w}{\partial c_b}\Big|_{\lambda_e} + \ln\lambda_n\,\big(n'F_0 + n\,F_0'\big), \qquad x = \mu^{mech}_b/RT .$$
+- **Units:** $n$ is the number of compounds per µm³, so $n w$ is in pN/µm² = J/m³. With $c_b$ in mM = mol/m³, $\mu^{mech}_b$ is in J/mol.
+- **Normalisation:** C4 uses $x - x_{rest}$, with $x_{rest} = x(c_{b0}, \lambda_e = 1, \lambda_n = 1)$.
+
+**Tangent (Fortran only).** The stretch sensitivity of the bias does not need the quadrature. Since $\partial w/\partial\lambda_e = w' = \lambda_0 r_0 f$ and the reservoir does not depend on $\lambda_e$:
+$$\frac{\partial x}{\partial\lambda_e} = \frac{1}{RT}\,\frac{\partial(n\,w')}{\partial c_b}\Big|_{\lambda_e} = \frac{n}{RT}\Big[\tfrac25\,\frac{w'}{c_b} + \lambda_0\big(r_{0f}'\,f + r_0\,\partial f/\partial c_b\big)\Big],$$
+the same combination as `auxdwdcb` in `affclnetfic_discrete_imp.f90`.
+
+**Verification (2026-11-03, scratchpad):**
+- `xmech.f90` against `_x_mech` at η = 1, 0.8, 0.65 ($c_b/c_{b0}$ = 0.8–1.2, $\lambda_e$ = 0.96–1.06, $\lambda_n$ = 0.98–1.02): maximum relative difference 5e-13.
+- $\partial x/\partial\lambda_e$ and $\partial f/\partial\lambda_e$ against finite differences: about 1e-9.
+
+## Future extensions (outside the current scope)
+
+Parked items, with the reason each is not pursued now.
+
+### 1. Stress-dependent actin (de)polymerisation per direction
+- **Idea:** filament content per direction $n_i$ exchanged with a G-actin pool,
+  $\dot n_i = k_{pol}c_G - k_{dep}(f_i)\,n_i$, with total actin conserved
+  (constrained-mixture growth and remodelling; same structure as $c_b$/$c_f$).
+- **Effect:** if new filaments reset the reference (deposited at the current stretch), the rates just add to $\Gamma$ (no new relaxation time). If turnover changes $n_i$, it is a separate channel with time $1/k_{actin}$, visible in the linear regime through the prestress $F_0$; its weight is set by the force sensitivity of $k_{dep}$.
+- **Why not now:** in reconstituted rigor-HMM gels, turnover is far too slow (treadmilling about 0.1–0.3 subunits/s, of order 10 h per 21 µm filament; barbed ends gelsolin-capped; ATP depleted). Supplying the missing 30–60 s modes would need a fitted rate with no microstructural basis.
+- **Where it fits:** cells and the cortex (fast, ATP-driven turnover). It needs the ATP free energy as an explicit source term for thermodynamic consistency (treadmilling is active).
+
+### 2. High-frequency $G''$ rise (Fig. 5 above about 1 Hz)
+- **Mechanism:** filament–solvent friction of the segment fluctuations, $G^* \propto (i\omega)^{3/4}$ (Gittes–MacKintosh, Morse; the $f^{3/4}$ term of Lieleg 2008), with $\tau \sim \eta L^4/\kappa$.
+- **Form:** one fast relaxation channel (free Maxwell fits put it at about 7–9 ms; Unterberger's 7 ms element), or a Prony approximation of the $(i\omega)^{3/4}$ law with weights from $\eta$, $\kappa$ and $L$.
+- **Why not now:** no effect at 0.05 Hz (LAOS, amplitude sweep). Needed only if the UEL is used for fast loading (high-rate indentation, impact).
+
+### 3. Finite (slowly draining) prestress reservoir
+- See the section "Finite (slowly draining) prestress reservoir" (option 2, explicit reservoir energy).
+- **Why not now:** Fig. 5 shows no terminal flow down to 0.01 Hz ($\tau_{res} \gg 100$ s), and rigor-HMM networks stiffen with age (Lieleg 2011). Only relevant for UEL simulations over many minutes, with data to constrain $\tau_{res}$.
+
+### 4. Chain relaxation: refinements and open points (`chain_relaxation_rules.md`)
+- **Per-crosslink rates:** $k_{j,j+1}(f)$ from the force at each crosslink instead of one $k = B/(2c_b)$ per direction.
+- **Populations following $c_b$:** tabulate $\kappa_p$, $\omega_p$ in $\langle L_{fil}\rangle/L(c_b)$ instead of freezing them at $c_{b0}$.
+- **Stress-dependent spectrum (Mulla 2019):** tension-limited bending length $\sqrt{\kappa/f}$ in the mode energies.
+- **Open:** the crosslink rate that Fig. 5 needs with $\langle L_{fil}\rangle = 21$ µm ($k \approx 1.5$ s⁻¹) is about 5 times the literature values (0.26–0.3 s⁻¹), and it makes the closed-system kinetics about 13 times more expensive per step.
+
+### 5. Yield onset at large amplitude
+- **Limitation:** the model yields at $\gamma_{taut} \approx s_{taut} - 1/s_{taut} \approx 0.17$ (directions reach the taut limit), the data at about 0.2–0.22. Same origin as the excess $G''$ at $\gamma = 0.158$ (about 1.7 times the data).
+- **Parked test:** a plate-averaged single-point fit with $\gamma = 0.2$ included, $\beta$ fixed at 0.438 and $\Delta x_s$ free (plate averaging shifts the apparent yield; `c5_w15_plate_guo` reached $G'(0.2)/G'(0.158) = 1.31$ against 1.46 in the data).
+- Plate averaging itself is parked for the current fits.
+
+### 6. $G_M/G'_{lin}$ and first-cycle overshoot
+- **$G_M/G'_{lin}$ diagnostics:** curvature of the force law near $f_0$ (scan $\beta$, $s_{taut}$ beyond their bounds); slack filaments at $\gamma = 0$ after large strain (Wolff 2012, Fig. 1B).
+- **Overshoot:** slip plasticity (Qian 2026) or a slow shakedown variable (Wolff 2012). Unterberger's data show only the steady third cycle, so they do not constrain it; Wolff's staircase data would.
+
+### 7. Fortran ports (after the Python decisions)
+- **C4 consistent kinetics:** force-space quadrature for $w$, closed-form tangent terms reusing `dw`, `DfDcb`, `dkoffdf`, `ddw` (corrected reservoir sign).
+- **Lumped populations (chain):** $P$ reference stretches per direction as state variables; the $\lambda_n$ term of the tangent summed over populations. No new `global.f90` variables.
+
+## Constitutive assumptions with internal variables (Coleman–Noll, step 2)
+
+Same structure as Sec. 2.3 of the paper draft (`literature/main.pdf`, Eqs. 15–22), starting from the free-energy imbalance (Eq. 14 there),
+$$\dot\Psi_R - \boldsymbol\sigma^e_{act} : \dot{\mathbf F}^e - \mu_{act}\,\dot c_R + \mathbf j_R\cdot\nabla_X\mu \le 0 ,$$
+but with the state extended by the bound content and the reference stretch of each direction $i = 1 \dots n_{dir}$ (weight $\rho_i$, unit vector $\mathbf m_i$).
+
+### 1. State variables
+| variable | meaning | evolves by |
+|---|---|---|
+| $\mathbf C^e = \mathbf F^{eT}\mathbf F^e$ | elastic right Cauchy–Green tensor | balance of momentum |
+| $c_{fR}$ | free (mobile) crosslinker content | balance of mass (transport and reactions) |
+| $c_{b,i}$ | bound crosslinker content of direction $i$ | local reaction law, $\dot c_{b,i} = R_i$ |
+| $\lambda_{n,i}$ | reference stretch of direction $i$ | local remodelling law, $\dot\lambda_{n,i} = \Lambda_i$ |
+
+The total content and the swelling remain those of the paper: $c_R = c_{fR} + \sum_i \rho_i\,c_{b,i}$, $\dot c_R = -\mathrm{Div}\,\mathbf j_R$, $J^c = 1 + v\,c_R$. Binding converts free into bound crosslinkers at constant $c_R$, so it does not change $J^c$.
+
+### 2. Constitutive equations
+At each material point $\mathbf X$ and time $t$, with $\mathbf c_b = \{c_{b,i}\}$ and $\boldsymbol\lambda_n = \{\lambda_{n,i}\}$:
+$$\boldsymbol\sigma^e_{act} = \hat{\boldsymbol\sigma}^e_{act}(\mathbf F^e, c_{fR}, \mathbf c_b, \boldsymbol\lambda_n), \qquad
+\Psi_R = \hat\Psi_R(\mathbf F^e, c_{fR}, \mathbf c_b, \boldsymbol\lambda_n), \qquad
+\mu_{act} = \hat\mu_{act}(\mathbf F^e, c_{fR}, \mathbf c_b, \boldsymbol\lambda_n),$$
+$$\mathbf j_R = \hat{\mathbf j}_R(\mathbf F^e, c_{fR}, \mathbf c_b, \boldsymbol\lambda_n, \nabla_X\mu), \qquad
+R_i = \hat R_i(\mathbf F^e, c_{fR}, \mathbf c_b, \boldsymbol\lambda_n), \qquad
+\Lambda_i = \hat\Lambda_i(\mathbf F^e, c_{fR}, \mathbf c_b, \boldsymbol\lambda_n),$$
+subject to $\det\mathbf F^e = J^e = 1$. The new entries are the internal variables $\mathbf c_b$, $\boldsymbol\lambda_n$ in every response function and their two evolution laws.
+
+**Frame indifference.** The dependence on $\mathbf F^e$ is replaced by $\mathbf C^e$. In the affine microsphere model it enters only through the directional stretches
+$$\bar\lambda_i = \sqrt{\mathbf m_i\cdot\mathbf C^e\,\mathbf m_i}\,,$$
+which are invariant under rotations of the current configuration:
+$$\boldsymbol\sigma^e_{act} = \mathbf F^e\,\hat{\mathbf S}(\mathbf C^e, c_{fR}, \mathbf c_b, \boldsymbol\lambda_n), \qquad \Psi_R = \hat\Psi_R(\mathbf C^e, c_{fR}, \mathbf c_b, \boldsymbol\lambda_n), \ \dots$$
+with $\hat{\mathbf S}$ symmetric. As in the paper (Eq. 16), $\boldsymbol\sigma^e_{act}$ is the two-point (first Piola–Kirchhoff-type) stress conjugate to $\dot{\mathbf F}^e$, hence a single $\mathbf F^e$; the Cauchy stress follows only at the end, by push-forward (Eq. 22).
+
+**Free energy, summarised.** Three parts: reference chemical potentials, mechanics, and mixing.
+$$\hat\Psi_R = \Psi_{ref}(c_{fR}, \mathbf c_b) + \Psi_{mech}(\mathbf C^e, \mathbf c_b, \boldsymbol\lambda_n) + \Psi_{mix}(c_{fR}, \mathbf c_b),$$
+$$\Psi_{ref} = \mu_0\,c_{fR} + \sum_i\rho_i\,\mu_b^0\,c_{b,i}, \qquad
+\Psi_{mech} = \sum_i\rho_i\,n(c_{b,i})\Big[w(\lambda_{e,i}) + F_0\ln\lambda_{n,i}\Big], \qquad
+\Psi_{mix} = \psi_{mix}^{f}(\theta_f) + \sum_i\rho_i\,\psi_{mix}^{b}(\theta_{b,i}).$$
+- $\Psi_{ref}$: energy of putting a crosslinker in the free or in the bound state; only $\mu_b^0 - \mu_0$ (the binding free energy) matters.
+- $\Psi_{mech}$: elastic energy of the filament–crosslinker compounds ($\lambda_0$ inside $w$) and the prestress reservoir; it couples to the chemistry through $n(c_b)$ and $r_{0f}(c_b)$.
+- $\Psi_{mix}$: configurational entropy (and, for the free species, the Flory–Huggins interaction $\chi$) of each species on its own lattice.
+
+The expanded form below writes out $\psi_{mix}^f$ and $\psi_{mix}^b$.
+
+**Free energy of the model, expanded** (the structure to which the restrictions below are applied), with $\lambda_{e,i} = \bar\lambda_i/\lambda_{n,i}$, $\theta_f = c_{fR}/C_{F,max}$ and $\theta_{b,i} = c_{b,i}/C_{B,max}$:
+$$\hat\Psi_R = \sum_i \rho_i\Big[\,\underbrace{n(c_{b,i})\,w(\lambda_{e,i}; c_{b,i})}_{\text{compounds (}\lambda_0\text{ inside }w\text{)}}
++ \underbrace{n(c_{b,i})\,F_0(c_{b,i})\ln\lambda_{n,i}}_{\text{prestress reservoir}}
++ \underbrace{\mu_b^0\,c_{b,i} + RT\,C_{B,max}\big[\theta_{b,i}\ln\theta_{b,i} + (1-\theta_{b,i})\ln(1-\theta_{b,i})\big]}_{\text{bound species: binding energy and site mixing}}\Big]$$
+$$\qquad + \underbrace{\mu_0\,c_{fR} + RT\,C_{F,max}\big[\theta_f\ln\theta_f + (1-\theta_f)\ln(1-\theta_f) + \chi\,\theta_f(1-\theta_f)\big]}_{\text{free species: reference potential and Flory–Huggins mixing}} ,$$
+with $n = K_{actin}/(a\,r_{0f})$, $r_{0f} = 1.6\,(10^3 c_b)^{-2/5}$, $F = w'(\lambda_e)\lambda_e$, $F_0 = F(1)$, $C_{F,max} = c_A R_{F,max}$, $C_{B,max} = c_A R_{B,max}$.
+- Free and bound crosslinkers occupy two separate lattices (free sites, capacity $C_{F,max}$; binding sites of each direction, capacity $C_{B,max}$), so the free mixing term depends only on $\theta_f$ and each direction has its own bound mixing term in $\theta_{b,i}$. The bound term is the one implied by the kinetics: the unbinding term $k_{off}\,C_{B,max}\,\theta_b/(1-\theta_b)$ of $R_i$ (`_kinetics_residual`) gives, at $R_i = 0$, the equilibrium of two Langmuir lattices (Oriani-type trapping).
+- Only the difference $\mu_b^0 - \mu_0$ (the binding free energy, contained in $K_0$) is physical; $\mu_0 = 0$ (`MU0`) in the parameter set.
+- The volumetric part depends on the total content $c_R$ through $J^c$: the incompressibility constraint $J^e = 1$ (as in the paper), or the `KBULK` penalty of the code, in which case $\Psi_{vol}(J^e)$ is added to $\hat\Psi_R$.
+
+### 3. Chain rule
+$$\dot\Psi_R = \frac{\partial\hat\Psi_R}{\partial\mathbf C^e} : \dot{\mathbf C}^e
++ \frac{\partial\hat\Psi_R}{\partial c_{fR}}\,\dot c_{fR}
++ \sum_i \frac{\partial\hat\Psi_R}{\partial c_{b,i}}\,\dot c_{b,i}
++ \sum_i \frac{\partial\hat\Psi_R}{\partial\lambda_{n,i}}\,\dot\lambda_{n,i},$$
+each derivative at fixed values of the other state variables. With $\dot{\mathbf C}^e = \dot{\mathbf F}^{eT}\mathbf F^e + \mathbf F^{eT}\dot{\mathbf F}^e$, the first term is $2\mathbf F^e\,\partial\hat\Psi_R/\partial\mathbf C^e : \dot{\mathbf F}^e$. With $\dot c_R = \dot c_{fR} + \sum_i\rho_i\,\dot c_{b,i}$, the dissipation inequality becomes
+$$\Big(2\mathbf F^e\frac{\partial\hat\Psi_R}{\partial\mathbf C^e} - \mathbf F^e\hat{\mathbf S}\Big) : \dot{\mathbf F}^e
++ \Big(\frac{\partial\hat\Psi_R}{\partial c_{fR}} - \hat\mu_{act}\Big)\dot c_{fR}
++ \sum_i\Big(\frac{\partial\hat\Psi_R}{\partial c_{b,i}} - \rho_i\,\hat\mu_{act}\Big)R_i
++ \sum_i\frac{\partial\hat\Psi_R}{\partial\lambda_{n,i}}\,\Lambda_i
++ \hat{\mathbf j}_R\cdot\nabla_X\mu \;\le\; 0 .$$
+
+### 4. State relations
+$\dot{\mathbf F}^e$ and $\dot c_{fR}$ can be prescribed arbitrarily (through the boundary conditions and the flux divergence), while the response functions do not depend on them. Their coefficients must therefore vanish:
+$$\boldsymbol\sigma^e_{act} = 2\mathbf F^e\,\frac{\partial\hat\Psi_R}{\partial\mathbf C^e}, \qquad
+\mu_{act} = \frac{\partial\hat\Psi_R}{\partial c_{fR}},$$
+as in Eq. (19) of the paper, now evaluated at fixed $\mathbf c_b$ and $\boldsymbol\lambda_n$. With the constraints (Eqs. 12–13 of the paper) this gives Eqs. (21)–(22) unchanged in form:
+$$\mathbf P = 2\mathbf F^e\frac{\partial\hat\Psi_R}{\partial\mathbf C^e}\mathbf F^{e-T} - P\,\mathbf F^{-T}, \qquad
+\mu = \frac{\partial\hat\Psi_R}{\partial c_{fR}} + \bar p\,v .$$
+In the microsphere form the stress uses $\partial\hat\Psi_R/\partial\bar\lambda_i = \rho_i\,n\,w'(\lambda_{e,i})/\lambda_{n,i}$, i.e. $w' = f\,r_0\lambda_0/\lambda_n$ (the $1/\lambda_n$ is the chain rule through $\lambda_e$).
+
+### 5. Residual dissipation inequality
+The rates $R_i$, $\Lambda_i$ and the flux $\mathbf j_R$ are given by response functions, so what remains is the restriction on them:
+$$\underbrace{-\,\hat{\mathbf j}_R\cdot\nabla_X\mu}_{\text{transport}}
+\;+\; \underbrace{\sum_i \rho_i\,\big(\mu_f - \mu_{b,i}\big)\,R_i}_{\text{reaction}}
+\;+\; \underbrace{\sum_i \Big(-\frac{\partial\hat\Psi_R}{\partial\lambda_{n,i}}\Big)\Lambda_i}_{\text{remodelling}} \;\ge\; 0,$$
+with the chemical potentials of the free and bound crosslinkers
+$$\mu_f = \frac{\partial\hat\Psi_R}{\partial c_{fR}} = \mu_0 + RT\Big[\ln\frac{\theta_f}{1-\theta_f} + \chi(1-2\theta_f)\Big],$$
+$$\mu_{b,i} = \frac{1}{\rho_i}\frac{\partial\hat\Psi_R}{\partial c_{b,i}}\Big|_{\lambda_{e,i},\,\lambda_{n,i}}
+= \mu_b^0 + RT\ln\frac{\theta_{b,i}}{1-\theta_{b,i}} + \underbrace{\frac{\partial\big[n\,(w + F_0\ln\lambda_n)\big]}{\partial c_b}\Big|_{\lambda_{e,i},\,\lambda_{n,i}}}_{\mu_b^{mech}\ (\texttt{\_x\_mech})} .$$
+The affinity $\mu_f - \mu_{b,i}$ therefore contains exactly the terms of the kinetics: the free and bound mixing logarithms, $\chi$, the binding free energy ($K_0$) and the mechanical part.
+The pressure term $\bar p\,v$ cancels in the affinity $\mu_f - \mu_{b,i}$, since binding does not change $c_R$. As in the paper (Eq. 20), each process is required to dissipate on its own (sufficient condition):
+- **transport:** $\hat{\mathbf j}_R\cdot\nabla_X\mu \le 0$;
+- **reaction:** $\rho_i\,(\mu_f - \mu_{b,i})\,R_i \ge 0$ (the net binding rate follows the affinity);
+- **remodelling:** $-\,\partial\hat\Psi_R/\partial\lambda_{n,i}\;\Lambda_i \ge 0$, with $-\partial\hat\Psi_R/\partial\lambda_{n,i} = \rho_i\,n\,\big(F(\lambda_{e,i}) - F_0\big)/\lambda_{n,i}$ (the reservoir term supplies the $-F_0$).
+
+**Choices of the model that satisfy them** (step 5 of the procedure, derived in the sections above):
+- transport: $\mathbf j_R = -\mathbf M\nabla_X\mu$, $\mathbf M = D\,c_f(1-\theta_f)/(J\,RT)\,\mathbf I \ge 0$ (Chester–Anand);
+- reaction: $k_{on}/k_{off} = K_0\,e^{\chi(1-2\theta_f)}\,e^{-\mu_b^{mech}/RT}$ (with the mixing factors $\theta_f/(1-\theta_f)$ in $B_i$ and $\theta_{b,i}/(1-\theta_{b,i})$ in the unbinding term of $R_i$) and the catch–slip law in a shared positive prefactor, so that $\mathrm{sign}(R_i) = \mathrm{sign}(\mu_f - \mu_{b,i})$ (mass-action kinetics with the rate ratio set by the chemical potentials, as in Arricca et al. 2023, JMPS 181:105425); the legacy kinetics ($k_{on}$ independent of $\mu_b^{mech}$) does not satisfy it;
+- remodelling: $\Lambda_i = \Gamma_i\,\lambda_{n,i}(\lambda_{e,i} - 1)$, $\Gamma_i = B_i/c_{b,i}$; since $F$ is non-decreasing in $\lambda_e$, $(F - F_0)(\lambda_e - 1) \ge 0$ for every state (nonlinear, sign-preserving; not of Onsager form).
+
+**To state explicitly:** the reaction and the remodelling share the binding flux $B_i$ (in $R_i$ and in $\Gamma_i$); requiring each term to be non-negative separately is sufficient, and it relies on the split of $\mu_{b,i}$ at fixed $\lambda_{e,i}$, $\lambda_{n,i}$ (new bonds form at the current stretch, which is accounted for in $\Lambda_i$).
+
+
+---------------------------------------------
+
+$$\rho_i,(\mu_f - \mu_{b,i}),R_i ;\ge; 0 ,$$
+so the net binding rate R_i must have the same sign as the affinity A_i = μ_f − μ_b,i:
+- free crosslinkers "higher" (A_i > 0): net binding, R_i > 0;
+- bound crosslinkers "higher" (A_i < 0): net unbinding, R_i < 0;
+- A_i = 0 (equilibrium): R_i = 0.
+
+Two ways to guarantee it
+
+1. Linear (Onsager): R_i = L A_i with L ≥ 0, so R_i A_i = L A_i² ≥ 0. This is the same trick as the flux, but it is only accurate close to equilibrium.
+2. Mass action with detailed balance (Arricca et al.; your C4): write the rate as (unbinding flux) × (ratio − 1),
+   $$R_i = \underbrace{k_{off},C_{B,max}\frac{\theta_{b,i}}{1-\theta_{b,i}}}_{>0};\Big(e^{A_i/RT} - 1\Big).$$
+   Since e^x − 1 has the sign of x, R_i·A_i ≥ 0 for every state, however far from equilibrium.
+
+Why C4 has this form and the legacy kinetics doesn't
+
+Your rate is R_i = B − k_off C_B,max θ_b/(1 − θ_b), with B = k_on C_F,max θ_f/(1 − θ_f)·e^{χ(1−2θ_f)}. The ratio of binding to unbinding flux is
+$$\frac{B}{k_{off}C_{B,max},\theta_b/(1-\theta_b)} = \frac{k_{on}}{k_{off}},\frac{C_{F,max}}{C_{B,max}},\frac{\theta_f}{1-\theta_f},\frac{1-\theta_b}{\theta_b},e^{\chi(1-2\theta_f)} .$$
+- C4: k_on/k_off = K₀e^{χ(1−2θ_f)}e^{−μ_b^mech/RT}, with K₀ set by μ₀ − μ_b⁰. The ratio is exactly e^{A_i/RT}, so the sign condition holds always.
+- Legacy: k_on/k_off has no e^{−μ_b^mech/RT}. The ratio is e^{(A_i + μ_b^mech)/RT}, so R_i follows A_i + μ_b^mech instead of A_i. Whenever the affinity is small and opposite in sign to μ_b^mech (|A_i| < |μ_b^mech|), the reaction runs against its affinity and R_i A_i < 0.
+The full condition
+
+Write k_on = k_on0 e^G and k_off = k_off0 e^F. With your rate,
+$$\frac{B}{k_{off}C_{B,max}\theta_b/(1-\theta_b)} = \frac{k_{on0}}{k_{off0}},e^{G-F},\frac{C_{F,max}}{C_{B,max}},\frac{\theta_f}{1-\theta_f},\frac{1-\theta_b}{\theta_b},$$
+and the affinity is
+$$\frac{A_i}{RT} = \frac{\mu_0 - \mu_b^0}{RT} + \ln\frac{\theta_f}{1-\theta_f} + \chi(1-2\theta_f) - \ln\frac{\theta_b}{1-\theta_b} - \frac{\mu_b^{mech}}{RT}.$$
+Setting the ratio equal to e^{A_i/RT}, the mixing logarithms cancel, leaving
+$$G - F = \chi(1-2\theta_f) - \frac{\mu_b^{mech}}{RT} ;+; \underbrace{\frac{\mu_0 - \mu_b^0}{RT} - \ln\frac{C_{F,max}}{C_{B,max}} - \ln\frac{k_{on0}}{k_{off0}}}_{\text{constant}} .$$
+
+Your expression is this one with the constant reduced to −ln(k_on0/k_off0). That's what you get if μ₀ = μ_b⁰ and C_F,max = C_B,max. Neither holds in general: in your parameter set R_F,max = 1 and R_B,max = 0.25, so C_F,max/C_B,max = 4.
+
+
+----
+
+
+![alt text](image.png)
