@@ -621,6 +621,20 @@ Parked items, with the reason each is not pursued now.
 - **C4 consistent kinetics:** force-space quadrature for $w$, closed-form tangent terms reusing `dw`, `DfDcb`, `dkoffdf`, `ddw` (corrected reservoir sign).
 - **Lumped populations (chain):** $P$ reference stretches per direction as state variables; the $\lambda_n$ term of the tangent summed over populations. No new `global.f90` variables.
 
+### 8. Catch reinforcement through a force-dependent bound-state energy
+- **Background:** "catch" has one agreed definition, a bond lifetime that increases with force, i.e. $k_{off}$ decreasing over a force range (Mulla, Hosseini 2020, Schiffhauer 2016). The increase of the bound fraction under load reported in the same papers (mechanoaccumulation, dissociation-on-demand) follows only with a force-independent $k_{on}$. Under detailed balance that is equivalent to a force-dependent affinity. In C4, $\hat g(f)$ is a shared prefactor of $k_{on}$ and $k_{off}$: it sets lifetimes and turnover, but not occupancy. Occupancy depends only on $\Psi$.
+- **Idea:** a two-state (closed/open) bound crosslinker in fast conformational equilibrium. Opening lengthens the crosslinker by $\delta$ along the load and is rare at zero force ($K_o \ll 1$, cryptic site). Add to $\Psi$
+  $$\Psi_{cat} = \sum_i \rho_i\,c_{b,i}\,\psi_{cat}(f_i), \qquad \psi_{cat}(f) = -RT\ln\frac{1 + K_o\,e^{f\delta/k_BT}}{1 + K_o}, \qquad f_i = \hat f(\lambda_{e,i}, c_{b,i}) .$$
+  This is the first-order (work $f\delta$) version. The exact version at fixed stretch makes the crosslinker rest length conformation-dependent, $r_{0,c} \to r_{0,c} + p_o\,\delta$, inside $w$.
+- **Effect:**
+  - **Occupancy:** $\mu_{b,i}$ gains $\psi_{cat}(f_i)$, so the C4 ratio raises the equilibrium occupancy of direction $i$ by $(1 + K_o e^{f_i\delta/k_BT})/(1 + K_o)$. That is about 1 below $f^* = (k_BT/\delta)\ln(1/K_o)$ and grows above it.
+  - **Kinetics:** $k_{off} = c_{b,max}\hat g(f)$ is unchanged, so lifetime ($\Delta x_c$, $\Delta x_s$) and reinforcement ($K_o$, $\delta$) get separate parameters. The reaction inequality still holds automatically.
+  - **Stress:** an extra term $J^{-1}\sum_i\rho_i c_{b,i}\,\psi_{cat}'(f_i)\,(\partial f_i/\partial\lambda_{e,i})\,\lambda_{e,i}\,\mathbf m_i\otimes\mathbf m_i$, with $\psi_{cat}' = -N_A\delta\,p_o(f) < 0$, i.e. extra compliance of loaded directions. Check convexity for large $\delta$ or $c_{b,i}$.
+- **Open point:** $\Psi_{cat}$ depends on $\lambda_{n,i}$ through $f_i(\lambda_{e,i})$. It adds $-\rho_i c_{b,i} N_A\delta\,p_o\,(\partial f/\partial\lambda_e)\lambda_e \le 0$ to the remodelling force $X_i$, which breaks the current proof of $\mathcal D_i \ge 0$. It needs a reservoir-type counterpart, or $\psi_{cat}(f_i) - \psi_{cat}(f_{rest})$, and a new proof.
+- **Bounded variant:** replace the exponential growth by a saturating affinity ratio (e.g. at most about 5, the affinity of the always-open α-actinin-4 K255E mutant, Schiffhauer 2016).
+- **Why not now:** rigor HMM has no known force-activated conformational switch. The $\Delta x_c$ profile is flat from 0 to about 0.2 nm (`final_Pdxc_0`: J 0.05506 vs B1 0.05517), so the LAOS and sweep data need no catch effect of either kind. $K_o$ and $\delta$ would not be identified. For the HMM network, Lieleg 2009 attribute the lower apparent off-rate under prestress to network geometry, independent of the binding mechanism.
+- **Where it fits:** networks crosslinked by established catch-bond proteins (α-actinin-4; filamin). Discussion item for the paper (consistent catch reinforcement needs a term in $\Psi$, not only in the rate law). Related continuum work to check for detailed balance: Wei et al. 2021 (JMPS 147:104267), Rabbi et al. 2025 (Acta Biomater. 201:372).
+
 ## Constitutive assumptions with internal variables (Coleman–Noll, step 2)
 
 Same structure as Sec. 2.3 of the paper draft (`literature/main.pdf`, Eqs. 15–22), starting from the free-energy imbalance (Eq. 14 there),
@@ -755,3 +769,86 @@ Your expression is this one with the constant reduced to −ln(k_on0/k_off0). Th
 
 
 ![alt text](image.png)
+
+
+
+
+
+
+
+Step 0. Structure of the net rate (direction i):
+
+$$\mathcal R_i = k_{on},\frac{\theta_f}{1-\theta_f} - k_{off},\frac{\theta_b}{1-\theta_b},\qquad k_{on}=k_{on,0},c_{f,max},e^{G},\quad k_{off}=k_{off,0},c_{b,max},e^{F}$$
+
+Step 1. The chemical potentials. The swelling pressure term is the same for both species and cancels:
+
+$$\frac{\mu_f}{RT}=\frac{\mu^0_f}{RT}+\ln\frac{\theta_f}{1-\theta_f}+\chi(1-2\theta_f),\qquad \frac{\mu_{b,i}}{RT}=\frac{\mu^0_b}{RT}+\ln\frac{\theta_b}{1-\theta_b}+x_i$$
+
+x_i = μ^mech_b,i/RT is defined only up to a constant, set by the zero of Ψ_mech. Take the rest state as the reference. Add and subtract x_rest, and put the constant into the reference potential:
+
+$$\frac{\mu_{b,i}}{RT}=\underbrace{\frac{\mu^0_b}{RT}+x_{rest}}{\mu^0{b,rest}/RT}+\ln\frac{\theta_b}{1-\theta_b}+(x_i-x_{rest})$$
+
+Step 2. Dissipation requires R_i to have the sign of the affinity. Write R_i as a positive factor times a bracket:
+
+$$\mathcal R_i = k_{off}\frac{\theta_b}{1-\theta_b}\left[\frac{k_{on}}{k_{off}},\frac{\theta_f/(1-\theta_f)}{\theta_b/(1-\theta_b)}-1\right]$$
+
+(μ_f − μ_b,i) R_i ≥ 0 for all states if the bracket equals e^{(μ_f−μ_b,i)/RT} − 1, i.e. if
+
+$$\frac{k_{on}}{k_{off}}=e^{(\mu^0_f-\mu^0_{b,rest})/RT};e^{\chi(1-2\theta_f)};e^{-(x_i-x_{rest})}$$
+
+With the forms of Step 0, the constant and the state-dependent parts give two conditions:
+
+$$\frac{k_{on,0}}{k_{off,0}}=\frac{c_{b,max}}{c_{f,max}},e^{(\mu^0_f-\mu^0_{b,rest})/RT},\qquad G-F=\chi(1-2\theta_f)-(x_i-x_{rest})$$
+
+Step 3. Thermodynamics fixes only G − F. Any common factor H (a function of the state) is allowed:
+
+$$F=H,\qquad G=\chi(1-2\theta_f)-(x_i-x_{rest})+H$$
+
+Step 4. Kinetic choice: unbinding follows the measured catch–slip law.
+
+$$k_{off}=c_{b,max},\hat g(f)\quad\Longrightarrow\quad k_{off,0},e^{H}=\hat  e^{H}=\frac{\hat g(f)}{k_{off,0}}$$
+
+Step 5. Reference choice: F = 0 at rest. At rest, f = f_rest, and requiring
+
+$$k_{off,0},e^{0}=\hat g(f_{rest})\quad\Longrightarrow\quad k_{off,0}=\hat g{H}=\frac{\hat g(f)}{g_{rest}}$$
+
+So k_off,0 is the off-rate of the prestressed rest state, not the zero-forcerough the rest force, g_rest = ĝ(f_rest) ≈ 0.993 k_off^Bell at F1p.
+
+Step 6. Insert e^H into F and G:
+
+$$\boxed{;k_{on}=k_{on,0};c_{f,max};e^{\chi(1-2\theta_f)};e^{-(x_i-x_{rest})\qquad k_{off}=k_{off,0},c_{b,max},\frac{\hat g(f)}{g_{rest}}=c_{b,max},\hatg(f);}}$$
+
+$$\mathcal R_i=\frac{\hat
+g(f)}{g_{rest}}\left[k_{on,0},e^{\chi(1-2\theta_f)},e^{-(x_i-x_{rest})},c_{f_f}-k_{off,0},c_{b,max}\frac{\theta_b}{1-\theta_b}\right]$$
+
+Step 7. Meaning of the prefactors and the initial state. At rest both normal
+
+$$k_{on}^{rest}=k_{on,0},c_{f,max},e^{\chi(1-2\theta_f)},\qquad k_{off}^{res
+
+So k_on,0 and k_off,0 are the binding and unbinding prefactors of the rest sws from R_i = 0 at rest, which is the pullchem condition:
+
+$$k_{on,0},e^{\chi(1-2\theta_f)},c_{f,max}\frac{\theta_f}{1-\theta_f}=k_{off1-\theta_b}\quad\Rightarrow\quad c_{b,0}$$
+
+-------------------------------------------------------
+
+$$k_{on}=\frac{k_{on,0}}{k_{off}^{Bell}};c_{f,max};e^{\chi(1-2\theta_f)};e^{-x_i};\hat g(f),\qquad k_{off}=c_{b,max},\hat g(f)$$
+
+1. Insert 1 = e^{x_rest}e^{−x_rest} and 1 = g_rest/g_rest:
+
+$$k_{on}=\underbrace{\frac{k_{on,0}}{k_{off}^{Bell}},e^{-x_{rest}},g_{rest}}{\text{constant}};c{f,max};e^{\chi(1-2\theta_f)};e^{-(x_i-x_{rest})};\frac{\hat g(f)}{g_{rest}}$$
+
+2. Call the constant k_eq k_off^Bell, the code's Kon0:
+
+$$\frac{k_{on,0}}{k_{off}^{Bell}},e^{-x_{rest}},g_{rest}\equiv k_{eq},k_{off}^{Bell}\quad\Longleftrightarrow\quad \frac{k_{on,0}}{k_{off}^{Bell}}=k_{eq},\frac{k_{off}^{Bell}}{g_{rest}},e^{x_{rest}}$$
+
+Result, as in the code:
+
+$$k_{on}=k_{eq},k_{off}^{Bell};c_{f,max};e^{\chi(1-2\theta_f)};e^{-(x_i-x_{rest})};\frac{\hat g(f)}{g_{rest}},\qquad k_{off}=c_{b,max},\hat g(f)$$
+
+AND
+
+$$k_{off}=k_{off,0},c_{b,max},e^{F}=c_{b,max},\hat g(f);\Rightarrow;e^{F}=\frac{\hat g(f)}{k_{off,0}},\qquad k_{on}=\frac{k_{on,0}}{k_{off,0}};c_{f,max};e^{\chi(1-2\theta_f)};e^{-x_i};\hat g(f)$$
+
+Only the ratio k_on,0/k_off,0 appears, so k_off,0 is a normalisation, i.e. a choice of where F = 0. Repeating the two steps gives
+
+$$\frac{k_{on,0}}{k_{off,0}}=k_{eq},\frac{k_{off}^{Bell}}{g_{rest}},e^{x_{rest}}$$

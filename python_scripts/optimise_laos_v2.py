@@ -49,10 +49,11 @@ Usage (from any directory; results go to --out, default python_scripts/optimisat
   python optimise_laos_v2.py --consistent-kinetics --engine fortran ...        # simulations with the Fortran driver
 Engines: --engine python (default) runs material.py / material_TC.py; --engine fortran (consistent kinetics only)
 runs the closed-system driver 10_CL_DIFF_CS_SFR_FI_TC/main_closed.f90 (same model and integration directions as the
-UMAT, about 200x faster), compiled from that folder with
-  cat global.f90 > umat.f90; find . -type f -path '*src/material_AFFCL*' -name '*.f90' -exec cat {} >> umat.f90 \\;
-  gfortran -O2 -o laos_closed umat.f90 main_closed.f90
-The executable is FORTRAN_DIR/laos_closed, or --fortran-exe / the environment variable LAOS_CLOSED_EXE.
+UMAT, about 200x faster). FACTOR (number of directions, NDIR = 10 FACTOR^2) is a compile-time constant, so there is one
+executable per factor, FORTRAN_DIR/laos_closed_f<factor>, built by build_laos_closed.sh (default factors 3 6 9):
+  bash build_laos_closed.sh            # or e.g. bash build_laos_closed.sh 3 6
+--factor selects the executable. --fortran-exe / the environment variable LAOS_CLOSED_EXE override it (the factor of
+that executable is then not checked).
 Outputs (in --out): evals.csv (every LAOS run, with per-cycle peaks and cycle-to-cycle change, and the sweep moduli),
                     cache.json (residuals per parameter set, reused on restart
                     only with the same settings, fixed constants, data and model source),
@@ -83,7 +84,7 @@ PARAMS = {
     's_taut':  (1.1, 1.050, 1.200), # 1.0861 a_ratio/lambda0
     'koff0':   (0.15,  0.020, 2.00), # [0.08] k_c + k_s
     'phi':     (0.971, 0.000, 0.9999), # [0.9091] k_c / (k_s + k_c) = k_c / koff0
-    'dxc_nm':  (5.5570,    0.1,   35.0), # 2.
+    'dxc_nm':  (5.5570,    0.0,   35.0), # 2. (lower bound 0.1 until Stage C; 0 = force-independent catch pathway)
     'dxs_nm':  (1.566,    0.1,   20.0), # 0.5
     'keq':        (38.84,     3.0,    50.0),    # k_on_0 / koff0
     'beta':       (0.438,   0.30,   0.70),    # BETA (Unterberger 2013, from Liu & Pollack)
@@ -122,7 +123,7 @@ LSQ = {'method': 'trf', 'x_scale': 1.0, 'ftol': 1e-5, 'xtol': 1e-5, 'gtol': 1e-6
 
 # Fortran engine (closed-system driver main_closed.f90 of the C4 UMAT)
 FORTRAN_DIR = os.path.join(os.path.dirname(REPO), '10_CL_DIFF_CS_SFR_FI_TC')
-FORTRAN_EXE_ENV = 'LAOS_CLOSED_EXE'  # path of the compiled driver (default FORTRAN_DIR/laos_closed)
+FORTRAN_EXE_ENV = 'LAOS_CLOSED_EXE'  # path of a compiled driver (default FORTRAN_DIR/laos_closed_f<factor>)
 KB_FORTRAN = 1.380649e-5           # k_B of the Fortran code [pN um/K] (Python: 1.38065e-5, see fortran_props)
 
 
@@ -195,8 +196,9 @@ def plate_nodes(n):
     u, w = roots_jacobi(n, 0.0, 2.0)          # weight (1 + u)^2 on [-1, 1]; x = (1 + u)/2
     return 0.5 * (1.0 + u), 0.5 * w           # sum(w * x) = 1: a linear material gives sigma(gamma_A)
 
-def fortran_exe():
-    return os.environ.get(FORTRAN_EXE_ENV, os.path.join(FORTRAN_DIR, 'laos_closed'))
+def fortran_exe(factor):
+    """Driver compiled with FACTOR = factor (build_laos_closed.sh), unless overridden by LAOS_CLOSED_EXE."""
+    return os.environ.get(FORTRAN_EXE_ENV, os.path.join(FORTRAN_DIR, f'laos_closed_f{factor}'))
 
 
 def fortran_sources():
@@ -206,16 +208,13 @@ def fortran_sources():
 
 
 def check_fortran(factor):
-    """Stop if the Fortran driver is missing, older than its sources, or compiled for another factor."""
-    exe = fortran_exe()
+    """Stop if the Fortran driver of this factor is missing or older than its sources."""
+    exe = fortran_exe(factor)
     if not os.access(exe, os.X_OK):
-        sys.exit(f'--engine fortran: executable {exe} not found (see the compile line in the docstring)')
+        sys.exit(f'--engine fortran: executable {exe} not found (build it with: bash build_laos_closed.sh {factor})')
     newest = max(fortran_sources(), key=os.path.getmtime)
     if os.path.getmtime(exe) < os.path.getmtime(newest):
-        sys.exit(f'--engine fortran: {exe} is older than {newest}: recompile')
-    m = re.search(r'PARAMETER\s*\(\s*FACTOR\s*=\s*(\d+)', open(fortran_sources()[0]).read(), re.I)
-    if not m or int(m.group(1)) != factor:
-        sys.exit(f'--engine fortran: FACTOR in global.f90 is {m.group(1) if m else "?"}, but --factor {factor}')
+        sys.exit(f'--engine fortran: {exe} is older than {newest}: rebuild (bash build_laos_closed.sh {factor})')
 
 
 def fortran_props(p):
@@ -236,7 +235,7 @@ def simulate_fortran(p, cfg, t):
     (preferred direction (1, 0, 0) hard-coded there, as FIXED_MECH['prefdir'])."""
     inp = (' '.join(repr(float(v)) for v in fortran_props(p)) + '\n' +
            f"{float(cfg['gamma_A'])!r} {FREQ!r} {float(cfg['dt'])!r} {len(t) - 1}\n")
-    r = subprocess.run([fortran_exe()], input=inp, capture_output=True, text=True, check=True)
+    r = subprocess.run([fortran_exe(cfg['factor'])], input=inp, capture_output=True, text=True, check=True)
     out = np.array([[float(x) for x in line.split()] for line in r.stdout.splitlines() if line.strip()])
     if out.shape != (len(t) - 1, 5):
         raise RuntimeError(f'Fortran driver returned {out.shape} values: {r.stderr.strip()[-300:]}')
@@ -564,7 +563,7 @@ def main():
                     help='thermodynamically consistent kinetics (material_TC.py, kinetics = consistent)')
     ap.add_argument('--engine', choices=('python', 'fortran'), default='python',
                     help='simulations with material*.py or with the Fortran driver main_closed.f90 (consistent kinetics)')
-    ap.add_argument('--fortran-exe', default=None, help=f'Fortran driver (default: ${FORTRAN_EXE_ENV} or FORTRAN_DIR/laos_closed)')
+    ap.add_argument('--fortran-exe', default=None, help=f'Fortran driver (default: ${FORTRAN_EXE_ENV} or FORTRAN_DIR/laos_closed_f<factor>)')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
 
@@ -619,7 +618,7 @@ def main():
                          'n_sweep_rows': n_sweep(cfg), 'SWEEP_FAIL': SWEEP_FAIL},
              'sweep_data_files': list(SWEEP_DATA) if n_sweep(cfg) else [],
              'steady_tol': STEADY_TOL,
-             'engine': ({'name': 'fortran', 'exe': fortran_exe(), 'fortran_dir': FORTRAN_DIR, 'kb_fortran': KB_FORTRAN}
+             'engine': ({'name': 'fortran', 'exe': fortran_exe(a.factor), 'fortran_dir': FORTRAN_DIR, 'kb_fortran': KB_FORTRAN}
                         if a.engine == 'fortran' else {'name': 'python'}),
              'optimiser': {**LSQ, 'max_nfev': a.max_nfev, 'h': a.h, 'workers': a.workers, 'evaluate_only': a.evaluate_only},
              'versions': {'numpy': np.__version__, 'scipy': scipy.__version__, 'python': sys.version.split()[0]}}

@@ -27,12 +27,9 @@ export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 WORKERS=${WORKERS:-3}
 FDIR=../10_CL_DIFF_CS_SFR_FI_TC
 
-# --- build the closed-system driver (laos_closed) if needed ---
-if [ ! -x $FDIR/laos_closed ] || [ -n "$(find $FDIR/global.f90 $FDIR/main_closed.f90 $FDIR/src/material_AFFCL -name '*.f90' -newer $FDIR/laos_closed)" ]; then
-  ( cd $FDIR && cat global.f90 > umat.f90 && \
-    find . -type f -path '*src/material_AFFCL*' -name '*.f90' -exec cat {} >> umat.f90 \; && \
-    gfortran -O2 -o laos_closed umat.f90 main_closed.f90 )
-  echo "built $FDIR/laos_closed"
+# --- build the closed-system driver for factor 3 (laos_closed_f3) if needed (see build_laos_closed.sh) ---
+if [ ! -x $FDIR/laos_closed_f3 ] || [ -n "$(find $FDIR/global.f90 $FDIR/main_closed.f90 $FDIR/src/material_AFFCL -name '*.f90' -newer $FDIR/laos_closed_f3)" ]; then
+  bash build_laos_closed.sh 3
 fi
 
 BASE="--consistent-kinetics --engine fortran --dt 0.1 --factor 3 --cycles 5 --max-nfev 40"
