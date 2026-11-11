@@ -3,7 +3,7 @@
 
 SUBROUTINE affclnetfic_discrete(sfic,cfic,f,unit2,filprops,affprops,  &
   efi,noel,det,prefdir,ndi,cb,dtime,chemprops, &
-  thetaf, cbtau_tot, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf, lamn, imode)
+  thetaf, cbtau_tot, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf, lamn, imode, f_t, thetaf_t)
 
 
 
@@ -35,6 +35,8 @@ DOUBLE PRECISION, INTENT(OUT)            :: dcbdthetaf ! G = dcb_tot/dthetaf (at
 DOUBLE PRECISION, INTENT(OUT)            :: dsficdthetaf(ndi,ndi) ! d(fictitious Cauchy)/dthetaf via cb_i
 DOUBLE PRECISION, INTENT(IN OUT)         :: cb(ndir)
 DOUBLE PRECISION, INTENT(IN OUT)         :: lamn(ndir)
+DOUBLE PRECISION, INTENT(IN)             :: f_t(ndi,ndi)   ! distortion gradient at the start of the increment
+DOUBLE PRECISION, INTENT(IN)             :: thetaf_t       ! thetaf at the start of the increment
 
 INTEGER :: i1,j1,k1,l1,m1, im1, isub, n_sub
 INTEGER, PARAMETER :: nargs = 19
@@ -67,7 +69,15 @@ INTEGER :: nhard, nacc, nsub_max
 ! (larger factor used): slow kinetics (kh << 1) err ~ |dcb|*kh/2; fast kinetics (kh >> 1,
 ! quasi-equilibrium, e.g. complete unbinding) err ~ |dcb|/kh -> 0.
 DOUBLE PRECISION, PARAMETER :: DH_MIN = 0.1d0, DCB_MAX = 0.1d0, CB_SCALE = 1.0d-3
-INTEGER, PARAMETER :: MAX_SUBSTEPS = 64
+! Sub-stepping is off (MAX_SUBSTEPS = 1): the time step is controlled through PNEWDT by the error estimate below
+INTEGER, PARAMETER :: MAX_SUBSTEPS = 1
+! Backward-Euler local error estimate per direction (imode = 2): err = |dy - dt*ydot_t|/2 (y = lamn, absolute;
+! y = cb, relative), ydot_t the rate at the start-of-increment state; PNEWDT = SAFETY_DT/sqrt(max err/TOL)
+! (local error ~ dt^2), < 1 rejects the increment, otherwise at most PNEWDT_MAX (growth)
+! Tolerances calibrated 2026-11-07 (main_sa.f90 vs fixed fine steps): max stress error about 1 % or less
+DOUBLE PRECISION, PARAMETER :: TOL_LAMN = 3.0d-6, TOL_CB = 3.0d-5
+DOUBLE PRECISION, PARAMETER :: SAFETY_DT = 0.9d0, PNEWDT_MIN = 0.25d0, PNEWDT_MAX = 1.5d0
+DOUBLE PRECISION :: lambda_t_i, mfi_t(ndi), kon_t, bind_t, rate_cb_t, rate_lamn_t, err_i, err_max, args_t(nargs)
 DOUBLE PRECISION :: dPK2filficdcb(ndi,ndi), pfdlambdadcfil(ndi,ndi), cfilficchem(ndi,ndi,ndi,ndi)
 
 ! Stretch-free rebinding (SFR)
@@ -183,6 +193,7 @@ off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
   nhard = 0
   nacc = 0
   nsub_max = 1
+  err_max = zero
   dHdcb_min = huge(one)
 !----------------------------------------------------------------------
   
@@ -239,7 +250,7 @@ do face = 1, face_num/2
         ! write(*,*) 'mf0i =', mf0i
         CALL deffil(lambdai,mfi,mf0i,f,ndi)
         
-        CALL bangle(ang,f,mfi,noel,pd,ndi)
+        CALL bangle(ang,f,mf0i,noel,prefdir0,ndi)
         
         CALL density(rho,ang,bdisp,efi)
         
@@ -322,22 +333,6 @@ do face = 1, face_num/2
               ok_i = .FALSE.
               hard_i = .TRUE.
             END IF
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            !!!!!!!!!!!  CHECK IF THIS CAN BE REPLACED BY A SIMPLER APPROACH  !!!!!!!!!!
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            ! |dH/dcb - 1| = dt_sub * |dR/dcb| and tau_k = 1/|dR/dcb| is the local kinetic time scale
-            ! kh_i = dt_sub / tau_k = |dH/dcb - 1| measures the sub-step length relative to the kinetics
-            kh_i = ABS(dHdcb_i - one)
-            gerr_i = MIN(half * kh_i, one / MAX(kh_i, 1.0d-300))
-            cbx_i = cb_sub
-            ! dH/dcb at the start of the sub-step (cb_sub), for kh at the start in the error check below
-            ! (same evaluation as the first one in solveKinetics, which only returns dH/dcb at the root)
-            CALL kineticsFunc(cbx_i, Hx_i, dHdcbx_i, dHdlambdax_i, args, nargs)
-            kh_i = ABS(dHdcbx_i - one)
-            gerr_i = MAX(gerr_i, MIN(half * kh_i, one / MAX(kh_i, 1.0d-300)))
-            IF (ABS(cb_new - cb_sub) * gerr_i &
-                > DCB_MAX * MAX(MIN(cb_sub, cb_new), CB_SCALE * cbmax)) ok_i = .FALSE.
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             dHdcb_min = MIN(dHdcb_min, dHdcb_i)
             cb_sub = cb_new
             ! Abandon this attempt and refine (the last attempt is always completed)
@@ -360,7 +355,30 @@ do face = 1, face_num/2
         cb(node_num) = cbtau_i
         lamn(node_num) = lamn_sub
         thetab_i = cbtau_i / cbmax
-        
+
+        ! Local error estimate of the Backward-Euler step (final call only): rates of cb and lamn at the
+        ! start-of-increment state (cb, lamn, stretch and thetaf at t); the cb rate from the kinetics residual
+        ! at cb = cb_t (H = -R dt)
+        IF (imode == 2) THEN
+          CALL deffil(lambda_t_i, mfi_t, mf0i, f_t, ndi)
+          kon_t = (Koff0 + Kcatch0) * Keq * EXP(CHI * (one - two * thetaf_t))
+          bind_t = kon_t * cfmax * thetaf_t / (one - thetaf_t)
+          args_t = args
+          args_t(1) = lambda_t_i / lamn_t
+          args_t(12) = dtime
+          args_t(13) = kon_t
+          args_t(15) = thetaf_t
+          args_t(16) = cbt_i
+          cbx_i = cbt_i
+          CALL kineticsFunc(cbx_i, Hx_i, dHdcbx_i, dHdlambdax_i, args_t, nargs)
+          rate_cb_t = - Hx_i / dtime
+          rate_lamn_t = zero
+          IF (sfr > half) rate_lamn_t = bind_t / cbt_i * (lambda_t_i - lamn_t)
+          err_i = MAX(half * ABS(lamn_sub - lamn_t - dtime * rate_lamn_t) / TOL_LAMN, &
+                      half * ABS(cbtau_i - cbt_i - dtime * rate_cb_t) / (TOL_CB * MAX(cbt_i, CB_SCALE * cbmax)))
+          err_max = MAX(err_max, err_i)
+        END IF
+
         ! Stress and tangent of the direction (skipped in kinetics-only calls, imode = 1)
         IF (imode == 2) THEN
           ! FINAL STATE UPDATE
@@ -486,6 +504,15 @@ do face = 1, face_num/2
   IF (nacc > 0) THEN
     write(*,*) 'WARNING: kinetics accuracy check not met with', MAX_SUBSTEPS, 'sub-steps in', nacc, &
                'directions (result kept). noel =', noel
+  END IF
+  ! Time-step control from the local error estimate (final call only): reject (PNEWDT < 1) if the largest
+  ! scaled error exceeds 1, otherwise allow growth up to PNEWDT_MAX
+  IF ((imode == 2) .AND. (err_max > zero)) THEN
+    IF (err_max > one) THEN
+      pnewdt = MIN(pnewdt, MAX(PNEWDT_MIN, SAFETY_DT / SQRT(err_max)))
+    ELSE
+      pnewdt = MIN(pnewdt, MAX(one, MIN(PNEWDT_MAX, SAFETY_DT / SQRT(err_max))))
+    END IF
   END IF
 !
 !  Discard allocated memory.

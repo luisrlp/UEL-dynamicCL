@@ -3,7 +3,7 @@
 
 SUBROUTINE affclnetfic_discrete(sfic,cfic,f,unit2,filprops,affprops,  &
   efi,noel,det,prefdir,ndi,cb,dtime,chemprops, &
-  thetaf, cbtau_tot, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf, lamn, imode)
+  thetaf, cbtau_tot, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf, lamn, imode, f_t, thetaf_t)
 
 
 
@@ -35,6 +35,8 @@ DOUBLE PRECISION, INTENT(OUT)            :: dcbdthetaf ! G = dcb_tot/dthetaf (at
 DOUBLE PRECISION, INTENT(OUT)            :: dsficdthetaf(ndi,ndi) ! d(fictitious Cauchy)/dthetaf via cb_i
 DOUBLE PRECISION, INTENT(IN OUT)         :: cb(ndir)
 DOUBLE PRECISION, INTENT(IN OUT)         :: lamn(ndir)
+DOUBLE PRECISION, INTENT(IN)             :: f_t(ndi,ndi)   ! distortion gradient at the start of the increment
+DOUBLE PRECISION, INTENT(IN)             :: thetaf_t       ! thetaf at the start of the increment
 
 INTEGER :: i1,j1,k1,l1,m1, im1, isub, n_sub
 INTEGER, PARAMETER :: nargs = 21
@@ -57,19 +59,22 @@ DOUBLE PRECISION :: dHdcb_i, dHdlambda_i, dcbdlambda_i, dHdcb_min, kh_i, gerr_i,
 LOGICAL :: conv_i, atb_i, ok_i, hard_i
 INTEGER :: nhard, nacc, nsub_max
 DOUBLE PRECISION :: g_rest, x_rest, rt, kactin, x_i, f_st, dxdle_i, dfdle_i, g_st, dgdf_st, s_i
-DOUBLE PRECISION :: bind_flux, dbindflux_dth, dHdth_i, dHds_i, dHdthx_i, dHdsx_i, dledl, dsdl, dbfdl
-! Kinetics sub-stepping (per direction). The whole increment is tried first (n_sub = 1); it is
-! repeated from the start-of-increment state with n_sub = 2, 4, ... <= MAX_SUBSTEPS sub-steps of
-! dtime/n_sub if, in any sub-step, the solve does not converge, dH/dcb at the root < DH_MIN
-! (uniqueness of the Backward-Euler root being lost), or the estimated Backward-Euler error
-! exceeds DCB_MAX*max(min(cb_start, cb_end), CB_SCALE*cbmax) (accuracy, relative to the smaller
-! of the two values). Error estimate (exact order for linear kinetics):
-! err = |cb change| * min(kh/2, 1/kh), with kh = dt_sub*|dR/dcb| = |dH/dcb - 1| the sub-step
-! length over the kinetic time scale, evaluated at the start and at the end of the sub-step
-! (larger factor used): slow kinetics (kh << 1) err ~ |dcb|*kh/2; fast kinetics (kh >> 1,
-! quasi-equilibrium, e.g. complete unbinding) err ~ |dcb|/kh -> 0.
+DOUBLE PRECISION :: bind_flux, dHdth_i, dHds_i, dHdthx_i, dHdsx_i
+DOUBLE PRECISION :: dledlambda_i, dledthetaf_i, dsdlambda_i, dsdthetaf_i, dbindfluxdlambda_i, dbindfluxdthetaf_i
+! Sub-steps k > 1: x and the force are evaluated at cb and lamn of the previous sub-step
+DOUBLE PRECISION :: dxdcb_i, dfdcb_i, dxdlamn_i, x_pert, f_pert, dxdle_pert, dfdle_pert
+DOUBLE PRECISION, PARAMETER :: EPS_FD = 1.0d-7      ! relative step of the one-sided differences of xmech
 DOUBLE PRECISION, PARAMETER :: DH_MIN = 0.1d0, DCB_MAX = 0.1d0, CB_SCALE = 1.0d-3
-INTEGER, PARAMETER :: MAX_SUBSTEPS = 64
+! Sub-stepping is off (MAX_SUBSTEPS = 1): the time step is controlled through PNEWDT by the error estimate below
+INTEGER, PARAMETER :: MAX_SUBSTEPS = 1
+! Backward-Euler local error estimate per direction (imode = 2): err = |dy - dt*ydot_t|/2 (y = lamn, absolute;
+! y = cb, relative), ydot_t the rate at the start-of-increment state; PNEWDT = SAFETY_DT/sqrt(max err/TOL)
+! (local error ~ dt^2), < 1 rejects the increment, otherwise at most PNEWDT_MAX (growth)
+! Tolerances calibrated 2026-11-07 (main_sa.f90 vs fixed fine steps): max stress error about 1 % or less
+DOUBLE PRECISION, PARAMETER :: TOL_LAMN = 3.0d-6, TOL_CB = 3.0d-5
+DOUBLE PRECISION, PARAMETER :: SAFETY_DT = 0.9d0, PNEWDT_MIN = 0.25d0, PNEWDT_MAX = 1.5d0
+DOUBLE PRECISION :: lambda_t_i, mfi_t(ndi), le_t, x_t, f_t_i, g_t, dgdf_t, dxdle_t, dfdle_t, s_t, kon_t, bind_t
+DOUBLE PRECISION :: thetab_t, rate_cb_t, rate_lamn_t, err_i, err_max
 DOUBLE PRECISION :: dPK2filficdcb(ndi,ndi), pfdlambdadcfil(ndi,ndi), cfilficchem(ndi,ndi,ndi,ndi)
 
 ! Stretch-free rebinding (SFR)
@@ -189,6 +194,7 @@ off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
   nhard = 0
   nacc = 0
   nsub_max = 1
+  err_max = zero
   dHdcb_min = huge(one)
 !----------------------------------------------------------------------
   
@@ -245,7 +251,7 @@ do face = 1, face_num/2
         ! write(*,*) 'mf0i =', mf0i
         CALL deffil(lambdai,mfi,mf0i,f,ndi)
         
-        CALL bangle(ang,f,mfi,noel,pd,ndi)
+        CALL bangle(ang,f,mf0i,noel,prefdir0,ndi)
         
         CALL density(rho,ang,bdisp,efi)
         
@@ -310,51 +316,61 @@ do face = 1, face_num/2
                         mu0str, beta, b0, lambda0, kactin, rt)
             s_i = EXP(-(x_i - x_rest)) / g_rest
             CALL koffcs(g_st, dgdf_st, f_st, Koff0, Kcatch0, dx / (kb * theta), dxc / (kb * theta))
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             bind_flux = bind * s_i * g_st                ! C4 binding flux of the reference update
-            dbindflux_dth = dbinddthetaf * s_i * g_st
+            ! From sub-step 2 on, cb_sub and lamn_sub depend on lambda and thetaf through the earlier
+            ! sub-steps: partial derivatives of x and of the force with respect to them (one-sided
+            ! differences of xmech). In sub-step 1 they are start-of-increment values: no terms.
+            IF (isub > 1) THEN
+              CALL xmech(x_pert, f_pert, dxdle_pert, dfdle_pert, cb_sub * (one + EPS_FD), lambdai / lamn_sub, &
+                         lamn_sub, aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin, rt)
+              dxdcb_i = (x_pert - x_i) / (cb_sub * EPS_FD)          ! dx/dcb at fixed le, lamn
+              dfdcb_i = (f_pert - f_st) / (cb_sub * EPS_FD)         ! df/dcb at fixed le
+              CALL xmech(x_pert, f_pert, dxdle_pert, dfdle_pert, cb_sub, lambdai / lamn_sub, &
+                         lamn_sub * (one + EPS_FD), aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin, rt)
+              dxdlamn_i = (x_pert - x_i) / (lamn_sub * EPS_FD)      ! dx/dlamn at fixed le, cb (reservoir term)
+            ELSE
+              dxdcb_i = zero
+              dfdcb_i = zero
+              dxdlamn_i = zero
+            END IF
             args(20) = s_i
             args(21) = dbinddthetaf
-            dledl = (one - (lambdai / lamn_sub) * dlamndlambda_i) / lamn_sub   ! before the SFR update
-            dsdl  = - s_i * dxdle_i * dledl
-            dbfdl = bind_flux * (- dxdle_i + dgdf_st / g_st * dfdle_i) * dledl
+            ! Total derivatives at the start of the sub-step (before the SFR update) of le = lambda/lamn,
+            ! of s_i = exp(-(x - x_rest))/g_rest and of the binding flux bind*s_i*g(f)
+            dledlambda_i = (one - (lambdai / lamn_sub) * dlamndlambda_i) / lamn_sub
+            dledthetaf_i = - (lambdai / lamn_sub**2) * dlamndthetaf_i
+            dsdlambda_i = - s_i * (dxdle_i * dledlambda_i + dxdcb_i * dcbdlambda_i + dxdlamn_i * dlamndlambda_i)
+            dsdthetaf_i = - s_i * (dxdle_i * dledthetaf_i + dxdcb_i * dcbdthetaf_i + dxdlamn_i * dlamndthetaf_i)
+            dbindfluxdlambda_i = bind_flux * ((- dxdle_i + dgdf_st / g_st * dfdle_i) * dledlambda_i &
+                               + (- dxdcb_i + dgdf_st / g_st * dfdcb_i) * dcbdlambda_i - dxdlamn_i * dlamndlambda_i)
+            dbindfluxdthetaf_i = dbinddthetaf * s_i * g_st &
+                               + bind_flux * ((- dxdle_i + dgdf_st / g_st * dfdle_i) * dledthetaf_i &
+                               + (- dxdcb_i + dgdf_st / g_st * dfdcb_i) * dcbdthetaf_i - dxdlamn_i * dlamndthetaf_i)
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             IF (sfr > half) THEN
               den_n = cb_sub + args(12) * bind_flux
               lamn_prev = lamn_sub
               lamn_sub = (cb_sub * lamn_prev + args(12) * bind_flux * lambdai) / den_n
               dlamndlambda_i = (cb_sub * dlamndlambda_i + args(12) * bind_flux &
-              + (lamn_prev - lamn_sub) * dcbdlambda_i + args(12) * dbfdl * (lambdai - lamn_sub)) / den_n
+              + (lamn_prev - lamn_sub) * dcbdlambda_i + args(12) * dbindfluxdlambda_i * (lambdai - lamn_sub)) / den_n
               dlamndthetaf_i = (cb_sub * dlamndthetaf_i + (lamn_prev - lamn_sub) * dcbdthetaf_i &
-              + args(12) * dbindflux_dth * (lambdai - lamn_sub)) / den_n
+              + args(12) * dbindfluxdthetaf_i * (lambdai - lamn_sub)) / den_n
             END IF
             lambdar = lambdai / lamn_sub
             dlrdl = (one - lambdar * dlamndlambda_i) / lamn_sub
             dlrdth = - lambdar / lamn_sub * dlamndthetaf_i
             args(1) = lambdar
             CALL solveKinetics(cb_new, args, nargs, cb_sub, conv_i, atb_i, dHdcb_i, dHdlambda_i, dHdth_i, dHds_i)
-            IF (dHdcb_i /= zero) dcbdlambda_i = (dcbdlambda_i - dHdlambda_i * dlrdl - dHds_i * dsdl) / dHdcb_i
+            IF (dHdcb_i /= zero) dcbdlambda_i = (dcbdlambda_i - dHdlambda_i * dlrdl - dHds_i * dsdlambda_i) / dHdcb_i
             dHdthetaf_i = dHdth_i                        ! C4: -dt_sub * koff(f_root) * s_i * dbind/dthetaf
-            IF (dHdcb_i /= zero) dcbdthetaf_i = (dcbdthetaf_i - dHdthetaf_i - dHdlambda_i * dlrdth) / dHdcb_i
+            IF (dHdcb_i /= zero) dcbdthetaf_i = (dcbdthetaf_i - dHdthetaf_i - dHdlambda_i * dlrdth &
+                                                - dHds_i * dsdthetaf_i) / dHdcb_i
             ! Hard failures (no converged root, or uniqueness being lost)
             IF ((.NOT. conv_i) .OR. (dHdcb_i < DH_MIN)) THEN
               ok_i = .FALSE.
               hard_i = .TRUE.
             END IF
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            !!!!!!!!!!!  CHECK IF THIS CAN BE REPLACED BY A SIMPLER APPROACH  !!!!!!!!!!
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            ! |dH/dcb - 1| = dt_sub * |dR/dcb| and tau_k = 1/|dR/dcb| is the local kinetic time scale
-            ! kh_i = dt_sub / tau_k = |dH/dcb - 1| measures the sub-step length relative to the kinetics
-            kh_i = ABS(dHdcb_i - one)
-            gerr_i = MIN(half * kh_i, one / MAX(kh_i, 1.0d-300))
-            cbx_i = cb_sub
-            ! dH/dcb at the start of the sub-step (cb_sub), for kh at the start in the error check below
-            ! (same evaluation as the first one in solveKinetics, which only returns dH/dcb at the root)
-            CALL kineticsFunc(cbx_i, Hx_i, dHdcbx_i, dHdlambdax_i, dHdthx_i, dHdsx_i, args, nargs)
-            kh_i = ABS(dHdcbx_i - one)
-            gerr_i = MAX(gerr_i, MIN(half * kh_i, one / MAX(kh_i, 1.0d-300)))
-            IF (ABS(cb_new - cb_sub) * gerr_i &
-                > DCB_MAX * MAX(MIN(cb_sub, cb_new), CB_SCALE * cbmax)) ok_i = .FALSE.
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             dHdcb_min = MIN(dHdcb_min, dHdcb_i)
             cb_sub = cb_new
             ! Abandon this attempt and refine (the last attempt is always completed)
@@ -377,7 +393,27 @@ do face = 1, face_num/2
         cb(node_num) = cbtau_i
         lamn(node_num) = lamn_sub
         thetab_i = cbtau_i / cbmax
-        
+
+        ! Local error estimate of the Backward-Euler step (final call only): rates of cb and lamn at the
+        ! start-of-increment state (cb, lamn, stretch and thetaf at t), with the same kinetics as the update
+        IF (imode == 2) THEN
+          CALL deffil(lambda_t_i, mfi_t, mf0i, f_t, ndi)
+          le_t = lambda_t_i / lamn_t
+          CALL xmech(x_t, f_t_i, dxdle_t, dfdle_t, cbt_i, le_t, lamn_t, aratio, r0c, etac, &
+                     mu0str, beta, b0, lambda0, kactin, rt)
+          CALL koffcs(g_t, dgdf_t, f_t_i, Koff0, Kcatch0, dx / (kb * theta), dxc / (kb * theta))
+          s_t = EXP(-(x_t - x_rest)) / g_rest
+          kon_t = (Koff0 + Kcatch0) * Keq * EXP(CHI * (one - two * thetaf_t))
+          bind_t = kon_t * cfmax * thetaf_t / (one - thetaf_t)
+          thetab_t = cbt_i / cbmax
+          rate_cb_t = g_t * (bind_t * s_t - cbmax * thetab_t / (one - thetab_t))
+          rate_lamn_t = zero
+          IF (sfr > half) rate_lamn_t = bind_t * s_t * g_t / cbt_i * (lambda_t_i - lamn_t)
+          err_i = MAX(half * ABS(lamn_sub - lamn_t - dtime * rate_lamn_t) / TOL_LAMN, &
+                      half * ABS(cbtau_i - cbt_i - dtime * rate_cb_t) / (TOL_CB * MAX(cbt_i, CB_SCALE * cbmax)))
+          err_max = MAX(err_max, err_i)
+        END IF
+
         ! Stress and tangent of the direction (skipped in kinetics-only calls, imode = 1)
         IF (imode == 2) THEN
           ! FINAL STATE UPDATE
@@ -503,6 +539,15 @@ do face = 1, face_num/2
   IF (nacc > 0) THEN
     write(*,*) 'WARNING: kinetics accuracy check not met with', MAX_SUBSTEPS, 'sub-steps in', nacc, &
                'directions (result kept). noel =', noel
+  END IF
+  ! Time-step control from the local error estimate (final call only): reject (PNEWDT < 1) if the largest
+  ! scaled error exceeds 1, otherwise allow growth up to PNEWDT_MAX
+  IF ((imode == 2) .AND. (err_max > zero)) THEN
+    IF (err_max > one) THEN
+      pnewdt = MIN(pnewdt, MAX(PNEWDT_MIN, SAFETY_DT / SQRT(err_max)))
+    ELSE
+      pnewdt = MIN(pnewdt, MAX(one, MIN(PNEWDT_MAX, SAFETY_DT / SQRT(err_max))))
+    END IF
   END IF
 !
 !  Discard allocated memory.

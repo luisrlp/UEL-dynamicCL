@@ -2312,7 +2312,7 @@ END DO
         mf0i=node_xyz
         CALL deffil(lambdai,mfi,mf0i,f,ndi)
 
-        CALL bangle(ang,f,mfi,noel,pd,ndi)
+        CALL bangle(ang,f,mf0i,noel,prefdir0,ndi)
   
         CALL density(rho,ang,bdisp,efi)
 

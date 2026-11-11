@@ -57,6 +57,7 @@ DOUBLE PRECISION :: distgr(ndi,ndi),c(ndi,ndi),b(ndi,ndi),  &
     ubar(ndi,ndi),vbar(ndi,ndi),rot(ndi,ndi), dfgrd1inv(ndi,ndi), &
     cinv(ndi,ndi), cbarinv(ndi,ndi)
 DOUBLE PRECISION :: det,detfe, detfs,cbari1,cbari2
+DOUBLE PRECISION :: distgr_t(ndi,ndi), det_t        ! distortion gradient at the start of the increment
 !     VOLUMETRIC CONTRIBUTION
 DOUBLE PRECISION :: pkvol(ndi,ndi),svol(ndi,ndi),  &
     cvol(ndi,ndi,ndi,ndi),cmvol(ndi,ndi,ndi,ndi)
@@ -269,6 +270,7 @@ CALL sdvread(statev, thetaf_t, cb, cb_tot, lamn)
 !----------------------------------------------------------------------
 !     DISTORTION GRADIENT
 CALL fslip(dfgrd1,distgr,det,ndi)
+CALL fslip(dfgrd0,distgr_t,det_t,ndi)
 !     INVERSE OF DEFORMATION GRADIENT
 CALL matinv3d(dfgrd1,dfgrd1inv,ndi)
 !     INVERSE OF DISTORTION GRADIENT
@@ -371,7 +373,8 @@ CALL projlag(c,unit4,projl,ndi)
       IF (phinet > zero) THEN
         CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,unit2,filprops,  &
              affprops,efi,noel,det,prefdir,ndi,cb,dtime,chemprops, &
-             thetaf_tau, cb_tot_new, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf, lamn, 2)
+             thetaf_tau, cb_tot_new, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf, lamn, 2, &
+             distgr_t, thetaf_t)
       END IF
       ARGS(9) = cb_tot_new
 
@@ -631,7 +634,7 @@ CONTAINS
     dcbdthetaf = zero
     CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,unit2,filprops,  &
         affprops,efi,noel,det,prefdir,ndi,cb_try,dtime,chemprops, &
-        thv, cb_tot_new, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf, lamn_try, 1)
+        thv, cb_tot_new, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf, lamn_try, 1, distgr_t, thetaf_t)
     ARGS(9) = cb_tot_new
     thc = thv
     CALL thetafFunc(thc, Fv, Fpv, ARGS, NARGS)

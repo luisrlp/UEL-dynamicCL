@@ -240,6 +240,18 @@ Also remove the `lambdaif >= 1.18` debug print (line 252). With the extensible f
 - **When a direction is unresolved** (not converged at `MAX_SUBSTEPS`): set `PNEWDT = min(PNEWDT, 0.5d0)` and write **one** warning per call, giving the element, the integration point and the number of unresolved directions. Abaqus then repeats the increment with a smaller Δt. This replaces the old `call exit`.
 - **Do not** cut back just because sub-stepping was needed. `PNEWDT < 1` discards a converged increment, and sub-stepping exists to avoid that.
 
+### F6b. Time-step control by a local error estimate (2026-11-07, folders 9 and 10) — supersedes the F5 accuracy check
+- **Finding:** the F5 sub-steps hold the stretch λᵢ and θ_f at their end-of-increment values and the accuracy check only watches c_b. With stretch-free binding λ_n is driven by (λ − λ_n), so in fast loading λ_n over-slides and refining the sub-steps does not reduce the error (ramp γ = 0.2 in 1 s at Δt = 0.025 s: −18 % stress; LAOS γ_A = 0.158: −1.4 % peak stress).
+- **Implemented ("option B"):** `MAX_SUBSTEPS = 1` (the sub-step loop is kept but inactive), the c_b-only check is removed, and the final call (`imode = 2`) computes a Backward-Euler error estimate per direction, ½|Δy − Δt·ẏᵗ| for y = λ_n (absolute, `TOL_LAMN = 3e-6`) and y = c_b (relative, `TOL_CB = 3e-5`), with ẏᵗ the rate at the start-of-increment state (new arguments `f_t`, `thetaf_t`). `PNEWDT = 0.9/√err_max`: below 1 the increment is repeated, otherwise growth up to 1.5. Hard failures still give `PNEWDT = ½`.
+- **Consequence:** one direction above the tolerance repeats the increment for the whole model. The local drivers (`main_sa.f90`, `main_closed.f90`) apply the same reject/grow loop as Abaqus.
+
+**TO DO — "option A": local sub-stepping with interpolated kinematics (only if the global cut-backs are too expensive in FE runs)**
+- Reactivate the per-direction sub-steps (`MAX_SUBSTEPS > 1`), but interpolate the stretch and θ_f across them: λᵢ,ₖ = λᵢᵗ + (k/n)(λᵢ^τ − λᵢᵗ) (λᵢᵗ from `f_t`, already passed), θ_f,ₖ likewise from `thetaf_t`.
+- Include λ_n in the sub-step accuracy check (the F6b estimate per sub-step, with the same tolerances), so the global increment is only cut for hard failures.
+- Tangent: the sensitivity recursion of F5 needs dλᵢ,ₖ/dλᵢ^τ = k/n and dθ_f,ₖ/dθ_f^τ = k/n in every sub-step (instead of 1); re-run the finite-difference checks of the material and element tangents.
+- Closed-system / θ_f solve: the `imode = 1` calls must use the same interpolation, so that the mass balance is solved with the kinetics that the final call uses.
+- Verification: same fixed fine-step references as the F6b calibration (stress error ≤ ~1 %), and the number of global increments against option B.
+
 ### F7. Diagnostics in STATEV (optional, recommended) [SKIPPED]
 - **`global.f90`:** `NSDV = 16 + NDIR` becomes `18 + NDIR`. `sdvread` and `initialize` address c_b as `nsdv − ndir + i`, so the c_b slots move automatically.
 - **`sdvwrite.f90`:** slot 17 = max `n_sub` over directions, slot 18 = min `dHdcb`. Update the layout comment.
@@ -672,7 +684,7 @@ In 1b, $-\mathrm{ResFac} = (\dot c_f + \mathcal R)/\bar J$, so the two parts are
    - compare with an equivalent `*Cflux` distribution (each of the face's 4 nodes getting $-q\,A/4$, positive into the body) to confirm the opposite sign convention of the two keywords.
 
 ### FD validation results (items 1, 3, 4, 5, 7 implemented; 2026-10-08)
-One element, central differences of the residual with `SVARS` reset; `BB` $= 10^{-9}$ unless stated (to remove the neglected $\partial\rho/\partial\mathbf F$ term).
+One element, central differences of the residual with `SVARS` reset; `BB` $= 10^{-9}$ unless stated (at the time, $\rho_i$ was evaluated from the deformed directions; see "Angular density $\rho_i$" below).
 - **States covered:** rotation + general deformation (strain scale 1, 5, 10, 20), node perturbation ($J \neq \bar J$), $\mu$ gradient (100 J/mol), $D = 0$, kinetics off, $V_{mol} \to 0$, prestress `LAMBDA0` $= 1.1$–$1.2$, first increment (KINC = 1), $\Delta t = 0.05$ and $0.5$ s, bulk modulus $K = 1$, 10, 1000 (to resolve the chemical parts of $K_{uu}$).
 - **Force-sensitive kinetics:** the driver ramps the deformation as $s = t/T$, so at the checked increment (KINC = 3) only 15% of the nominal strain is applied, and the forces there were small (< 0.12 pN). At full strain with the study properties the forces are 0.06 pN (max isochoric stretch 1.18), 0.4 pN (1.38) and 1.9 pN (1.38 with `LAMBDA0` $= 1.1$); with $\Delta x/k_BT = 1.2$ pN$^{-1}$ the kinetics are moderately force-sensitive. These full-strain states were added (`tshear` = 0.15, also with $\Delta t = 0.5$ and $K = 1$): all blocks at noise level. The kinetics were also tested with `DX` $= 0.5$, `KCATCH0` $= 0.5$, `DXC` $= 1.0$ (catch peak at $f^\ast \approx 0.008$ pN); there $n_{sub}$ reached 2 and 4.
 - **Results (item 7 included):** $K_{uu}$ $5.5\times10^{-9}$, $K_{cu}$ $\le 4\times10^{-8}$, $K_{cc}$ $\le 2\times10^{-9}$, $K_{uc}$ $5\times10^{-9}$ (with $h_\mu = 0.1$). All remaining differences scale as $1/h$ (round-off).
@@ -710,9 +722,9 @@ One element, central differences of the residual with `SVARS` reset; `BB` $= 10^
   No structural change in `u3d8.f90`: items 5 and 1 already use `MFLUID`, `DmDmu` and `detF*DmDJ`. Rerun the FD check afterwards, and update the mobility definition (and $\partial m/\partial\mu_f$, $\partial m/\partial\bar J$) in `paper/model/res_tang.tex` (K_μμ and K_μu sections). State the chosen convention explicitly in the paper either way.
 - **Magnitude.** $\mathcal O(\bar J - 1)$: small for the nearly isochoric network ($\bar J \approx 1$; $v_{mol}\Delta c$ small), unlike Chester's swelling gels ($J \sim 2$–$10$).
 
-## Neglected
-The angular density $\rho_i$ depends on the deformed direction through `bangle` (fixed `prefdir`). With `BB` $= 10^{-6}$ its derivative is negligible; revisit only for anisotropic networks.
-FD check (after item 1): through $c_{b,\mathrm{tot}} = \sum_i c_{b,i}\,\rho_i\,a_i$ this is the only remaining $K_{cu}$ error, and it scales linearly with `BB`. With `BB` $= 10^{-6}$ it is $3\times10^{-6}$ relative ($8.6\times10^{-10}$ absolute, also with kinetics off, $V_{mol}\to 0$ and $D = 0$). With `BB` $= 10^{-9}$ it falls to $4\times10^{-8}$, the FD noise floor. With `BB` $= 10^{-3}$ it rises to $3\times10^{-3}$.
+## Angular density $\rho_i$ (corrected 2026-11-06)
+The discrete density $\rho_i$ is computed from the reference directions, as in Li et al. 2018 (Eqs. 1.1, 2.7 and 3.1: the PDF, the representative directions $\mathbf N_n$ and the mean direction $\mathbf M$ are all defined in the reference configuration). It depends only on the dispersion parameter `BB` and on $\mathbf m_{0,i}$, so it is constant during the deformation and no derivative enters the tangent.
+The code previously passed the deformed filament and preferred directions to `bangle` (`CALL bangle(ang,f,mfi,noel,pd,ndi)`, with `pd` $= \mathbf F\mathbf M$ normalised), so $\rho_i$ followed the deformation. This made the `BB`-dependent $K_{cu}$ differences seen in the FD checks above. Corrected in the sources and the compiled concatenations of folders 1, 2 and 4–10 to `CALL bangle(ang,f,mf0i,noel,prefdir0,ndi)`; the copies in the `test_in_abaqus/` run folders are unchanged. Results with `BB` $= 10^{-6}$ change by about $10^{-7}$ (F1p loop: 4e-7 Pa).
 
 ## Optional: fully implicit $\theta_f$–$c_b$ update (not planned)
 To remove the one-increment lag of $c_b$ in $J^c$, $\theta_f^{\tau}$ and the bound contents $c_{b,i}^{\tau}$ would have to satisfy, simultaneously,

@@ -5,13 +5,19 @@ PROGRAM main_closed
 !> kinetics-only calls of affclnetfic_discrete, imode = 1) and then evaluates the network stress (imode = 2).
 !> In simple shear (det F = 1, phinet = 1) sigma_12 = sfic(1,2): the deviatoric projection does not change
 !> off-diagonal entries and the pressure only acts on the diagonal.
+!> Time stepping: adaptive, controlled by the PNEWDT of the network routine (Backward-Euler error estimate of the
+!> kinetics), as main_sa.f90: PNEWDT < 1 repeats the increment from the accepted state with dt*PNEWDT, otherwise
+!> the next step is dt*min(PNEWDT, GROWTH_MAX). The steps never exceed dtime and land exactly on the output times
+!> k*dtime, so the output stays on the uniform grid.
 !> Input (stdin):   line 1: PROPS(1:28) (as the UMAT)
-!>                  line 2: gamma0, freq [Hz], dtime [s], ninc
-!> Output (stdout): per increment  t, gamma, sigma_12, thetaf, cb_tot
+!>                  line 2: gamma0, freq [Hz], dtime [s] (output spacing = maximum step), ninc (number of outputs)
+!> Output (stdout): per output time  t, gamma, sigma_12, thetaf, cb_tot
+!> stderr:          number of accepted and rejected increments
 use global
 IMPLICIT NONE
 INTEGER, PARAMETER :: ndi = 3, nprops = 28, maxit = 50
 DOUBLE PRECISION, PARAMETER :: tol_th = 1.0d-14, tol_g = 1.0d-15
+DOUBLE PRECISION, PARAMETER :: GROWTH_MAX = 1.5d0, DT_MIN = 1.0d-9, PNEWDT_CALL = 1.0d10
 DOUBLE PRECISION :: props(nprops)
 !     MODEL CONSTANTS (as _umat_.f90)
 DOUBLE PRECISION :: a, r0c, etac, mu0str, beta, Lp, theta, dx, bb, lambda0, cactin, R, Rfmax, Rbmax
@@ -21,13 +27,18 @@ DOUBLE PRECISION :: x_rest, f_rest, g_rest, dum1, dum2, efi
 DOUBLE PRECISION :: filprops(10), affprops(7), chemprops(12), eqprops(11), prefdir(nelem,4)
 !     KINEMATICS AND NETWORK STATE
 DOUBLE PRECISION :: dfgrd1(ndi,ndi), distgr(ndi,ndi), unit2(ndi,ndi), det
+DOUBLE PRECISION :: distgr_t(ndi,ndi), thetaf_t       ! start of the increment (error estimate of the kinetics)
 DOUBLE PRECISION :: sfic(ndi,ndi), cfic(ndi,ndi,ndi,ndi), dPK2ficdcb(ndi,ndi), dcbdc(ndi,ndi), dsficdthetaf(ndi,ndi)
 DOUBLE PRECISION :: cb(ndir), lamn(ndir), cb_try(ndir), lamn_try(ndir)
 DOUBLE PRECISION :: thetaf, cb_tot, c_tot, cbtot_try, dcbdthetaf, pnewdt
 !     LOADING AND THETAF SOLVE
 DOUBLE PRECISION :: gamma0, freq, dtime, time, gam, pi
 DOUBLE PRECISION :: thl, thh, thx, gx, dgx, dth, dthold
-INTEGER :: ninc, kinc, it, noel, nwarn, nfail
+INTEGER :: ninc, kinc, it, noel, nfail
+!     ADAPTIVE STEPPING (accepted state at the start of the increment, step sizes)
+DOUBLE PRECISION :: cb_acc(ndir), lamn_acc(ndir), cbtot_acc, t_out, t_new, h, h_try, dt_step
+INTEGER :: n_accept, n_reject
+LOGICAL :: limited
 
 READ(*,*) props
 READ(*,*) gamma0, freq, dtime, ninc
@@ -92,61 +103,103 @@ cb = cb0
 lamn = one
 thetaf = (cabp - cb0) / cfmax
 cb_tot = cb0
+distgr = unit2
 pi = four * ATAN(one)
-nwarn = 0
 nfail = 0
+n_accept = 0
+n_reject = 0
+time = zero
+h = dtime
 
 DO kinc = 1, ninc
-  time = DBLE(kinc) * dtime
-  gam = gamma0 * SIN(two * pi * freq * time)
-  dfgrd1 = unit2
-  dfgrd1(1,2) = gam
-  CALL fslip(dfgrd1, distgr, det, ndi)
-  pnewdt = one
+  t_out = DBLE(kinc) * dtime
+  ! Adaptive increments from time to the output time t_out (at most dtime, the last one ends exactly at t_out)
+  DO WHILE (time < t_out - 1.0d-12 * MAX(one, t_out))
+    h_try = MIN(h, dtime, t_out - time)
+    IF (t_out - time - h_try < 0.1d0 * h_try) h_try = t_out - time    ! no sliver before the output time
+    limited = (h_try < h)
+    t_new = time + h_try
+    IF (h_try == t_out - time) t_new = t_out
+    dt_step = h_try
+    gam = gamma0 * SIN(two * pi * freq * t_new)
+    ! accepted state at the start of the increment (restored if the increment is rejected)
+    distgr_t = distgr
+    thetaf_t = thetaf
+    cb_acc = cb
+    lamn_acc = lamn
+    cbtot_acc = cb_tot
+    dfgrd1 = unit2
+    dfgrd1(1,2) = gam
+    CALL fslip(dfgrd1, distgr, det, ndi)
 
-  ! Closed system: g(thetaf) = cfmax*thetaf + cb_tot(thetaf) - c_tot = 0, conserved total content.
-  ! Bracket as material_TC: g(1e-12) < 0 (only unbinding, cb_tot <= cb_tot^t < c_tot), g(c_tot/cfmax) >= 0.
-  c_tot = cfmax * thetaf + cb_tot
-  thl = 1.0d-12
-  thh = MIN(one - 1.0d-8, c_tot / cfmax)
-  thx = thetaf
-  CALL gfun(thx, gx, dgx)
-  dthold = thh - thl
-  dth = dthold
-  DO it = 1, maxit
-    IF (ABS(gx) < tol_g * c_tot) EXIT
-    IF (gx < zero) THEN
-      thl = thx
-    ELSE
-      thh = thx
-    END IF
-    ! Newton if it stays inside the bracket and decreases fast enough, else bisection (RTSAFE)
-    IF ((((thx - thh) * dgx - gx) * ((thx - thl) * dgx - gx) >= zero) .OR. &
-        (ABS(two * gx) > ABS(dthold * dgx))) THEN
-      dthold = dth
-      dth = half * (thh - thl)
-      thx = thl + dth
-    ELSE
-      dthold = dth
-      dth = gx / dgx
-      thx = thx - dth
-    END IF
+    ! Closed system: g(thetaf) = cfmax*thetaf + cb_tot(thetaf) - c_tot = 0, conserved total content.
+    ! Bracket as material_TC: g(1e-12) < 0 (only unbinding, cb_tot <= cb_tot^t < c_tot), g(c_tot/cfmax) >= 0.
+    c_tot = cfmax * thetaf + cb_tot
+    thl = 1.0d-12
+    thh = MIN(one - 1.0d-8, c_tot / cfmax)
+    thx = thetaf
     CALL gfun(thx, gx, dgx)
-    IF (ABS(dth) < tol_th) EXIT
+    dthold = thh - thl
+    dth = dthold
+    DO it = 1, maxit
+      IF (ABS(gx) < tol_g * c_tot) EXIT
+      IF (gx < zero) THEN
+        thl = thx
+      ELSE
+        thh = thx
+      END IF
+      ! Newton if it stays inside the bracket and decreases fast enough, else bisection (RTSAFE)
+      IF ((((thx - thh) * dgx - gx) * ((thx - thl) * dgx - gx) >= zero) .OR. &
+          (ABS(two * gx) > ABS(dthold * dgx))) THEN
+        dthold = dth
+        dth = half * (thh - thl)
+        thx = thl + dth
+      ELSE
+        dthold = dth
+        dth = gx / dgx
+        thx = thx - dth
+      END IF
+      CALL gfun(thx, gx, dgx)
+      IF (ABS(dth) < tol_th) EXIT
+    END DO
+    IF (it > maxit) nfail = nfail + 1
+    thetaf = thx
+
+    ! Final evaluation at the converged thetaf: kinetics from the start-of-increment state + stress.
+    ! pnewdt starts large: the network routine only lowers it (MIN), so values > 1 can signal growth.
+    pnewdt = PNEWDT_CALL
+    CALL affclnetfic_discrete(sfic, cfic, distgr, unit2, filprops, affprops, efi, noel, det, prefdir, ndi, &
+         cb, dt_step, chemprops, thetaf, cb_tot, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf, lamn, 2, &
+         distgr_t, thetaf_t)
+
+    IF (pnewdt < one) THEN          ! rejected: restore the accepted state and repeat with a smaller step
+      n_reject = n_reject + 1
+      cb = cb_acc
+      lamn = lamn_acc
+      thetaf = thetaf_t
+      cb_tot = cbtot_acc
+      distgr = distgr_t
+      h = h_try * pnewdt
+      IF (h < DT_MIN) THEN
+        WRITE(0,*) 'ERROR: time step below', DT_MIN, ' at t =', time
+        STOP 1
+      END IF
+      CYCLE
+    END IF
+    n_accept = n_accept + 1
+    time = t_new
+    IF (limited) THEN               ! step shortened by the output time or dtime: keep h
+      h = MAX(h, h_try * MIN(pnewdt, GROWTH_MAX))
+    ELSE
+      h = h_try * MIN(pnewdt, GROWTH_MAX)
+    END IF
   END DO
-  IF (it > maxit) nfail = nfail + 1
-  thetaf = thx
 
-  ! Final evaluation at the converged thetaf: kinetics from the start-of-increment state + stress
-  CALL affclnetfic_discrete(sfic, cfic, distgr, unit2, filprops, affprops, efi, noel, det, prefdir, ndi, &
-       cb, dtime, chemprops, thetaf, cb_tot, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf, lamn, 2)
-  IF (pnewdt < one) nwarn = nwarn + 1
-
-  WRITE(*,'(5ES24.15)') time, gam, sfic(1,2), thetaf, cb_tot
+  WRITE(*,'(5ES24.15)') t_out, gam, sfic(1,2), thetaf, cb_tot
 END DO
 
 IF (nfail > 0) WRITE(0,*) 'WARNING: closed-system thetaf not converged in', nfail, 'increments'
-IF (nwarn > 0) WRITE(0,*) 'WARNING: local kinetics not resolved (PNEWDT < 1) in', nwarn, 'increments'
+WRITE(0,'(A,I8,A,I8,A)') 'increments: ', n_accept, ' accepted, ', n_reject, ' rejected'
 
 CONTAINS
 
@@ -157,7 +210,8 @@ SUBROUTINE gfun(th, g, dg)
   cb_try = cb
   lamn_try = lamn
   CALL affclnetfic_discrete(sfic, cfic, distgr, unit2, filprops, affprops, efi, noel, det, prefdir, ndi, &
-       cb_try, dtime, chemprops, th, cbtot_try, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf, lamn_try, 1)
+       cb_try, dt_step, chemprops, th, cbtot_try, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf, lamn_try, 1, &
+       distgr_t, thetaf_t)
   g = cfmax * th + cbtot_try - c_tot
   dg = cfmax + dcbdthetaf
 END SUBROUTINE gfun

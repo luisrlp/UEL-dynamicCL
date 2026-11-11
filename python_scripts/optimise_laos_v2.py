@@ -53,7 +53,9 @@ UMAT, about 200x faster). FACTOR (number of directions, NDIR = 10 FACTOR^2) is a
 executable per factor, FORTRAN_DIR/laos_closed_f<factor>, built by build_laos_closed.sh (default factors 3 6 9):
   bash build_laos_closed.sh            # or e.g. bash build_laos_closed.sh 3 6
 --factor selects the executable. --fortran-exe / the environment variable LAOS_CLOSED_EXE override it (the factor of
-that executable is then not checked).
+that executable is then not checked). The Fortran driver steps adaptively (PNEWDT of the network routine, i.e. the
+Backward-Euler error estimate of the kinetics); --dt is then the output spacing and the maximum time step, and the
+outputs stay on the uniform grid k*dt. The Python engine uses fixed steps of --dt (with its own sub-stepping).
 Outputs (in --out): evals.csv (every LAOS run, with per-cycle peaks and cycle-to-cycle change, and the sweep moduli),
                     cache.json (residuals per parameter set, reused on restart
                     only with the same settings, fixed constants, data and model source),
@@ -231,8 +233,9 @@ def fortran_props(p):
 
 
 def simulate_fortran(p, cfg, t):
-    """sigma_xy at the times t (t[0] = 0, constant step dt) from the closed-system Fortran driver main_closed.f90
-    (preferred direction (1, 0, 0) hard-coded there, as FIXED_MECH['prefdir'])."""
+    """sigma_xy at the times t (t[0] = 0, uniform output spacing dt) from the closed-system Fortran driver
+    main_closed.f90 (adaptive steps of at most dt that land on every output time; preferred direction (1, 0, 0)
+    hard-coded there, as FIXED_MECH['prefdir'])."""
     inp = (' '.join(repr(float(v)) for v in fortran_props(p)) + '\n' +
            f"{float(cfg['gamma_A'])!r} {FREQ!r} {float(cfg['dt'])!r} {len(t) - 1}\n")
     r = subprocess.run([fortran_exe(cfg['factor'])], input=inp, capture_output=True, text=True, check=True)
@@ -547,7 +550,8 @@ def main():
     ap.add_argument('--fix', action='append', default=[], help='name=value, e.g. dxs_nm=0.5 (repeatable)')
     ap.add_argument('--free', action='append', default=[], help=f'release a default-fixed parameter {DEFAULT_FIXED} (repeatable)')
     ap.add_argument('--x0', action='append', default=[], help='name=value to override a starting value')
-    ap.add_argument('--dt', type=float, default=0.1)
+    ap.add_argument('--dt', type=float, default=0.1,
+                    help='time step [s]; --engine fortran: output spacing and maximum step (adaptive steps in between)')
     ap.add_argument('--factor', type=int, default=3)
     ap.add_argument('--cycles', type=int, default=3, help='simulated cycles from rest; the last one is fitted')
     ap.add_argument('--overshoot-weight', type=float, default=0.0, help='weight of the early-cycle overshoot penalty (0 = off)')
