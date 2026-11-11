@@ -16,6 +16,7 @@ python_scripts/old
 # Specific Files to Ignore
 # =========================
 GEMINI.md
+python_scripts/*.md
 
 # =========================
 # Abaqus Ignore List

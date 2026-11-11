@@ -360,11 +360,12 @@ SUBROUTINE write_increment()
 END SUBROUTINE write_increment
 
 SUBROUTINE write_snapshots()
-  ! All directions at the first increment at or after each requested time (within half the time step)
+  ! All directions at the increment that ends at each requested time (snapshot times are breakpoints, which the
+  ! adaptive steps reach exactly; the tolerance only covers round-off of the accumulated time)
   DOUBLE PRECISION :: cb_i, lamn_i, lambar_i, lame_i, force_i, g_i, x_i, affinity_i, rate_i, dr_i, dc_i
   INTEGER :: idir
   DO WHILE (isnap <= nsnap)
-    IF (t < tsnap(isnap) - half * dtime) EXIT
+    IF (t < tsnap(isnap) - 1.0d-9 * MAX(one, tsnap(isnap))) EXIT
     DO idir = 1, ndir
       CALL direction_state(idir, cb_i, lamn_i, lambar_i, lame_i, force_i, g_i, x_i, affinity_i, rate_i, dr_i, dc_i)
       WRITE(11,'(I4,2ES24.15,I6,13ES24.15)') isnap, t, gamma, idir, m0(:,idir), wdir(idir), cb_i, lambar_i, &

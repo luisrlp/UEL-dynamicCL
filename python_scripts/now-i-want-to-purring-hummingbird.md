@@ -852,3 +852,58 @@ $$k_{off}=k_{off,0},c_{b,max},e^{F}=c_{b,max},\hat g(f);\Rightarrow;e^{F}=\frac{
 Only the ratio k_on,0/k_off,0 appears, so k_off,0 is a normalisation, i.e. a choice of where F = 0. Repeating the two steps gives
 
 $$\frac{k_{on,0}}{k_{off,0}}=k_{eq},\frac{k_{off}^{Bell}}{g_{rest}},e^{x_{rest}}$$
+
+## Swelling ratio and free fraction: the coupled linearisation behind Eq. (33) (fully implicit update)
+
+Notation: $\bar{\lambda}_i$ isochoric stretch of direction $i$, $c_{b,i}^{\tau}(\bar{\lambda}_i, \theta_f)$ its bound content after the Backward-Euler kinetics, $c_{b,\mathrm{tot}} = \sum_i \rho_i\, c_{b,i}$ the total bound content ($\rho_i$ the direction weights, $\sum_i \rho_i = 1$), and $H(\theta_f;\, \mu_f, J, c_{b,\mathrm{tot}}) = 0$ the chemical equilibrium that defines $\theta_f$ (in which $c_{b,\mathrm{tot}}$ enters through $J^c$).
+
+The swelling ratio has two pathways, through the total bound content and through the free fraction:
+
+$$J^c = 1 + v_{mol}\,\big(c_{b,\mathrm{tot}} + c_f^{max}\,\theta_f - c_0\big)
+\quad\Rightarrow\quad
+\left.\frac{\mathrm{d}J^c}{\mathrm{d}\mathbf{C}}\right|_{\mu_f}
+= \frac{\partial J^c}{\partial c_{b,\mathrm{tot}}}\,\frac{\mathrm{d}c_{b,\mathrm{tot}}}{\mathrm{d}\mathbf{C}}
++ \frac{\partial J^c}{\partial \theta_f}\,\frac{\mathrm{d}\theta_f}{\mathrm{d}\mathbf{C}}
+= v_{mol}\left[\frac{\mathrm{d}c_{b,\mathrm{tot}}}{\mathrm{d}\mathbf{C}} + c_f^{max}\,\frac{\mathrm{d}\theta_f}{\mathrm{d}\mathbf{C}}\right].$$
+
+The two total derivatives depend on each other.
+
+Kinetics ($c_b$ depends on $\theta_f$; present in both the staggered and the fully implicit update):
+
+$$\frac{\mathrm{d}c_{b,\mathrm{tot}}}{\mathrm{d}\mathbf{C}} = \left.\frac{\partial c_{b,\mathrm{tot}}}{\partial \mathbf{C}}\right|_{\theta_f} + \left.\frac{\partial c_{b,\mathrm{tot}}}{\partial \theta_f}\right|_{\bar{\lambda}}\,\frac{\mathrm{d}\theta_f}{\mathrm{d}\mathbf{C}},
+\qquad
+\left.\frac{\partial c_{b,\mathrm{tot}}}{\partial \mathbf{C}}\right|_{\theta_f} = \sum_i \rho_i\,\frac{\partial c_{b,i}^{\tau}}{\partial \bar{\lambda}_i}\,\frac{\partial\bar{\lambda}_i}{\partial\mathbf{C}},
+\qquad
+\left.\frac{\partial c_{b,\mathrm{tot}}}{\partial \theta_f}\right|_{\bar{\lambda}} = \sum_i \rho_i\,\frac{\partial c_{b,i}^{\tau}}{\partial \theta_f} .$$
+
+Equilibrium ($\theta_f$ depends on $c_{b,\mathrm{tot}}$ through $J^c$ in $H = 0$; this is the link added by the fully implicit update). From $\delta H = 0$ at fixed $\mu_f$:
+
+$$\frac{\mathrm{d}\theta_f}{\mathrm{d}\mathbf{C}} = \left.\frac{\partial \theta_f}{\partial \mathbf{C}}\right|_{c_{b,\mathrm{tot}}} + \left.\frac{\partial \theta_f}{\partial c_{b,\mathrm{tot}}}\right|_{J}\,\frac{\mathrm{d}c_{b,\mathrm{tot}}}{\mathrm{d}\mathbf{C}},
+\qquad
+\left.\frac{\partial \theta_f}{\partial \mathbf{C}}\right|_{c_{b,\mathrm{tot}}} = -\,\frac{\partial H/\partial J}{\partial H/\partial \theta_f}\,\frac{J}{2}\,\mathbf{C}^{-1},
+\qquad
+\left.\frac{\partial \theta_f}{\partial c_{b,\mathrm{tot}}}\right|_{J} = -\,\frac{\partial H/\partial c_{b,\mathrm{tot}}}{\partial H/\partial \theta_f},$$
+
+where $\partial H/\partial\theta_f$ is taken at fixed $J$ and $c_{b,\mathrm{tot}}$ (it includes the dependence of $H$ on $\theta_f$ through $J^c$), and $\partial J/\partial\mathbf{C} = \tfrac{J}{2}\,\mathbf{C}^{-1}$.
+
+Each line contains the total derivative of the other (the loop $\theta_f \to c_{b,\mathrm{tot}} \to J^c \to \theta_f$), so the two form a $2\times2$ system that must be solved, not expanded once. Inserting the kinetics line into the equilibrium line,
+
+$$\frac{\mathrm{d}\theta_f}{\mathrm{d}\mathbf{C}} = \left.\frac{\partial \theta_f}{\partial \mathbf{C}}\right|_{c_{b,\mathrm{tot}}} + \left.\frac{\partial \theta_f}{\partial c_{b,\mathrm{tot}}}\right|_{J}\left[\left.\frac{\partial c_{b,\mathrm{tot}}}{\partial \mathbf{C}}\right|_{\theta_f} + \left.\frac{\partial c_{b,\mathrm{tot}}}{\partial \theta_f}\right|_{\bar{\lambda}}\,\frac{\mathrm{d}\theta_f}{\mathrm{d}\mathbf{C}}\right],$$
+
+and solving,
+
+$$\left.\frac{\mathrm{d}\theta_f}{\mathrm{d}\mathbf{C}}\right|_{\mu_f}
+= \frac{\left.\dfrac{\partial \theta_f}{\partial \mathbf{C}}\right|_{c_{b,\mathrm{tot}}} + \left.\dfrac{\partial \theta_f}{\partial c_{b,\mathrm{tot}}}\right|_{J}\,\left.\dfrac{\partial c_{b,\mathrm{tot}}}{\partial \mathbf{C}}\right|_{\theta_f}}{1 - \left.\dfrac{\partial \theta_f}{\partial c_{b,\mathrm{tot}}}\right|_{J}\,\left.\dfrac{\partial c_{b,\mathrm{tot}}}{\partial \theta_f}\right|_{\bar{\lambda}}}
+= -\,\frac{\dfrac{\partial H}{\partial J}\,\dfrac{J}{2}\,\mathbf{C}^{-1} + \dfrac{\partial H}{\partial c_{b,\mathrm{tot}}}\,\left.\dfrac{\partial c_{b,\mathrm{tot}}}{\partial \mathbf{C}}\right|_{\theta_f}}{\left.\dfrac{\mathrm{d}H}{\mathrm{d}\theta_f}\right|_{J,\bar{\lambda}}},
+\qquad
+\left.\frac{\mathrm{d}H}{\mathrm{d}\theta_f}\right|_{J,\bar{\lambda}} = \frac{\partial H}{\partial \theta_f} + \frac{\partial H}{\partial c_{b,\mathrm{tot}}}\,\left.\frac{\partial c_{b,\mathrm{tot}}}{\partial \theta_f}\right|_{\bar{\lambda}} .$$
+
+This is Eq. (33) of `paper/model/res_tang.tex` ($H_{\mathrm{eff}}$ there is the total derivative $\mathrm{d}H/\mathrm{d}\theta_f|_{J,\bar{\lambda}}$: the slope of the equilibrium when the bound content follows $\theta_f$ through the kinetics). The denominator $1 - (\partial\theta_f/\partial c_{b,\mathrm{tot}})(\partial c_{b,\mathrm{tot}}/\partial\theta_f)$ sums all orders of the feedback $\theta_f \to c_{b,\mathrm{tot}} \to J^c \to \theta_f$. Then $\mathrm{d}c_{b,\mathrm{tot}}/\mathrm{d}\mathbf{C}$ follows from the kinetics line, and
+
+$$\left.\frac{\mathrm{d}J^c}{\mathrm{d}\mathbf{C}}\right|_{\mu_f}
+= v_{mol}\left[\left.\frac{\partial c_{b,\mathrm{tot}}}{\partial \mathbf{C}}\right|_{\theta_f} + \Big(c_f^{max} + \left.\frac{\partial c_{b,\mathrm{tot}}}{\partial \theta_f}\right|_{\bar{\lambda}}\Big)\frac{\mathrm{d}\theta_f}{\mathrm{d}\mathbf{C}}\right]
+= v_{mol}\left[\Big(c_f^{max} + \left.\frac{\partial c_{b,\mathrm{tot}}}{\partial \theta_f}\right|_{\bar{\lambda}}\Big)\frac{J}{2}\,\frac{\partial\theta_f}{\partial J}\,\mathbf{C}^{-1} + \frac{\left.\partial H/\partial \theta_f\right|_{J^c}}{\left.\mathrm{d}H/\mathrm{d}\theta_f\right|_{J,\bar{\lambda}}}\,\left.\frac{\partial c_{b,\mathrm{tot}}}{\partial \mathbf{C}}\right|_{\theta_f}\right],$$
+
+with $\partial\theta_f/\partial J = -(\partial H/\partial J)\big/(\mathrm{d}H/\mathrm{d}\theta_f|_{J,\bar{\lambda}})$, and $\partial H/\partial\theta_f|_{J^c} = \tfrac{1}{\theta_f} + \tfrac{1}{1-\theta_f} - 2\chi$ the mixing part of $\partial H/\partial\theta_f$ (at fixed $J^c$). The last factor uses $\partial H/\partial\theta_f = \partial H/\partial\theta_f|_{J^c} + c_f^{max}\,\partial H/\partial c_{b,\mathrm{tot}}$ (both $\theta_f$ and $c_{b,\mathrm{tot}}$ enter $J^c$, with $\partial J^c/\partial\theta_f = c_f^{max}\,\partial J^c/\partial c_{b,\mathrm{tot}}$), so that $1 - (c_f^{max} + \partial c_{b,\mathrm{tot}}/\partial\theta_f)\,(\partial H/\partial c_{b,\mathrm{tot}})/(\mathrm{d}H/\mathrm{d}\theta_f) = (\partial H/\partial\theta_f|_{J^c})/(\mathrm{d}H/\mathrm{d}\theta_f)$. This is Eq. (34). The first term (origin: volume change $J$) gives the drained-bulk softening, term 2; the second (origin: remodelling at fixed $\theta_f$) the pressure from remodelling, term 5.
+
+Staggered update: $H$ uses $c_{b,\mathrm{tot}}^{t}$, so $\partial\theta_f/\partial c_{b,\mathrm{tot}}|_J = 0$ (the term $\partial H/\partial c_{b,\mathrm{tot}}$ drops from the linearisation). The loop is open, $\mathrm{d}H/\mathrm{d}\theta_f = \partial H/\partial\theta_f$, $\mathrm{d}\theta_f/\mathrm{d}\mathbf{C} = -\big[(\partial H/\partial J)/(\partial H/\partial\theta_f)\big]\,\tfrac{J}{2}\,\mathbf{C}^{-1}$, and $\theta_f$ does not see the remodelling of the current increment; only the kinetics link $\partial c_{b,\mathrm{tot}}/\partial\theta_f$ remains.
