@@ -907,3 +907,229 @@ $$\left.\frac{\mathrm{d}J^c}{\mathrm{d}\mathbf{C}}\right|_{\mu_f}
 with $\partial\theta_f/\partial J = -(\partial H/\partial J)\big/(\mathrm{d}H/\mathrm{d}\theta_f|_{J,\bar{\lambda}})$, and $\partial H/\partial\theta_f|_{J^c} = \tfrac{1}{\theta_f} + \tfrac{1}{1-\theta_f} - 2\chi$ the mixing part of $\partial H/\partial\theta_f$ (at fixed $J^c$). The last factor uses $\partial H/\partial\theta_f = \partial H/\partial\theta_f|_{J^c} + c_f^{max}\,\partial H/\partial c_{b,\mathrm{tot}}$ (both $\theta_f$ and $c_{b,\mathrm{tot}}$ enter $J^c$, with $\partial J^c/\partial\theta_f = c_f^{max}\,\partial J^c/\partial c_{b,\mathrm{tot}}$), so that $1 - (c_f^{max} + \partial c_{b,\mathrm{tot}}/\partial\theta_f)\,(\partial H/\partial c_{b,\mathrm{tot}})/(\mathrm{d}H/\mathrm{d}\theta_f) = (\partial H/\partial\theta_f|_{J^c})/(\mathrm{d}H/\mathrm{d}\theta_f)$. This is Eq. (34). The first term (origin: volume change $J$) gives the drained-bulk softening, term 2; the second (origin: remodelling at fixed $\theta_f$) the pressure from remodelling, term 5.
 
 Staggered update: $H$ uses $c_{b,\mathrm{tot}}^{t}$, so $\partial\theta_f/\partial c_{b,\mathrm{tot}}|_J = 0$ (the term $\partial H/\partial c_{b,\mathrm{tot}}$ drops from the linearisation). The loop is open, $\mathrm{d}H/\mathrm{d}\theta_f = \partial H/\partial\theta_f$, $\mathrm{d}\theta_f/\mathrm{d}\mathbf{C} = -\big[(\partial H/\partial J)/(\partial H/\partial\theta_f)\big]\,\tfrac{J}{2}\,\mathbf{C}^{-1}$, and $\theta_f$ does not see the remodelling of the current increment; only the kinetics link $\partial c_{b,\mathrm{tot}}/\partial\theta_f$ remains.
+
+### Final form of the bound-content derivative $\mathrm{d}c_b/\mathrm{d}\mathbf{C}$ (fully implicit update)
+
+Per direction, the bound content after the kinetics depends on $\mathbf{C}$ through its own isochoric stretch and through the free fraction:
+
+$$\left.\frac{\mathrm{d}c_{b,i}^{\tau}}{\mathrm{d}\mathbf{C}}\right|_{\mu_f}
+= \frac{\partial c_{b,i}^{\tau}}{\partial \bar{\lambda}_i}\,\frac{\partial\bar{\lambda}_i}{\partial\mathbf{C}}
++ \frac{\partial c_{b,i}^{\tau}}{\partial \theta_f}\,\left.\frac{\mathrm{d}\theta_f}{\mathrm{d}\mathbf{C}}\right|_{\mu_f},
+\qquad
+\frac{\partial\bar{\lambda}_i}{\partial\mathbf{C}} = \frac{1}{2\bar{\lambda}_i}\Big[J^{-2/3}\,\mathbf{M}_i\otimes\mathbf{M}_i - \tfrac{1}{3}\,\bar{\lambda}_i^{2}\,\mathbf{C}^{-1}\Big],$$
+
+($\bar{\lambda}_i^2 = \mathbf{M}_i\cdot\bar{\mathbf{C}}\,\mathbf{M}_i$, $\bar{\mathbf{C}} = J^{-2/3}\mathbf{C}$), with $\mathrm{d}\theta_f/\mathrm{d}\mathbf{C}$ from Eq. (33) above. The first term is local to direction $i$; the second couples all directions through $\theta_f$.
+
+Summing with the weights $\rho_i$ and inserting Eq. (33) into the kinetics line,
+
+$$\frac{\mathrm{d}c_{b,\mathrm{tot}}}{\mathrm{d}\mathbf{C}}
+= \left.\frac{\partial c_{b,\mathrm{tot}}}{\partial \mathbf{C}}\right|_{\theta_f}
+- \frac{\left.\partial c_{b,\mathrm{tot}}/\partial \theta_f\right|_{\bar{\lambda}}}{\left.\mathrm{d}H/\mathrm{d}\theta_f\right|_{J,\bar{\lambda}}}
+\left[\frac{\partial H}{\partial J}\,\frac{J}{2}\,\mathbf{C}^{-1} + \frac{\partial H}{\partial c_{b,\mathrm{tot}}}\,\left.\frac{\partial c_{b,\mathrm{tot}}}{\partial \mathbf{C}}\right|_{\theta_f}\right].$$
+
+Collecting the terms in $\partial c_{b,\mathrm{tot}}/\partial\mathbf{C}|_{\theta_f}$ and using $\mathrm{d}H/\mathrm{d}\theta_f|_{J,\bar{\lambda}} - \dfrac{\partial H}{\partial c_{b,\mathrm{tot}}}\,\left.\dfrac{\partial c_{b,\mathrm{tot}}}{\partial \theta_f}\right|_{\bar{\lambda}} = \dfrac{\partial H}{\partial \theta_f}$:
+
+$$\boxed{\;\left.\frac{\mathrm{d}c_{b,\mathrm{tot}}}{\mathrm{d}\mathbf{C}}\right|_{\mu_f}
+= \frac{\partial H/\partial \theta_f}{\left.\mathrm{d}H/\mathrm{d}\theta_f\right|_{J,\bar{\lambda}}}\;\sum_i \rho_i\,\frac{\partial c_{b,i}^{\tau}}{\partial \bar{\lambda}_i}\,\frac{\partial\bar{\lambda}_i}{\partial\mathbf{C}}
+\;+\; \left.\frac{\partial c_{b,\mathrm{tot}}}{\partial \theta_f}\right|_{\bar{\lambda}}\,\frac{\partial\theta_f}{\partial J}\,\frac{J}{2}\,\mathbf{C}^{-1}\;},
+\qquad
+\frac{\partial\theta_f}{\partial J} = -\,\frac{\partial H/\partial J}{\left.\mathrm{d}H/\mathrm{d}\theta_f\right|_{J,\bar{\lambda}}} .$$
+
+- First term (origin: remodelling of each direction at its own stretch). The factor $(\partial H/\partial\theta_f)/(\mathrm{d}H/\mathrm{d}\theta_f) = 1/\big[1 - (\partial\theta_f/\partial c_{b,\mathrm{tot}})(\partial c_{b,\mathrm{tot}}/\partial\theta_f)\big]$ is the feedback of the loop $c_{b,\mathrm{tot}} \to J^c \to \theta_f \to c_{b,\mathrm{tot}}$: binding changes $J^c$, the equilibrium moves $\theta_f$, and the new $\theta_f$ changes the binding rate of every direction.
+- Second term (origin: volume change $J$ at fixed $\bar{\lambda}$). Swelling or deswelling moves $\theta_f$, which changes the binding of all directions; it is purely volumetric ($\propto \mathbf{C}^{-1}$).
+
+Staggered update: $\partial H/\partial c_{b,\mathrm{tot}} = 0$, so $\mathrm{d}H/\mathrm{d}\theta_f = \partial H/\partial\theta_f$, the feedback factor is 1, and $\mathrm{d}c_{b,\mathrm{tot}}/\mathrm{d}\mathbf{C} = \partial c_{b,\mathrm{tot}}/\partial\mathbf{C}|_{\theta_f} + (\partial c_{b,\mathrm{tot}}/\partial\theta_f)\,(\partial\theta_f/\partial J)\,\tfrac{J}{2}\,\mathbf{C}^{-1}$ with $\partial\theta_f/\partial J = -(\partial H/\partial J)/(\partial H/\partial\theta_f)$.
+
+Check: with this result and Eq. (33), $v_{mol}\big[\mathrm{d}c_{b,\mathrm{tot}}/\mathrm{d}\mathbf{C} + c_f^{max}\,\mathrm{d}\theta_f/\mathrm{d}\mathbf{C}\big]$ reproduces Eq. (34) for $\mathrm{d}J^c/\mathrm{d}\mathbf{C}$.
+
+
+
+### Derivative of the kinetics residual with respect to the elastic stretch, $\partial G/\partial\lambda_r$ (folder 10, TC)
+
+Notation: $G$ is the Backward-Euler kinetics residual of one direction (called `H`/`f` in `kineticsFunc.f90`; not the $\theta_f$ equilibrium $H$ above), $\lambda_r = \bar{\lambda}/\lambda_n^{\tau}$ the elastic (reference-relative) stretch of the direction, $\theta_b = c_b/c_b^{max}$.
+
+**1. Residual and its arguments.**
+
+$$G\big(c_b^{\tau};\, \lambda_r,\, \theta_f,\, s\big) = c_b^{\tau} - c_b^{t} - \Delta t\, R,
+\qquad
+R = k_{off}\big(f\big)\left[\underbrace{k_{on}\,c_f^{max}\,\frac{\theta_f}{1-\theta_f}\,s}_{b\ (\texttt{bterm})} - \frac{c_b^{\tau}}{1-\theta_b}\right],
+\qquad f = f\big(\lambda_r,\, c_b^{\tau}\big).$$
+
+$s = e^{-(x - x_{rest})}/g_{rest}$ is evaluated at the start of the sub-step ($c_b^t$, $\lambda_n^t$) and $\theta_f$ is an independent argument, so at fixed $c_b^\tau$, $\theta_f$ and $s$ the stretch enters $R$ only through the filament force:
+
+$$\frac{\partial G}{\partial\lambda_r} = -\Delta t\,\frac{\partial R}{\partial\lambda_r},
+\qquad
+\frac{\partial R}{\partial\lambda_r} = \frac{\mathrm{d}k_{off}}{\mathrm{d}f}\,\frac{\partial f}{\partial\lambda_r}\bigg|_{c_b}\left[b - \frac{c_b^{\tau}}{1-\theta_b}\right].$$
+
+The bracket is not differentiated: $b$ depends on $\theta_f$ and $s$ only, and $c_b^\tau/(1-\theta_b)$ on $c_b^\tau$ only.
+
+**2. Catch-slip off-rate** (`koffcs.f90`):
+
+$$k_{off}(f) = k_{off,0}\,e^{f\Delta x_s/k_BT} + k_{catch,0}\,e^{-f\Delta x_c/k_BT},
+\qquad
+\frac{\mathrm{d}k_{off}}{\mathrm{d}f} = \frac{\Delta x_s}{k_BT}\,k_{off,0}\,e^{f\Delta x_s/k_BT} - \frac{\Delta x_c}{k_BT}\,k_{catch,0}\,e^{-f\Delta x_c/k_BT}$$
+
+(the exponents are clipped at $\pm 500$, where the derivative is set to zero). For a pure slip bond ($k_{catch,0} = 0$), $\mathrm{d}k_{off}/\mathrm{d}f = k_{off}\,\Delta x_s/k_BT$.
+
+**3. Force derivative from the filament energy.** The filament energy is $w = \int f\,\mathrm{d}r$ with $r = \lambda_0 r_0 \lambda_r$, and $r_0 = r_{0f} + r_{0c}$ depends only on $c_b$ ($r_{0f} = 1.6\,(10^3 c_b)^{-2/5}$). At fixed $c_b$, $\mathrm{d}r = \lambda_0 r_0\,\mathrm{d}\lambda_r$, so
+
+$$w' \equiv \frac{\partial w}{\partial\lambda_r}\bigg|_{c_b} = \lambda_0 r_0\, f
+\quad\Rightarrow\quad
+\frac{\partial f}{\partial\lambda_r}\bigg|_{c_b} = \frac{w''}{\lambda_0 r_0},
+\qquad w'' \equiv \frac{\partial^2 w}{\partial\lambda_r^2}\bigg|_{c_b}$$
+
+(`dwi` $= \lambda_0 r_0 f$ and `ddwi` $= w''$ in `fil.f90`).
+
+**4. $w''$ from the extensible force–stretch relation.** With the compliance $\eta$ ($0 < \eta \le 1$), the filament stretch and its reference value are
+
+$$\lambda_{if} = \eta\,\frac{r_0}{r_{0f}}\,(\lambda_r - 1) + 1,
+\qquad
+\lambda_{0f} = \eta\,\frac{r_0}{r_{0f}}\,(\lambda_0 - 1) + 1,$$
+
+and the force solves (`evalg.f90`, Brent in `pullforce.f90`)
+
+$$\frac{\lambda_{if}\,\lambda_{0f}\, r_{0f}}{L} = \rho(f),
+\qquad
+\rho(f) = u - \Big(1 - \frac{r_{0f}}{L}\Big)\, u^{\beta}\, v\, D^{-\beta},
+\qquad
+u = 1 + \frac{f}{\mu_0},\quad v = 1 + \frac{2f}{\mu_0},\quad D = 1 + c\,f\,u,\quad c = \frac{L^2}{\pi^2 B_0}.$$
+
+Differentiating at fixed $c_b$ ($L = a\,r_{0f}$, $r_0$, $r_{0f}$, $\lambda_{0f}$ fixed):
+
+$$\frac{\partial f}{\partial\lambda_r} = \frac{\lambda_{0f}\, r_{0f}}{L}\,\frac{\partial\lambda_{if}/\partial\lambda_r}{\rho'(f)} = \frac{\eta\,\lambda_{0f}\, r_0}{L\,\rho'(f)}
+\quad\Rightarrow\quad
+w'' = \lambda_0 r_0\,\frac{\partial f}{\partial\lambda_r} = \frac{\eta\,\lambda_{0f}\,\lambda_0\, r_0^{2}}{L\,\rho'(f)} .$$
+
+With $T = u^\beta v D^{-\beta}$ and $\mathrm{d}D/\mathrm{d}f = c\,v$,
+
+$$\mu_0\,\frac{\mathrm{d}T}{\mathrm{d}f} = \Big(\frac{u}{D}\Big)^{\beta}\left[\beta\,\frac{v}{u} + 2 - \beta\, c\,\mu_0\,\frac{v^2}{D}\right] = -\Big(\frac{u}{D}\Big)^{\beta} y,
+\qquad
+y = \frac{\beta}{\alpha}\,\frac{v^2}{D} - \beta\,\frac{v}{u} - 2,\quad \alpha = \frac{1}{c\,\mu_0} = \frac{\pi^2 B_0}{L^2\mu_0},$$
+
+so $\mu_0\,\rho'(f) = 1 + \big(1 - r_{0f}/L\big)\,(u/D)^{\beta}\, y$ and
+
+$$w'' = \frac{\eta\,\lambda_{0f}\,\lambda_0\, r_0^{2}\,\mu_0}{L}\,\Big[1 + \Big(1 - \frac{r_{0f}}{L}\Big)\Big(\frac{u}{D}\Big)^{\beta} y\Big]^{-1},$$
+
+which is `ddw = aux4*((one+y*aux5*aux6)**(-one))` in `fil.f90` (`aux4` $= \eta\lambda_{0f}\lambda_0 r_0^2\mu_0/L$, `aux5` $= (u/D)^\beta$, `aux6` $= 1 - r_{0f}/L$). Slack filament ($\lambda_{if}\lambda_{0f} \le 1$): $f = 0$ and $w'' = 0$ (set in `kineticsFunc.f90`), so $\partial G/\partial\lambda_r = 0$.
+
+**5. Result** (`dHdlambda` in `kineticsFunc.f90`):
+
+$$\boxed{\;\frac{\partial G}{\partial\lambda_r} = -\Delta t\,\frac{\mathrm{d}k_{off}}{\mathrm{d}f}\,\frac{w''}{\lambda_0 r_0}\left[k_{on}\,c_f^{max}\,\frac{\theta_f}{1-\theta_f}\,s - \frac{c_b^{\tau}}{1-\theta_b}\right] = -\Delta t\,\frac{\mathrm{d}k_{off}}{\mathrm{d}f}\,\frac{w''}{\lambda_0 r_0}\,\frac{R}{k_{off}}\;}$$
+
+- Non-TC limit (folder 9): binding carries neither $k_{off}(f)$ nor $s$, $R = k_{on} c_f^{max}\theta_f/(1-\theta_f) - k_{off}(f)\,c_b/(1-\theta_b)$, and only the unbinding term depends on the stretch:
+  $\partial G/\partial\lambda_r = \Delta t\,\dfrac{c_b^{\tau}}{1-\theta_b}\,\dfrac{\mathrm{d}k_{off}}{\mathrm{d}f}\,\dfrac{w''}{\lambda_0 r_0}$, with $\mathrm{d}k_{off}/\mathrm{d}f = k_{off}\Delta x_s/k_BT$ for a pure slip bond (the earlier expression).
+- Kinetic equilibrium ($R = 0$): $\partial G/\partial\lambda_r = 0$. In the TC kinetics the force factor scales both fluxes, so it changes how fast a direction relaxes but not where it relaxes to; the stretch shifts the bound equilibrium only through the bias $s$ (Section 6).
+
+**6. Chain to the isochoric stretch** (`affclnetfic_discrete_imp.f90`, line 365). With $\lambda_r = \bar{\lambda}/\lambda_n^\tau$ and $\lambda_n^\tau$ updated before $c_b^\tau$ (from $c_b^t$ and the start-of-sub-step binding flux),
+
+$$\frac{\mathrm{d}c_b^{\tau}}{\mathrm{d}\bar{\lambda}} = -\frac{1}{\partial G/\partial c_b}\left[\frac{\partial G}{\partial\lambda_r}\,\frac{\mathrm{d}\lambda_r}{\mathrm{d}\bar{\lambda}} + \frac{\partial G}{\partial s}\,\frac{\mathrm{d}s}{\mathrm{d}\bar{\lambda}}\right],
+\qquad
+\frac{\mathrm{d}\lambda_r}{\mathrm{d}\bar{\lambda}} = \frac{1 - \lambda_r\,\mathrm{d}\lambda_n^{\tau}/\mathrm{d}\bar{\lambda}}{\lambda_n^{\tau}},$$
+
+$$\frac{\partial G}{\partial s} = -\Delta t\, k_{off}\, k_{on}\, c_f^{max}\,\frac{\theta_f}{1-\theta_f}\quad(\texttt{dHds}),
+\qquad
+\frac{\mathrm{d}s}{\mathrm{d}\bar{\lambda}} = -\,s\,\frac{\partial x}{\partial\lambda_e}\,\frac{1}{\lambda_n^{t}}\quad(\text{sub-step 1}),
+\qquad
+\frac{\partial x}{\partial\lambda_e} = \frac{1}{RT}\,\frac{\partial\big(n\,\lambda_0 r_0 f\big)}{\partial c_b}\quad(\texttt{dxdle}),$$
+
+and $\partial G/\partial c_b = 1 - \Delta t\,\partial R/\partial c_b$ the Newton denominator, $\partial R/\partial c_b = (\mathrm{d}k_{off}/\mathrm{d}f)(\partial f/\partial c_b)\,[\,b - c_b^\tau/(1-\theta_b)\,] - k_{off}/(1-\theta_b)^2$. From sub-step 2 on, $\mathrm{d}s/\mathrm{d}\bar{\lambda}$ also contains $\partial x/\partial c_b\cdot\mathrm{d}c_b/\mathrm{d}\bar{\lambda}$ and $\partial x/\partial\lambda_n\cdot\mathrm{d}\lambda_n/\mathrm{d}\bar{\lambda}$ (one-sided differences of `xmech`); with `MAX_SUBSTEPS = 1` only the sub-step-1 form is used.
+
+Remark: for $\eta$ outside $(0, 1]$ the code sets $\lambda_{if} = \lambda_r$ (so $\partial\lambda_{if}/\partial\lambda_r = 1$), while `fil.f90` still uses the factor $\eta\, r_0/r_{0f}$ inside `aux4`; the two agree only for $0 < \eta \le 1$, the range used in all fits ($\eta = 1$).
+
+### Free-fraction sensitivity of the bound content, $\partial c_{b,\mathrm{tot}}/\partial\theta_f\big|_{\bar{\lambda}}$ (folder 10, TC)
+
+**Where it is needed.** It is the kinetic link of the coupled linearisation above: it appears in $\mathrm{d}H/\mathrm{d}\theta_f|_{J,\bar{\lambda}} = \partial H/\partial\theta_f + (\partial H/\partial c_{b,\mathrm{tot}})\,\partial c_{b,\mathrm{tot}}/\partial\theta_f$ (Eq. 33, $H_{\mathrm{eff}}$ in `_umat_.f90`), in the factor $c_f^{max} + \partial c_{b,\mathrm{tot}}/\partial\theta_f$ of $\mathrm{d}J^c/\mathrm{d}\mathbf{C}$ (Eq. 34, `ppv_chem`), and in the Newton slope of the $\theta_f$ solve in `main_closed.f90` (`dg = cfmax + dcbdthetaf`). In the code it is `dcbdthetaf` (called $G$ in the comments; not the kinetics residual $G$ of the previous section).
+
+**Intuition.** $\theta_f$ is the occupancy of the free (unbound) crosslinker sites. More free crosslinkers means a larger binding flux in every direction, so after one Backward-Euler step every direction holds a little more bound crosslinker. The derivative measures how much more, at fixed deformation ($\bar{\lambda}_i$ fixed in all directions). Two features control it:
+- the bound content responds only partially within one increment: the extra binding is opposed by the faster unbinding of the larger bound content, so the response is a balance of the two (step 6);
+- with stretch-free rebinding, the extra binding also moves the reference stretch $\lambda_n$ towards the current stretch, which unloads the filament and changes its off-rate (step 4).
+
+**1. Where $\theta_f$ enters one direction** (one sub-step, `MAX_SUBSTEPS = 1`). With
+
+$$\mathcal{B}(\theta_f) = k_{on}(\theta_f)\, c_f^{max}\,\frac{\theta_f}{1-\theta_f},
+\qquad
+k_{on}(\theta_f) = \big(k_{off,0} + k_{catch,0}\big)\,K_{eq}\,e^{\chi(1 - 2\theta_f)}$$
+
+(`bind`; $b = \mathcal{B}\,s$ is the bracket term of the previous section), the residual and the reference-stretch update are
+
+$$G = c_b^{\tau} - c_b^{t} - \Delta t\, k_{off}(f)\left[\mathcal{B}(\theta_f)\, s - \frac{c_b^{\tau}}{1-\theta_b}\right],
+\qquad f = f\big(\lambda_r, c_b^{\tau}\big),\quad \lambda_r = \frac{\bar{\lambda}}{\lambda_n^{\tau}},$$
+
+$$\lambda_n^{\tau} = \frac{c_b^{t}\,\lambda_n^{t} + \Delta t\,\Phi\,\bar{\lambda}}{c_b^{t} + \Delta t\,\Phi},
+\qquad
+\Phi = \mathcal{B}(\theta_f)\, s\, g(f_{st})\quad(\texttt{bind\_flux}),$$
+
+where $s$ and $f_{st}$ are evaluated at the start of the sub-step ($c_b^t$, $\lambda_n^t$, stretch $\bar{\lambda}/\lambda_n^t$). So $\theta_f$ enters through two pathways:
+- (i) directly, through $\mathcal{B}(\theta_f)$ in the binding term of $G$;
+- (ii) through $\lambda_n^{\tau}$, because the binding flux $\Phi$ sets how far the reference stretch slides, and $\lambda_n^\tau$ sets $\lambda_r$ and hence the force in $k_{off}(f)$.
+
+It does not enter through $s$ or $f_{st}$ (start-of-sub-step quantities): in sub-step 1, `dsdthetaf_i` $= 0$.
+
+**2. Derivative of the binding term** (`dbinddthetaf`). Mass action $\theta_f/(1-\theta_f)$ and the Flory–Huggins factor in $k_{on}$:
+
+$$\frac{\mathrm{d}\mathcal{B}}{\mathrm{d}\theta_f} = c_f^{max}\, k_{on}\left[\frac{1}{(1-\theta_f)^2} - 2\chi\,\frac{\theta_f}{1-\theta_f}\right]
+\qquad\Big(\tfrac{\mathrm{d}}{\mathrm{d}\theta_f}\tfrac{\theta_f}{1-\theta_f} = \tfrac{1}{(1-\theta_f)^2},\quad \tfrac{\mathrm{d}k_{on}}{\mathrm{d}\theta_f} = -2\chi\, k_{on}\Big).$$
+
+It is positive when $2\chi\,\theta_f(1-\theta_f) < 1$, i.e. for every $\theta_f$ if $\chi < 2$ (since $\theta_f(1-\theta_f) \le 1/4$): for $\chi > 0$ the solvent interaction lowers the binding rate as $\theta_f$ grows, but the mass-action term dominates.
+
+**3. Direct pathway** (`dHdth`):
+
+$$\frac{\partial G}{\partial\theta_f}\bigg|_{c_b,\lambda_r,s} = -\Delta t\, k_{off}(f)\, s\,\frac{\mathrm{d}\mathcal{B}}{\mathrm{d}\theta_f} .$$
+
+**4. Reference-stretch pathway** (`dlamndthetaf_i`, `dlrdth`). Differentiating the $\lambda_n$ update with respect to $\Phi$ ($c_b^t$, $\lambda_n^t$, $\bar{\lambda}$ fixed),
+
+$$\frac{\partial\lambda_n^{\tau}}{\partial\Phi} = \frac{\Delta t\,\big(\bar{\lambda} - \lambda_n^{\tau}\big)}{c_b^{t} + \Delta t\,\Phi},
+\qquad
+\frac{\mathrm{d}\Phi}{\mathrm{d}\theta_f} = s\, g(f_{st})\,\frac{\mathrm{d}\mathcal{B}}{\mathrm{d}\theta_f}
+\quad\Rightarrow\quad
+\frac{\mathrm{d}\lambda_n^{\tau}}{\mathrm{d}\theta_f} = \frac{\Delta t\, s\, g(f_{st})\,\big(\mathrm{d}\mathcal{B}/\mathrm{d}\theta_f\big)\,\big(\bar{\lambda} - \lambda_n^{\tau}\big)}{c_b^{t} + \Delta t\,\Phi},$$
+
+$$\frac{\mathrm{d}\lambda_r}{\mathrm{d}\theta_f} = -\frac{\lambda_r}{\lambda_n^{\tau}}\,\frac{\mathrm{d}\lambda_n^{\tau}}{\mathrm{d}\theta_f} .$$
+
+Intuition: the crosslinks formed during the step are formed in the current (stretched) configuration, so more binding pulls the reference stretch $\lambda_n$ towards $\bar{\lambda}$ (the weight of the new links in the average grows) and the elastic stretch $\lambda_r$ falls. For a stretched direction ($\bar{\lambda} > \lambda_n$) $\mathrm{d}\lambda_r/\mathrm{d}\theta_f < 0$: more free crosslinker unloads the filament. The pathway vanishes without stretch-free rebinding ($\lambda_n \equiv 1$) and in an unstretched direction ($\bar{\lambda} = \lambda_n$).
+
+Through the force, this changes the residual by $(\partial G/\partial\lambda_r)\,\mathrm{d}\lambda_r/\mathrm{d}\theta_f$, with $\partial G/\partial\lambda_r = -\Delta t\,(\mathrm{d}k_{off}/\mathrm{d}f)\,(w''/\lambda_0 r_0)\,R/k_{off}$ from the previous section.
+
+**5. Implicit function theorem.** At fixed $\bar{\lambda}$, $\mathrm{d}G = 0$ with $c_b^\tau$ and $\theta_f$ varying:
+
+$$0 = \frac{\partial G}{\partial c_b}\,\frac{\partial c_b^{\tau}}{\partial\theta_f} + \frac{\partial G}{\partial\theta_f} + \frac{\partial G}{\partial\lambda_r}\,\frac{\mathrm{d}\lambda_r}{\mathrm{d}\theta_f}
+\quad\Rightarrow\quad
+\boxed{\;\frac{\partial c_{b,i}^{\tau}}{\partial\theta_f}\bigg|_{\bar{\lambda}} = -\,\frac{\dfrac{\partial G_i}{\partial\theta_f} + \dfrac{\partial G_i}{\partial\lambda_r}\,\dfrac{\mathrm{d}\lambda_{r,i}}{\mathrm{d}\theta_f}}{\dfrac{\partial G_i}{\partial c_b}}\;}$$
+
+(line 367 of `affclnetfic_discrete_imp.f90`; the `dHds*dsdthetaf_i` term is zero in sub-step 1). Written out,
+
+$$\frac{\partial c_{b,i}^{\tau}}{\partial\theta_f} = \frac{\Delta t\left[k_{off}\, s\,\dfrac{\mathrm{d}\mathcal{B}}{\mathrm{d}\theta_f} + \dfrac{\mathrm{d}k_{off}}{\mathrm{d}f}\,\dfrac{w''}{\lambda_0 r_0}\,\dfrac{R}{k_{off}}\,\dfrac{\mathrm{d}\lambda_r}{\mathrm{d}\theta_f}\right]}{1 - \Delta t\,\dfrac{\partial R}{\partial c_b}},
+\qquad
+-\frac{\partial R}{\partial c_b} = \frac{k_{off}}{(1-\theta_b)^2} - \frac{\mathrm{d}k_{off}}{\mathrm{d}f}\,\frac{\partial f}{\partial c_b}\,\frac{R}{k_{off}} .$$
+
+- First numerator term: the extra binding produced by the extra free crosslinker during $\Delta t$.
+- Second numerator term: the change of the off-rate because the filament is unloaded by the sliding reference. It is proportional to $R/k_{off}$, so it vanishes at kinetic equilibrium; for a slip bond away from equilibrium it changes how fast the direction relaxes, not where to.
+- Denominator: the relaxation that resists the change, $1 + \Delta t\, k_{relax}$ with $k_{relax} = -\partial R/\partial c_b$ (dominated by $k_{off}/(1-\theta_b)^2$: more bound crosslinkers unbind faster, and the occupancy factor stiffens as $\theta_b \to 1$).
+
+**6. Limits of the direct pathway** (no stretch-free rebinding, or $\bar{\lambda} = \lambda_n$):
+
+$$\frac{\partial c_b^{\tau}}{\partial\theta_f} = \frac{\Delta t\, k_{off}\, s\,\mathcal{B}'}{1 + \Delta t\, k_{relax}}
+\;\longrightarrow\;
+\begin{cases}
+\Delta t\, k_{off}\, s\,\mathcal{B}' \to 0, & \Delta t\, k_{relax} \ll 1 \quad\text{(no time to respond)},\\[4pt]
+\dfrac{k_{off}\, s\,\mathcal{B}'}{k_{relax}} \approx (1-\theta_b)^2\, s\,\mathcal{B}', & \Delta t\, k_{relax} \gg 1 \quad\text{(equilibrium response)},
+\end{cases}$$
+
+with $\mathcal{B}' = \mathrm{d}\mathcal{B}/\mathrm{d}\theta_f$. The large-step limit is the derivative of the kinetic equilibrium $c_b/(1-\theta_b) = \mathcal{B}(\theta_f)\, s$ (since $\mathrm{d}[c_b/(1-\theta_b)]/\mathrm{d}c_b = 1/(1-\theta_b)^2$, and near equilibrium $R \approx 0$, so $k_{relax} \approx k_{off}/(1-\theta_b)^2$). The Backward-Euler sensitivity therefore interpolates between "nothing changes in a short step" and "the bound content follows the equilibrium" for a long one; this is why $\partial c_{b,\mathrm{tot}}/\partial\theta_f$, and with it the drained-bulk softening (term 2) and $H_{\mathrm{eff}}$, depend on the time step.
+
+**7. Sum over directions** (line 517):
+
+$$\frac{\partial c_{b,\mathrm{tot}}}{\partial\theta_f}\bigg|_{\bar{\lambda}} = \sum_i \rho_i\,\frac{\partial c_{b,i}^{\tau}}{\partial\theta_f},
+\qquad \rho_i = \rho\, a_i\quad(\texttt{rho*ai}).$$
+
+Each direction contributes with its own off-rate (force), bias $s$ and occupancy; slack directions ($f = 0$) respond with $k_{off}(0) = k_{off,0} + k_{catch,0}$, and strongly loaded directions (large $k_{off}$) reach the equilibrium response of step 6 within the step. The result is normally positive, so $\mathrm{d}H/\mathrm{d}\theta_f$ and $c_f^{max} + \partial c_{b,\mathrm{tot}}/\partial\theta_f$ in Eqs. (33)–(34) grow with it: the bound reservoir buffers changes of the free fraction.
+
+**8. More sub-steps and folder 9.**
+- With $n > 1$ sub-steps the derivative is propagated recursively: sub-step $k$ starts from $c_b$, $\lambda_n$ that already depend on $\theta_f$, so the numerator gains $\partial c_b/\partial\theta_f$ of the previous sub-step, and $s$, $f_{st}$ gain $\theta_f$-dependence through $\partial x/\partial c_b$, $\partial x/\partial\lambda_n$ (`dsdthetaf_i`, `dbindfluxdthetaf_i`); not used with `MAX_SUBSTEPS = 1`.
+- Folder 9 (non-TC): binding is $\mathcal{B}(\theta_f)$ without $k_{off}(f)$ and $s$, so $\partial G/\partial\theta_f = -\Delta t\,\mathcal{B}'$ and $\Phi = \mathcal{B}$ in the $\lambda_n$ update; the large-step limit becomes $\mathcal{B}'/k_{relax}$ with $k_{relax} = k_{off}(f)/(1-\theta_b)^2 + (\mathrm{d}k_{off}/\mathrm{d}f)(\partial f/\partial c_b)\,c_b/(1-\theta_b)$.
+
+
+
+
+--------------
+

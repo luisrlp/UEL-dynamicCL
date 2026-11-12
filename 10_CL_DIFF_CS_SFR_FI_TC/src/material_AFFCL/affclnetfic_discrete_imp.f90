@@ -362,10 +362,21 @@ do face = 1, face_num/2
             dlrdth = - lambdar / lamn_sub * dlamndthetaf_i
             args(1) = lambdar
             CALL solveKinetics(cb_new, args, nargs, cb_sub, conv_i, atb_i, dHdcb_i, dHdlambda_i, dHdth_i, dHds_i)
-            IF (dHdcb_i /= zero) dcbdlambda_i = (dcbdlambda_i - dHdlambda_i * dlrdl - dHds_i * dsdlambda_i) / dHdcb_i
+            ! IF (dHdcb_i /= zero) dcbdlambda_i = (dcbdlambda_i - dHdlambda_i * dlrdl - dHds_i * dsdlambda_i) / dHdcb_i
+            ! dHdthetaf_i = dHdth_i                        ! C4: -dt_sub * koff(f_root) * s_i * dbind/dthetaf
+            ! IF (dHdcb_i /= zero) dcbdthetaf_i = (dcbdthetaf_i - dHdthetaf_i - dHdlambda_i * dlrdth &
+            !                                     - dHds_i * dsdthetaf_i) / dHdcb_i
             dHdthetaf_i = dHdth_i                        ! C4: -dt_sub * koff(f_root) * s_i * dbind/dthetaf
+            IF (atb_i) THEN
+              ! Root clipped at a bound of solveKinetics (1e-10 or cbmax - 1e-10): cb stays at the bound
+              ! for small changes of lambda and thetaf, so it has no sensitivity to them
+              dcbdlambda_i = zero
+              dcbdthetaf_i = zero
+            ELSE
+            IF (dHdcb_i /= zero) dcbdlambda_i = (dcbdlambda_i - dHdlambda_i * dlrdl - dHds_i * dsdlambda_i) / dHdcb_i
             IF (dHdcb_i /= zero) dcbdthetaf_i = (dcbdthetaf_i - dHdthetaf_i - dHdlambda_i * dlrdth &
-                                                - dHds_i * dsdthetaf_i) / dHdcb_i
+                                                  - dHds_i * dsdthetaf_i) / dHdcb_i
+            END IF
             ! Hard failures (no converged root, or uniqueness being lost)
             IF ((.NOT. conv_i) .OR. (dHdcb_i < DH_MIN)) THEN
               ok_i = .FALSE.
@@ -409,7 +420,12 @@ do face = 1, face_num/2
           rate_cb_t = g_t * (bind_t * s_t - cbmax * thetab_t / (one - thetab_t))
           rate_lamn_t = zero
           IF (sfr > half) rate_lamn_t = bind_t * s_t * g_t / cbt_i * (lambda_t_i - lamn_t)
-          err_i = MAX(half * ABS(lamn_sub - lamn_t - dtime * rate_lamn_t) / TOL_LAMN, &
+          ! err_i = MAX(half * ABS(lamn_sub - lamn_t - dtime * rate_lamn_t) / TOL_LAMN, &
+          !             half * ABS(cbtau_i - cbt_i - dtime * rate_cb_t) / (TOL_CB * MAX(cbt_i, CB_SCALE * cbmax)))
+          err_i = half * ABS(lamn_sub - lamn_t - dtime * rate_lamn_t) / TOL_LAMN
+          ! cb check only for a Backward-Euler root: a root clipped at a bound (atb_i) is not a BE solution,
+          ! and its estimate (the rate it cannot follow) would force dt ~ 1/koff in fully unbound directions
+          IF (.NOT. atb_i) err_i = MAX(err_i, &
                       half * ABS(cbtau_i - cbt_i - dtime * rate_cb_t) / (TOL_CB * MAX(cbt_i, CB_SCALE * cbmax)))
           err_max = MAX(err_max, err_i)
         END IF

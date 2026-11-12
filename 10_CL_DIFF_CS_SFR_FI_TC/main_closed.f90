@@ -18,6 +18,7 @@ IMPLICIT NONE
 INTEGER, PARAMETER :: ndi = 3, nprops = 28, maxit = 50
 DOUBLE PRECISION, PARAMETER :: tol_th = 1.0d-14, tol_g = 1.0d-15
 DOUBLE PRECISION, PARAMETER :: GROWTH_MAX = 1.5d0, DT_MIN = 1.0d-9, PNEWDT_CALL = 1.0d10
+INTEGER, PARAMETER :: MAX_INC_PER_OUTPUT = 10   ! cap on increments (accepted + rejected) per output time
 DOUBLE PRECISION :: props(nprops)
 !     MODEL CONSTANTS (as _umat_.f90)
 DOUBLE PRECISION :: a, r0c, etac, mu0str, beta, Lp, theta, dx, bb, lambda0, cactin, R, Rfmax, Rbmax
@@ -115,6 +116,12 @@ DO kinc = 1, ninc
   t_out = DBLE(kinc) * dtime
   ! Adaptive increments from time to the output time t_out (at most dtime, the last one ends exactly at t_out)
   DO WHILE (time < t_out - 1.0d-12 * MAX(one, t_out))
+    ! Stall guard: a healthy run needs 1-3 increments per output time; a run that needs more than
+    ! MAX_INC_PER_OUTPUT is stopped (the caller treats it as a failed run), independent of machine load
+    IF (n_accept + n_reject >= MAX_INC_PER_OUTPUT * ninc) THEN
+      WRITE(0,*) 'ERROR: more than', MAX_INC_PER_OUTPUT * ninc, ' increments, stopped at t =', time
+      STOP 1
+    END IF
     h_try = MIN(h, dtime, t_out - time)
     IF (t_out - time - h_try < 0.1d0 * h_try) h_try = t_out - time    ! no sliver before the output time
     limited = (h_try < h)

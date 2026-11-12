@@ -27,7 +27,8 @@
 # Objective J = loop_RMS^2 + w^2 sweep_RMS_log10^2 (w = sweep weight); the least-squares cost is N_data * J / 2.
 #
 # 30 fits. Cost: about 13 CPU-min per evaluated point (loop + 7 sweep amplitudes), 30-150 points per fit.
-# WORKERS processes per fit (default 6), at most MAXJOBS fits at a time (default: cores / WORKERS).
+# WORKERS processes per fit (default 6), MAXJOBS = min(cores, MAXCORES) / WORKERS fits at a time
+# (MAXCORES default 24: never more than 24 busy processes in total).
 # Needs on the VM: the current 10_CL_DIFF_CS_SFR_FI_TC folder, optimise_laos_v2.py, build_laos_closed.sh,
 # main.py, gfortran. Outputs optimisation_runs/final2_<name>, logs final2_<name>.log, queue log stage2BC.log.
 set -e
@@ -38,13 +39,16 @@ if [ -z "$STAGE2BC_DETACHED" ]; then
   echo "Stage B+C queue running in the background (pid $!); progress in stage2BC.log, fits in final2_*.log"
   exit 0
 fi
-export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 WORKERS=${WORKERS:-6}
-MAXJOBS=${MAXJOBS:-$(( $(nproc) / WORKERS ))}
+MAXCORES=${MAXCORES:-24}   # upper limit on the cores used by all fits together (MAXJOBS * WORKERS)
+NCORES=$(nproc)   # before the export below: GNU nproc returns OMP_NUM_THREADS when it is set
+[ "$NCORES" -le "$MAXCORES" ] || NCORES=$MAXCORES
+MAXJOBS=$(( NCORES / WORKERS ))
 [ "$MAXJOBS" -ge 1 ] || MAXJOBS=1
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 FACTOR=6
 FDIR=../10_CL_DIFF_CS_SFR_FI_TC
-echo "$(date '+%F %T') WORKERS=$WORKERS MAXJOBS=$MAXJOBS ($(nproc) cores)"
+echo "$(date '+%F %T') WORKERS=$WORKERS MAXJOBS=$MAXJOBS: at most $(( MAXJOBS * WORKERS )) busy processes (MAXCORES=$MAXCORES, $(nproc --all) cores)"
 
 # --- build the closed-system driver for this factor if needed (see build_laos_closed.sh) ---
 if [ ! -x $FDIR/laos_closed_f$FACTOR ] || [ -n "$(find $FDIR/global.f90 $FDIR/main_closed.f90 $FDIR/src/material_AFFCL -name '*.f90' -newer $FDIR/laos_closed_f$FACTOR)" ]; then
@@ -76,6 +80,7 @@ M09="--x0 lambda0=1.018961 --x0 s_taut=1.181953 --x0 koff0=0.078777 --x0 phi=0.7
 M10="--x0 lambda0=1.001155 --x0 s_taut=1.185379 --x0 koff0=0.260518 --x0 phi=0.839141 --x0 dxs_nm=3.791113"
 
 launch() {  # name, options; keeps at most MAXJOBS fits running
+  if [ -f optimisation_runs/final2_$1/result.json ]; then echo "$(date '+%F %T') skip final2_$1 (done)"; return; fi
   while [ "$(jobs -rp | wc -l)" -ge "$MAXJOBS" ]; do wait -n || true; done
   nohup python -B optimise_laos_v2.py $2 --workers $WORKERS --out optimisation_runs/final2_$1 > final2_$1.log 2>&1 &
   echo "$(date '+%F %T') started final2_$1 (pid $!)"
