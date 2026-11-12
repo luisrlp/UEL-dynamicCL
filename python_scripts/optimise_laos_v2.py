@@ -550,6 +550,8 @@ def main():
     ap.add_argument('--fix', action='append', default=[], help='name=value, e.g. dxs_nm=0.5 (repeatable)')
     ap.add_argument('--free', action='append', default=[], help=f'release a default-fixed parameter {DEFAULT_FIXED} (repeatable)')
     ap.add_argument('--x0', action='append', default=[], help='name=value to override a starting value')
+    ap.add_argument('--bound', action='append', default=[],
+                    help='name=lower,upper to override the search range of a free parameter, e.g. lambda0=1.0,1.035 (repeatable)')
     ap.add_argument('--dt', type=float, default=0.1,
                     help='time step [s]; --engine fortran: output spacing and maximum step (adaptive steps in between)')
     ap.add_argument('--factor', type=int, default=3)
@@ -569,6 +571,12 @@ def main():
                     help='simulations with material*.py or with the Fortran driver main_closed.f90 (consistent kinetics)')
     ap.add_argument('--fortran-exe', default=None, help=f'Fortran driver (default: ${FORTRAN_EXE_ENV} or FORTRAN_DIR/laos_closed_f<factor>)')
     a = ap.parse_args()
+    for s in a.bound:        # search range only: the cache keys are physical values, so cached evaluations stay valid
+        k, v = s.split('=')
+        if k not in PARAMS:
+            sys.exit(f'--bound {k}: unknown parameter')
+        lower, upper = (float(t) for t in v.split(','))
+        PARAMS[k] = (PARAMS[k][0], lower, upper)
     os.makedirs(a.out, exist_ok=True)
 
     data, gamma_A = load_data()
