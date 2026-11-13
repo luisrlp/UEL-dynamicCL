@@ -9,9 +9,8 @@ LAOS loops (Unterberger et al. 2013, Fig. 4a) of saved optimisation runs against
   python -B plot_laos_runs.py --runs final_F1p --set dxc_nm=0.3      # variant of a saved parameter set
 
 Parameters: optimum and fixed values of optimisation_runs/<run>/result.json; dt, factor and gamma_A from its cfg.
-5 cycles are simulated by default (--cycles N to change; --dt and --factor to change the time step and the number
-of directions; with the fitted number, e.g. --cycles 7 for final_F1p, the
-last cycle is checked against the run's best_loop.npz). R^2 = 1 - SS_res/SS_tot over the data points of
+The fitted number of cycles is simulated by default (--cycles N to change; --dt and --factor to change the time step
+and the number of directions); with the fitted settings, the last cycle is checked against the run's best_loop.npz. R^2 = 1 - SS_res/SS_tot over the data points of
 both branches, with the model interpolated at the data strains as in the fit (unit weights).
 Output: figures/validation/laos_<runs>.pdf (or --out).
 """
@@ -40,7 +39,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--runs', nargs='+', required=True, help='run folders in optimisation_runs/')
     ap.add_argument('--cycle', nargs='+', default=['last'], help="cycles to plot: numbers, 'last' or 'all'")
-    ap.add_argument('--cycles', type=int, default=5, help='number of simulated cycles (default 5)')
+    ap.add_argument('--cycles', type=int, default=None, help='number of simulated cycles (default: as in the fit)')
     ap.add_argument('--dt', type=float, default=None, help='time step [s] (default: as in the fit)')
     ap.add_argument('--factor', type=int, default=None, help='integration factor, NDIR = 10 factor^2 (default: as in the fit)')
     ap.add_argument('--set', nargs='+', default=[], metavar='NAME=VALUE', help='override parameters of all runs')
@@ -58,7 +57,7 @@ def main():
         p, cfg = load_run(name)
         p.update(overrides)
         cfg['fortran_engine'] = 1
-        n_fit, cfg['cycles'] = cfg['cycles'], a.cycles
+        n_fit, cfg['cycles'] = cfg['cycles'], a.cycles or cfg['cycles']
         dt_fit, cfg['dt'] = cfg['dt'], a.dt or cfg['dt']
         factor_fit, cfg['factor'] = cfg['factor'], a.factor or cfg['factor']
         opt.check_fortran(cfg['factor'])
@@ -67,12 +66,14 @@ def main():
 
         # with the fitted number of cycles, the last cycle of an unmodified run must reproduce the saved fitted loop
         best = os.path.join(opt.REPO, 'optimisation_runs', name, 'best_loop.npz')
-        if not overrides and a.cycles == n_fit and cfg['dt'] == dt_fit and cfg['factor'] == factor_fit and os.path.exists(best):
+        if not overrides and cfg['cycles'] == n_fit and cfg['dt'] == dt_fit and cfg['factor'] == factor_fit and os.path.exists(best):
             print(f'{name}: max |sigma - best_loop| = {np.abs(cycles[-1][1] - np.load(best)["sigma"]).max():.2e} Pa')
 
         n = cfg['cycles']
         ks = (list(range(1, n + 1)) if 'all' in a.cycle else
               [n if c == 'last' else int(c) for c in a.cycle])
+        if max(ks) > n:
+            raise SystemExit(f'{name}: cycle {max(ks)} requested but only {n} simulated (use --cycles {max(ks)})')
         for i, k in enumerate(ks):
             gm, sm = cycles[k - 1]
             if len(a.runs) == 1:                         # one run: colour per cycle

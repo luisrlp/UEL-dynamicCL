@@ -37,6 +37,7 @@ use global
 IMPLICIT NONE
 INTEGER, PARAMETER :: ndi = 3, nshr = 3, ntens = 6, nprops = 28, maxit_mu = 40
 DOUBLE PRECISION, PARAMETER :: GROWTH_MAX = 1.5d0, DT_MIN = 1.0d-9, PNEWDT_CALL = 1.0d10
+INTEGER, PARAMETER :: MAX_INC_FACTOR = 20
 DOUBLE PRECISION :: props(nprops)
 !     MATERIAL INTERFACE
 DOUBLE PRECISION :: sigma(ndi,ndi), statev(nsdv), statev_t(nsdv), ddsigdde(ndi,ndi,ndi,ndi)
@@ -183,6 +184,11 @@ mu_acc = mu
 h = dt_init
 DO istep = 1, nstep
   DO WHILE (t < thist(istep) - 1.0d-12 * MAX(one, thist(istep)))
+    IF (kinc + n_reject >= MAX_INC_FACTOR * (nstep + NINT(thist(nstep) / dt_max))) THEN
+      WRITE(0,*) 'ERROR: more than', MAX_INC_FACTOR * (nstep + NINT(thist(nstep) / dt_max)), &
+                 ' increments, stopped at t =', t
+      STOP 1
+    END IF
     h_try = MIN(h, dt_max, thist(istep) - t)
     IF (thist(istep) - t - h_try < 0.1d0 * h_try) h_try = thist(istep) - t   ! no sliver before the breakpoint
     limited = (h_try < h)

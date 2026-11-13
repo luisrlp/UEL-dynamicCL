@@ -49,8 +49,9 @@
       !   Slots  5 to 10    : Cauchy stress (6 components)
       !   Slots  11 to 13   : grad(mu) flux (3 components)
       !   Slots  14 to 16   : fluid flux J_fluid (3 components)
-      !   Slots  17 to NSDV : cbi (bound CL concentration per unique direction)
-      PARAMETER(NELEM=1, NSDV=16 + NDIR)
+      !   Slots  17 to 16+NDIR : cbi (bound CL concentration per unique direction)
+      !   Slots  17+NDIR to NSDV : lambda_ni (reference stretch per unique direction)
+      PARAMETER(NELEM=1, NSDV=16 + 2*NDIR)
       PARAMETER(ZERO=0.D0, ONE=1.0D0,TWO=2.0D0)
       PARAMETER(THREE=3.0D0,FOUR=4.0D0,SIX=6.0D0)
       PARAMETER(HALF=0.5d0,THIRD=1.d0/3.d0)
@@ -3101,12 +3102,681 @@ end subroutine UEL
         return
       end subroutine UVARM
       
+! ! COMMENT WHEN RUNNING IN ABAQUS
+! SUBROUTINE getoutdir(outdir, lenoutdir)
+
+
+
+! !>     GET CURRENT WORKING DIRECTORY
+! ! INCLUDE 'aba_param.inc'
+
+
+! CHARACTER (LEN=256), INTENT(IN OUT)      :: outdir
+! INTEGER, INTENT(OUT)                     :: lenoutdir
+
+
+
+! CALL getcwd(outdir)
+! !        OUTDIR=OUTDIR(1:SCAN(OUTDIR,'\',BACK=.TRUE.)-1)
+! lenoutdir=len_trim(outdir)
+
+! RETURN
+! END SUBROUTINE getoutdir
+
+    SUBROUTINE MATERIAL(SIGMA,STATEV,DDSIGDDE,DFGRD0,DFGRD1,DET, &
+    TIME,DTIME,PREDEF,NDI,NSHR,NTENS,NSTATEV,PROPS,NPROPS,COORDS, &
+    PNEWDT,NOEL,NPT,KSTEP,KINC,MU_TAU,THETAF_TAU,DTHETAFDT, &
+      DTHETAFDMU,RMACRO,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,CFMAX,DSIGDMU, &
+      DSRCDMU,DSRCDJ,DSRCDGU)
+!
+use global
+IMPLICIT NONE
+!----------------------------------------------------------------------
+!--------------------------- DECLARATIONS -----------------------------
+!----------------------------------------------------------------------
+INTEGER :: NDI, NSHR, NTENS, NSTATEV, NPROPS, NOEL, NPT, &
+            LAYER, KSPT, KSTEP, KINC
+
+INTEGER, PARAMETER :: nargs = 11
+
+REAL(KIND=8) :: STRESS(NTENS), STATEV(NSTATEV), &
+                DDSDDE(NTENS,NTENS), DDSDDT(NTENS), DRPLDE(NTENS), &
+                STRAN(NTENS), DSTRAN(NTENS), TIME(2), PREDEF(1), DPRED(1), &
+                PROPS(NPROPS), COORDS(3), DROT(3,3), DFGRD0(3,3), DFGRD1(3,3), &
+                FIBORI(NELEM,4), ARGS(NARGS)
+
+REAL(8), INTENT(IN)      :: MU_TAU, DMUDX(3,1)
+REAL(8), INTENT(OUT)     :: DSIGDMU(NDI,NDI)
+REAL(8), INTENT(OUT)     :: THETAF_TAU, DTHETAFDT, DTHETAFDMU, RMACRO! DPHIDMU, DPHIDOTDMU
+REAL(8), INTENT(OUT)     :: MFLUID, DMDMU, DMDJ, VMOL, CFMAX
+! Derivatives of the source s = -(cfmax*dthetaf/dt + dcb_tot/dt) (sign: -ds/d(.)), Part C item 1:
+!   DSRCDMU = (cfmax+G)/dt * dthetaf/dmu,  DSRCDJ = (cfmax+G)/dt * dthetaf/dJbar,
+!   DSRCDGU = -dcbdc/dt (spatial, isochoric: contracts with grad(du) at the local point)
+REAL(8), INTENT(OUT)     :: DSRCDMU, DSRCDJ, DSRCDGU(NDI,NDI)
+
+REAL(8) :: THETAF_T
+! DIFFUSION VARIABLES
+REAL(8) :: CHI, D, MU0, RGAS
+REAL(8) :: PHI_PER, PHI_M, dPdt_per, dPdt_m, DELTAMU, JFLUID(3,1)
+REAL(8) :: DphiDJ, DmDphi
+
+REAL(KIND=8) :: SSE, SPD, SCD, RPL, DRPLDT, DTIME, TEMP, &
+                DTEMP, PNEWDT, CELENT
+
+COMMON /kfilp/prefdir
+COMMON /kfile/etadir
+DOUBLE PRECISION :: prefdir(nelem,4)
+DOUBLE PRECISION :: etadir(nelem*ngp, ndir+2)
+DOUBLE PRECISION :: etadir_array(ndir)
+
+!
+!     FLAGS
+!      INTEGER FLAG1
+!     UTILITY TENSORS
+DOUBLE PRECISION :: unit2(ndi,ndi),unit4(ndi,ndi,ndi,ndi),  &
+    unit4s(ndi,ndi,ndi,ndi), proje(ndi,ndi,ndi,ndi),projl(ndi,ndi,ndi,ndi)
+!     KINEMATICS
+DOUBLE PRECISION :: distgr(ndi,ndi),c(ndi,ndi),b(ndi,ndi),  &
+    cbar(ndi,ndi),bbar(ndi,ndi),distgrinv(ndi,ndi),  &
+    ubar(ndi,ndi),vbar(ndi,ndi),rot(ndi,ndi), dfgrd1inv(ndi,ndi), &
+    cinv(ndi,ndi), cbarinv(ndi,ndi)
+DOUBLE PRECISION :: det,detfe, detfs,cbari1,cbari2
+DOUBLE PRECISION :: distgr_t(ndi,ndi), det_t        ! distortion gradient at the start of the increment
+!     VOLUMETRIC CONTRIBUTION
+DOUBLE PRECISION :: pkvol(ndi,ndi),svol(ndi,ndi),  &
+    cvol(ndi,ndi,ndi,ndi),cmvol(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: k,pv,ppv,ssev,ppv_chem
+!     ISOCHORIC CONTRIBUTION
+DOUBLE PRECISION :: siso(ndi,ndi),pkiso(ndi,ndi),pk2(ndi,ndi),  &
+    ciso(ndi,ndi,ndi,ndi),cmiso(ndi,ndi,ndi,ndi),  &
+    sfic(ndi,ndi),cfic(ndi,ndi,ndi,ndi), pkfic(ndi,ndi),cmfic(ndi,ndi,ndi,ndi)
+!     ISOCHORIC ISOTROPIC CONTRIBUTION
+DOUBLE PRECISION :: c10,c01,sseiso,diso(5),pkmatfic(ndi,ndi),  &
+    smatfic(ndi,ndi),sisomatfic(ndi,ndi), cmisomatfic(ndi,ndi,ndi,ndi),  &
+    cisomatfic(ndi,ndi,ndi,ndi)
+!     FILAMENTS NETWORK CONTRIBUTION
+DOUBLE PRECISION :: filprops(10), affprops(7), chemprops(12), eqprops(11)
+DOUBLE PRECISION :: cactin,cabp,ll,lambda0,mu0str,beta,nn,b0,bb
+DOUBLE PRECISION :: phinet,r0,r0c,r0f,a,p,etac,na,mactin,rhoactin
+DOUBLE PRECISION :: pknetfic(ndi,ndi),cmnetfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: snetfic(ndi,ndi),cnetfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: pknetficaf(ndi,ndi),pknetficnaf(ndi,ndi)
+DOUBLE PRECISION :: snetficaf(ndi,ndi),snetficnaf(ndi,ndi)
+DOUBLE PRECISION :: cmnetficaf(ndi,ndi,ndi,ndi), cmnetficnaf(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: cnetficaf(ndi,ndi,ndi,ndi), cnetficnaf(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: efi, kb, dx, dxc, Lp, theta
+DOUBLE PRECISION :: R, Rfmax, Rbmax, Keq, Koff0, Kon0, Kcatch0
+DOUBLE PRECISION :: cb(ndir), cb0, cbmax, thetab, thetaf0
+DOUBLE PRECISION :: lamn(ndir), sfr, xi_t
+DOUBLE PRECISION :: cb_tot, cb_tot_new, cf
+DOUBLE PRECISION :: cb_upper, machep, tol
+DOUBLE PRECISION :: Jc, f, df, dHdcb
+DOUBLE PRECISION :: DTHETAFDJ, dcbdthetaf, dsficdthetaf(ndi,ndi), dsigisodthetaf(ndi,ndi)
+DOUBLE PRECISION :: x_rest, f_rest, g_rest, dum1, dum2
+!     FULLY IMPLICIT FREE FRACTION F(theta_f) = H(theta_f; mu, J, cb_tot(theta_f)), RTSAFE
+INTEGER :: it_fi
+INTEGER, PARAMETER :: MAXIT_FI = 50
+DOUBLE PRECISION, PARAMETER :: TOL_FI_F = 1.0d-10, TOL_FI_TH = 1.0d-12
+DOUBLE PRECISION :: cb_try(ndir), lamn_try(ndir), theta0, theta1, thx, thl, thh, Ffi, Fpfi, dthfi, dthold
+DOUBLE PRECISION :: Heff, Hth0
+!
+!     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)
+DOUBLE PRECISION :: cjr(ndi,ndi,ndi,ndi)
+!     CAUCHY STRESS AND ELASTICITY TENSOR
+DOUBLE PRECISION :: sigma(ndi,ndi),ddsigdde(ndi,ndi,ndi,ndi),  &
+    ddpkdde(ndi,ndi,ndi,ndi)
+!     OTHER TANGENT AUX TENSORS
+DOUBLE PRECISION :: dpk2dthetaf(ndi,ndi), dthetafdc(ndi,ndi), dPK2ficdcb(ndi,ndi), &
+                    dcbdc(ndi,ndi), cvolchem(ndi,ndi,ndi,ndi), &
+                    dsigmadcb(ndi,ndi)
+DOUBLE PRECISION :: stest(ndi,ndi), ctest(ndi,ndi,ndi,ndi)
+
+INTEGER :: I1, J1, K1, L1
+
+
+!----------------------------------------------------------------------
+!-------------------------- INITIALIZATIONS ---------------------------
+!----------------------------------------------------------------------
+!     IDENTITY AND PROJECTION TENSORS
+unit2=zero
+unit4=zero
+unit4s=zero
+proje=zero
+projl=zero
+!     KINEMATICS
+distgr=zero
+c=zero
+b=zero
+cbar=zero
+bbar=zero
+ubar=zero
+vbar=zero
+rot=zero
+det=zero
+cbari1=zero
+cbari2=zero
+!     VOLUMETRIC
+pkvol=zero
+svol=zero
+cvol=zero
+k=zero
+pv=zero
+ppv=zero
+ppv_chem=zero
+ssev=zero
+!     ISOCHORIC
+siso=zero
+pkiso=zero
+pk2=zero
+ciso=zero
+cfic=zero
+sfic=zero
+pkfic=zero
+!     ISOTROPIC
+c10=zero
+c01=zero
+sseiso=zero
+diso=zero
+pkmatfic=zero
+smatfic=zero
+sisomatfic=zero
+cmisomatfic=zero
+cisomatfic=zero
+!     FILAMENTS NETWORK
+snetfic=zero
+cnetfic=zero
+pknetfic=zero
+pknetficaf=zero
+pknetficnaf=zero
+snetficaf=zero
+snetficnaf=zero
+cmnetfic=zero
+cmnetficaf=zero
+cmnetficnaf=zero
+cnetficaf=zero
+cnetficnaf=zero
+!     JAUMANN RATE
+cjr=zero
+!     TOTAL CAUCHY STRESS AND ELASTICITY TENSORS
+sigma=zero
+ddsigdde=zero
+cvolchem=zero
+!     FLUID FLUX
+jfluid=zero
+!----------------------------------------------------------------------
+!------------------------ IDENTITY TENSORS ----------------------------
+!----------------------------------------------------------------------
+CALL onem(unit2,unit4,unit4s,ndi)
+!----------------------------------------------------------------------
+!------------------------ RANDOM GENERATION ---------------------------
+!----------------------------------------------------------------------
+
+!----------------------------------------------------------------------
+!------------------- MATERIAL CONSTANTS AND DATA ----------------------
+!----------------------------------------------------------------------
+!     VOLUMETRIC
+k        = props(1)
+!     ISOCHORIC ISOTROPIC
+c10      = props(2)
+c01      = props(3)
+phinet   = props(4)
+!     ACTIN/CROSSLINKERS
+a        = props(5)  ! Ratio between contour length and end-to-end distance
+r0c      = props(6)
+etac     = props(7)
+mu0str   = props(8)
+beta     = props(9)
+Lp       = props(10) ! Persistence length
+theta    = props(11) ! Absolute temperature
+dx       = props(12) ! CL reactive distance / bond length
+!     AFFINE NETWORK
+bb       = props(13)
+lambda0  = props(14)
+cactin   = props(15)
+R        = props(16) ! CL to actin ratio
+Rfmax    = props(17) ! Maximum free CL to actin ratio
+Rbmax   = props(18) ! Maximum bound CL to actin ratio
+!     SOLVENT
+CHI    = PROPS(19)
+D      = PROPS(20)
+MU0    = PROPS(21)
+VMOL   = PROPS(22)
+Koff0  = PROPS(23)
+Keq    = PROPS(24)
+Kcatch0 = PROPS(25)
+dxc     = PROPS(26)
+!     STRETCH-FREE REBINDING (as 6_CL_DIFF_CS if PROPS(27) = 0)
+IF (NPROPS >= 28) THEN
+  sfr  = PROPS(27) ! 1 = on (bonds rebind at the current stretch, reference stretch lamn), 0 = off (lamn = 1)
+  xi_t = PROPS(28) ! fraction of the network with stretch-free rebinding (0..1; the rest is permanent)
+ELSE
+  sfr  = zero
+  xi_t = zero
+END IF
+
+!Other parameters (Check which of these will be actually needed in the UMAT and not only in the AFFCL subroutine)
+! (double-precision literals: single-precision ones carry ~1e-8 relative errors)
+kb = 1.380649d-5
+b0 = Lp * theta * kb
+rgas = 8.314462618d0
+Mactin = 42.0d-3       ! [MDa]
+rhoactin = 16.0d0      ! [MDa/microm]
+NA = 6.022d5           ! [1/amol]
+Kon0 = (Koff0 + Kcatch0) * Keq
+! Maximum allowable CL concentration
+cfmax = Rfmax * cactin
+cbmax = Rbmax * cactin
+
+filprops = (/a, r0c, etac, mu0str, beta, Lp, theta, dx, kb, NA/)
+affprops = (/bb, lambda0, cactin, Mactin, rhoactin, sfr, xi_t/)
+eqprops = (/a, r0c, etac, mu0str, beta, b0, lambda0, Koff0, Kcatch0, dx/(kb*theta), dxc/(kb*theta)/)
+
+! Rest equilibrium (prestress-aware): initial state at t = 0 and, with the consistent kinetics (C4),
+! the rest constants g_rest = g(f_rest) and x_rest = mu_b^mech(rest)/RT at every call (no state variables)
+cabp = cactin*R
+cb_upper = MIN(cabp, cbmax)
+machep = 2.22d-16
+tol = 1.0d-12
+CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq, eqprops)
+CALL xmech(x_rest, f_rest, dum1, dum2, cb0, one, one, a, r0c, etac, mu0str, beta, b0, lambda0, &
+           cactin*NA*Mactin/rhoactin, rgas*theta)
+CALL koffcs(g_rest, dum1, f_rest, Koff0, Kcatch0, dx/(kb*theta), dxc/(kb*theta))
+chemprops = (/cbmax, cfmax, CHI, D, MU0, VMOL, Koff0, Keq, Kcatch0, dxc, g_rest, x_rest/)
+
+IF (STATEV(1) == 0.0d0) THEN
+  thetaf0 = (cabp - cb0) / cfmax
+  CALL initialize(statev,thetaf0,vmol,cb0,cfmax)
+END IF
+!        READ STATEV
+CALL sdvread(statev, thetaf_t, cb, cb_tot, lamn)
+!----------------------------------------------------------------------
+!---------------------------- KINEMATICS ------------------------------
+!----------------------------------------------------------------------
+!     DISTORTION GRADIENT
+CALL fslip(dfgrd1,distgr,det,ndi)
+CALL fslip(dfgrd0,distgr_t,det_t,ndi)
+!     INVERSE OF DEFORMATION GRADIENT
+CALL matinv3d(dfgrd1,dfgrd1inv,ndi)
+!     INVERSE OF DISTORTION GRADIENT
+CALL matinv3d(distgr,distgrinv,ndi)
+!     CAUCHY-GREEN DEFORMATION TENSORS
+CALL deformation(dfgrd1,c,b,ndi)
+CALL deformation(distgr,cbar,bbar,ndi)
+!     INVERSE OF CAUCHY-GREEN DEFORMATION TENSORS
+CALL matinv3d(c,cinv,ndi)
+CALL matinv3d(cbar,cbarinv,ndi)
+!     INVARIANTS OF DEVIATORIC DEFORMATION TENSORS
+CALL invariants(cbar,cbari1,cbari2,ndi)
+!     STRETCH TENSORS
+CALL stretch(cbar,bbar,ubar,vbar,ndi)
+!     ROTATION TENSORS
+CALL rotation(distgr,rot,ubar,ndi)
+!     DEVIATORIC PROJECTION TENSORS
+CALL projeul(unit2,unit4s,proje,ndi)
+CALL projlag(c,unit4,projl,ndi)
+!----------------------------------------------------------------------
+!---------------------- COUPLED DIFFUSION -----------------------------
+!----------------------------------------------------------------------
+
+!     1. Solve for current free crosslinker fraction (THETAF_TAU)
+      ARGS(1) = MU_TAU
+      ARGS(2) = MU0
+      ARGS(3) = RGAS
+      ARGS(4) = THETA
+      ARGS(5) = CHI
+      ARGS(6) = VMOL
+      ARGS(7) = K
+      ARGS(8) = DET
+      ARGS(9) = CB_TOT
+      ARGS(10) = CFMAX
+      ARGS(11) = cactin * R      ! initial total crosslinker content c0 (reference state of J^c)
+      ! write(*,*) 'ARGS = ', ARGS
+      ! write(*,*) 'THETAF_T =', THETAF_T
+      CALL SOLVETHETAF(THETAF_TAU, ARGS, NARGS, THETAF_T, PNEWDT)
+
+      CALL erfi(efi,bb)
+      IF ((phinet > zero) .AND. (PNEWDT >= one)) THEN
+        theta0 = THETAF_TAU
+        CALL fi_eval(theta0, Ffi, Fpfi)
+        IF ((PNEWDT >= one) .AND. (ABS(Ffi) >= TOL_FI_F)) THEN
+          CALL SOLVETHETAF(theta1, ARGS, NARGS, theta0, PNEWDT)   ! phi(theta0)
+          Jc = one + VMOL * (ARGS(9) + cfmax * theta0 - cactin * R)
+          dHdcb = k * vmol**two / (RGAS * THETA) * (one + DLOG(det/Jc)) / Jc**two
+          IF (ABS(dHdcb * dcbdthetaf) * ABS(theta1 - theta0) < TOL_FI_F) THEN
+            THETAF_TAU = theta1
+          ELSE
+            IF (dcbdthetaf <= zero) THEN                     ! SFR: [theta0, phi(theta0)] not guaranteed
+              thl = 1.0d-8                                   ! F < 0
+              thh = one - 1.0d-8
+            ELSE IF (Ffi < zero) THEN
+              thl = theta0
+              thh = theta1
+            ELSE
+              thl = theta1
+              thh = theta0
+            END IF
+            thx = theta0
+            dthold = ABS(thh - thl)
+            dthfi = dthold
+            DO it_fi = 1, MAXIT_FI
+              ! Bisect if Newton is out of the bracket or not decreasing fast enough
+              IF ((((thx - thh) * Fpfi - Ffi) * ((thx - thl) * Fpfi - Ffi) >= zero) .OR. &
+                  (ABS(two * Ffi) > ABS(dthold * Fpfi))) THEN
+                dthold = dthfi
+                dthfi = half * (thh - thl)
+                thx = thl + dthfi
+              ELSE
+                dthold = dthfi
+                dthfi = Ffi / Fpfi
+                thx = thx - dthfi
+              END IF
+              IF (ABS(dthfi) < TOL_FI_TH) EXIT
+              CALL fi_eval(thx, Ffi, Fpfi)
+              IF ((PNEWDT < one) .OR. (ABS(Ffi) < TOL_FI_F)) EXIT
+              IF (Ffi < zero) THEN
+                thl = thx
+              ELSE
+                thh = thx
+              END IF
+            END DO
+            IF (it_fi > MAXIT_FI) THEN
+              PNEWDT = MIN(PNEWDT, half)
+              write(*,*) 'WARNING: fully implicit thetaf not converged, noel =', noel, ' |F| =', ABS(Ffi), &
+                         ' -> PNEWDT =', PNEWDT
+            END IF
+            THETAF_TAU = thx
+          END IF
+        END IF
+      END IF
+
+      ! Final network evaluation at the accepted theta_f: bound contents cb^tau
+      dcbdc = zero
+      dcbdthetaf = zero
+      dsficdthetaf = zero
+      cb_tot_new = cb_tot
+      IF (phinet > zero) THEN
+        CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,unit2,filprops,  &
+             affprops,efi,noel,det,prefdir,ndi,cb,dtime,chemprops, &
+             thetaf_tau, cb_tot_new, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf, lamn, 2, &
+             distgr_t, thetaf_t)
+      END IF
+      ARGS(9) = cb_tot_new
+
+      cf = THETAF_TAU * cfmax
+      ! Swelling relative to the initial content c0 = cactin*R (stress-free reference: Jc = 1 at t = 0);
+      ! dJc/dc = VMOL as before, so the derivatives below are unchanged (same definition in thetafFunc)
+      Jc = 1.0d0 + VMOL * (cb_tot_new + cf - cactin * R)
+
+      ! Evaluate tangent at converged root
+      CALL thetafFunc(THETAF_TAU, f, df, ARGS, NARGS)
+      dHdcb = k * vmol**two / (RGAS * THETA) * (one + DLOG(det/Jc)) / Jc**two
+      Heff = df + dHdcb * dcbdthetaf
+      Hth0 = one / THETAF_TAU + one / (one - THETAF_TAU) - two * CHI
+      DTHETAFDMU = one / (RGAS * THETA * Heff)
+
+      ! write(*,*) 'kinc = ', kinc
+      ! write(*,*) 'kstep = ', kstep
+      ! write(*,*) 'DTIME = ', DTIME
+
+      IF (DTIME > 1.0d-12) THEN
+        DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME            
+      ELSE
+        DTHETAFDT = 0.0d0
+      END IF
+
+
+      ! Fluid mobility (spatial, consistent with the spatial flux j = -m grad(mu)):
+      !   m = D/(RT) * (cf/J) * (1 - thetaf), with cf/J the free CL concentration per unit
+      !   deformed volume (cf is per unit reference volume; J = det = Jbar with F-bar).
+      !   D is the Fickian diffusion coefficient; the 1/(RT) (Einstein relation) gives
+      !   D_eff = m * dmu/d(cf/J) = D * [1 - 2*chi*thetaf*(1-thetaf)] ~ D
+      !   (Chester, Di Leo & Anand 2015, Eqs. 2.11 and 4.1)
+      MFLUID = D / (RGAS * THETA) * cf * (1.0d0 - THETAF_TAU) / det
+
+      ! Mobility tangents
+      DMDMU = D / (RGAS * THETA) * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) * DTHETAFDMU / det
+      ! dm/dJ: through thetaf (Implicit Function Theorem on H(THETAF_TAU, mu, J) = 0,
+      !   dthetaf/dJ = (k*Vmol) / (RT * Jc * det * df)) and through the 1/J of the concentration:
+      !   dm/dJ = dm/dthetaf * dthetaf/dJ - m/J
+      DTHETAFDJ = (k * VMOL) / (RGAS * THETA * Jc * det * Heff)
+      DMDJ  = D / (RGAS * THETA) * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) * DTHETAFDJ / det &
+            - MFLUID / det
+
+      ! Fluid flux vector (for visualization/SVARS)
+      jfluid = -MFLUID * DMUDX
+
+      
+!----------------------------------------------------------------------
+!--------------------- CONSTITUTIVE RELATIONS  ------------------------
+!----------------------------------------------------------------------
+!---- VOLUMETRIC ------------------------------------------------------
+!     STRAIN-ENERGY
+CALL vol(ssev,pv,ppv,k,det,Jc)
+! Add chemical contribution (Kuu Term 2)
+ppv_chem = - (k**two * VMOL**two * (CFMAX + dcbdthetaf)) / (det * Jc**two) * DTHETAFDMU
+ppv = ppv+ ppv_chem
+! write(*,*) 'DTHETAFDMU = ', DTHETAFDMU
+! write(*,*) 'ppv = ', ppv
+! write(*,*) 'ppv_chem = ', ppv_chem
+!---- ISOCHORIC ISOTROPIC ---------------------------------------------
+IF (phinet < one) THEN
+!     STRAIN-ENERGY
+  CALL isomat(sseiso,diso,c10,c01,cbari1,cbari2)
+!     PK2 'FICTICIOUS' STRESS TENSOR
+  CALL pk2isomatfic(pkmatfic,diso,cbar,cbari1,unit2,ndi)
+!     CAUCHY 'FICTICIOUS' STRESS TENSOR
+  CALL sigisomatfic(sisomatfic,pkmatfic,distgr,det,ndi)
+!     'FICTICIOUS' MATERIAL ELASTICITY TENSOR
+  CALL cmatisomatfic(cmisomatfic,cbar,cbari1,cbari2, diso,unit2,unit4,det,ndi)
+!     'FICTICIOUS' SPATIAL ELASTICITY TENSOR
+  CALL csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
+  
+END IF
+!---- FILAMENTS NETWORK -----------------------------------------------
+!     Computed with the fully implicit free fraction: snetficaf, cnetficaf, cb^tau,
+!     cb_tot_new, dcbdthetaf (G), dcbdc, dsficdthetaf
+
+! Macroscopic reaction source (homogenized binding rate) and the source derivatives (Part C, item 1)
+IF (DTIME > 1.0d-12) THEN
+  RMACRO = (cb_tot_new - cb_tot) / DTIME
+  DSRCDMU = (CFMAX + dcbdthetaf) * DTHETAFDMU / DTIME
+  DSRCDJ  = (CFMAX + dcbdthetaf) * DTHETAFDJ / DTIME
+  DSRCDGU = - dcbdc / DTIME * Hth0 / Heff
+ELSE
+  RMACRO = 0.0d0
+  DSRCDMU = 0.0d0
+  DSRCDJ  = 0.0d0
+  DSRCDGU = 0.0d0
+END IF
+! write(*,*) 'cb_tot = ', cb_tot
+! write(*,*) 'cb_tot_new = ', cb_tot_new
+
+!      PKNETFIC=PKNETFICNAF+PKNETFICAF
+snetfic=snetficnaf+snetficaf
+!      CMNETFIC=CMNETFICNAF+CMNETFICAF
+cnetfic=cnetficnaf+cnetficaf
+!----------------------------------------------------------------------
+!     STRAIN-ENERGY
+SSE=SSEV+SSEISO
+!     PK2 'FICTICIOUS' STRESS
+pkfic=(one-phinet)*pkmatfic+pknetfic
+!     CAUCHY 'FICTICIOUS' STRESS
+sfic=(one-phinet)*sisomatfic+snetfic
+!     MATERIAL 'FICTICIOUS' ELASTICITY TENSOR
+cmfic=(one-phinet)*cmisomatfic+cmnetfic
+!     SPATIAL 'FICTICIOUS' ELASTICITY TENSOR
+cfic=(one-phinet)*cisomatfic+cnetfic
+!----------------------------------------------------------------------
+!-------------------------- STRESS MEASURES ---------------------------
+!----------------------------------------------------------------------
+!---- VOLUMETRIC ------------------------------------------------------
+!      PK2 STRESS
+! CALL pk2vol(pkvol,pv,c,ndi)
+CALL pk2vol(pkvol,pv,c,ndi,det)
+!      CAUCHY STRESS
+CALL sigvol(svol,pv,unit2,ndi)
+!---- ISOCHORIC -------------------------------------------------------
+!      PK2 STRESS
+CALL pk2iso(pkiso,pkfic,projl,det,ndi)
+!      CAUCHY STRESS
+CALL sigiso(siso,sfic,proje,ndi)
+!      ACTIVE CAUCHY STRESS
+!      CALL SIGISO(SACTISO,SNETFICAF,PROJE,NDI)
+
+!      CALL SPECTRAL(SACTISO,SACTVL,SACTVC)
+!---- VOLUMETRIC + ISOCHORIC ------------------------------------------
+!      PK2 STRESS
+pk2 = pkvol + pkiso
+!      CAUCHY STRESS
+sigma = svol + siso
+
+!----------------------------------------------------------------------
+!-------------------- MATERIAL ELASTICITY TENSOR ----------------------
+!----------------------------------------------------------------------
+
+!---- VOLUMETRIC ------------------------------------------------------
+
+!      CALL METVOL(CMVOL,C,PV,PPV,DET,NDI)
+
+!---- ISOCHORIC -------------------------------------------------------
+
+!      CALL METISO(CMISO,CMFIC,PROJL,PKISO,PKFIC,C,UNIT2,DET,NDI)
+
+!----------------------------------------------------------------------
+
+!      DDPKDDE=CMVOL+CMISO
+
+!----------------------------------------------------------------------
+!--------------------- SPATIAL ELASTICITY TENSOR ----------------------
+!----------------------------------------------------------------------
+
+!---- VOLUMETRIC ------------------------------------------------------
+
+CALL setvol(cvol,pv,ppv,unit2,unit4s,ndi)
+
+!---- ISOCHORIC -------------------------------------------------------
+
+CALL setiso(ciso,cfic,proje,siso,sfic,unit2,ndi)
+
+!-----JAUMMAN RATE ----------------------------------------------------
+
+CALL setjr(cjr,sigma,unit2,ndi)
+
+!----------------------------------------------------------------------
+
+!     ELASTICITY TENSOR
+ddsigdde=cvol+ciso ! +cvolchem ! +cjr
+! if (npt==1) then
+!   write(*,*) 'cvolchem / ddsigdde = ', cvolchem / ddsigdde
+! end if
+!----------------------------------------------------------------------
+!------------------------- CROSS-COUPLINGS ----------------------------
+!----------------------------------------------------------------------
+!     DISPLACEMENT - CHEMICAL POTENTIAL MODULUS
+! DO I1 = 1, NDI
+!     DO J1 = 1, NDI
+!       ! Derivative of Cauchy stress with respect to phi
+!       SPUCMOD(I1,J1) = (K / (DETFE * PHI_TAU)) * UNIT2(I1,J1) * DPHIDMU
+!     END DO
+! END DO
+
+!     CHEMICAL POTENTIAL - DISPLACEMENT MODULUS: assembled in the element from MFLUID, DMDJ,
+!     DSRCDJ and DSRCDGU (u3d8.f90, Part C items 1 and 5)
+
+
+!     CAUCHY STRESS - CHEMICAL POTENTIAL MODULUS (dS / dMu)
+!     volumetric (free CL swelling) + isochoric network through cb_i(thetaf) (Part C, item 4):
+!     dsigma/dthetaf = -K*Vmol*cfmax/(J*Jc) I + P : sum_i dsfic_i/dcb_i * S^theta_i
+  CALL contraction42(dsigisodthetaf, proje, dsficdthetaf, ndi)
+  DO I1 = 1, NDI
+      DO J1 = 1, NDI
+        DSIGDMU(I1,J1) = ( -((K * VMOL * (CFMAX + dcbdthetaf)) / (DET * Jc)) * UNIT2(I1,J1) &
+                         + dsigisodthetaf(I1,J1) ) * DTHETAFDMU
+      END DO
+  END DO
+
+!     NETWORK STRESS THROUGH THETAF(J) (Kuu term 4, Part C item 7): push-forward of
+!     2 dSiso/dthetaf (x) dthetaf/dC, with dthetaf/dC = J/2 dthetaf/dJ C^-1:
+!     c_ijkl += J * dthetaf/dJ * dsigiso/dthetaf_ij * delta_kl
+!     (the volumetric counterpart is zero: Jc uses the lagged cb_tot, as for cvolchem)
+  DO I1 = 1, NDI
+    DO J1 = 1, NDI
+      DO K1 = 1, NDI
+        ddsigdde(I1,J1,K1,K1) = ddsigdde(I1,J1,K1,K1) + DET * DTHETAFDJ * dsigisodthetaf(I1,J1)
+      END DO
+    END DO
+  END DO
+
+!     FULLY IMPLICIT: stretch dependence through cb_tot^tau (dc_mech = -dcbdc:eps at fixed J and mu):
+!     Term 5  - pressure through J^c:   dc = Hth0/Heff * dc_mech  ->  +K*Vmol/(J*Jc) * Hth0/Heff * I (x) dcbdc
+!     Term 4b - network through theta_f: dthetaf = -dHdcb/Heff * dc_mech -> dsigiso/dthetaf (x) dHdcb/Heff * dcbdc
+  DO I1 = 1, NDI
+    DO J1 = 1, NDI
+      DO K1 = 1, NDI
+        DO L1 = 1, NDI
+          ddsigdde(I1,J1,K1,L1) = ddsigdde(I1,J1,K1,L1) &
+              + ((K * VMOL) / (DET * Jc) * Hth0 / Heff * UNIT2(I1,J1) + dHdcb / Heff * dsigisodthetaf(I1,J1)) &
+              * dcbdc(K1,L1)
+        END DO
+      END DO
+    END DO
+  END DO
+
+
+!----------------------------------------------------------------------
+!------------------------- INDEX ALLOCATION ---------------------------
+!----------------------------------------------------------------------
+!     VOIGT NOTATION  - FULLY SIMMETRY IMPOSED
+CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
+
+!----------------------------------------------------------------------
+!--------------------------- STATE VARIABLES --------------------------
+!----------------------------------------------------------------------
+!     DO K1 = 1, NTENS
+!      STATEV(1:27) = VISCOUS TENSORS
+CALL sdvwrite(det,statev,stress,thetaf_tau,dmudx,Vmol,jfluid,cb,cb_tot_new,cfmax,lamn)
+! CALL sdvwrite(det,etac_sdv,statev)
+!     END DO
+!----------------------------------------------------------------------
+RETURN
+
+!----------------------------------------------------------------------
+!----------------------- AUXILIAR SUBROUTINES -------------------------
+!----------------------------------------------------------------------
+
+CONTAINS
+
+  SUBROUTINE fi_eval(thv, Fv, Fpv)
+    ! Kinetics of all directions at theta_f = thv from the state at t (on a copy of cb, kinetics only),
+    ! then F = H(thv; mu, J, cb_tot(thv)) (thetafFunc) and F' = dH/dthetaf + dH/dcb_tot * G.
+    ! Sets ARGS(9) = cb_tot(thv).
+    DOUBLE PRECISION, INTENT(IN)  :: thv
+    DOUBLE PRECISION, INTENT(OUT) :: Fv, Fpv
+    DOUBLE PRECISION :: thc, Jcv
+    cb_try = cb
+    lamn_try = lamn
+    dcbdthetaf = zero
+    CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,unit2,filprops,  &
+        affprops,efi,noel,det,prefdir,ndi,cb_try,dtime,chemprops, &
+        thv, cb_tot_new, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf, lamn_try, 1, distgr_t, thetaf_t)
+    ARGS(9) = cb_tot_new
+    thc = thv
+    CALL thetafFunc(thc, Fv, Fpv, ARGS, NARGS)
+    Jcv = one + VMOL * (cb_tot_new + cfmax * thv - cactin * R)
+    Fpv = Fpv + k * vmol**two / (RGAS * THETA) * (one + DLOG(det/Jcv)) / Jcv**two * dcbdthetaf
+  END SUBROUTINE fi_eval
+
+END SUBROUTINE material
+!----------------------------------------------------------------------
+!--------------------------- END OF UMAT ------------------------------
+!----------------------------------------------------------------------
+
 ! SUBROUTINE affclnetfic_discrete(sfic,cfic,f,filprops,affprops,  &
 !           efi,noel,det,prefdir,ndi) ! (original)
 
 SUBROUTINE affclnetfic_discrete(sfic,cfic,f,unit2,filprops,affprops,  &
   efi,noel,det,prefdir,ndi,cb,dtime,chemprops, &
-  thetaf, cbtau_tot, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf)
+  thetaf, cbtau_tot, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf, lamn, imode, f_t, thetaf_t)
 
 
 
@@ -3116,6 +3786,7 @@ use global
 IMPLICIT NONE
 
 INTEGER, INTENT(IN)                      :: ndi
+INTEGER, INTENT(IN)                      :: imode
 DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
 DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION, INTENT(OUT)            :: dPK2ficdcb(ndi,ndi)
@@ -3124,8 +3795,8 @@ DOUBLE PRECISION, INTENT(IN OUT)         :: pnewdt
 DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN)             :: filprops(10)
-DOUBLE PRECISION, INTENT(IN)             :: affprops(5)
-DOUBLE PRECISION, INTENT(IN)             :: chemprops(10)
+DOUBLE PRECISION, INTENT(IN)             :: affprops(7)
+DOUBLE PRECISION, INTENT(IN)             :: chemprops(12)
 DOUBLE PRECISION, INTENT(IN OUT)         :: efi
 INTEGER, INTENT(IN OUT)                  :: noel
 DOUBLE PRECISION, INTENT(IN OUT)         :: det
@@ -3136,9 +3807,12 @@ DOUBLE PRECISION, INTENT(OUT)            :: cbtau_tot
 DOUBLE PRECISION, INTENT(OUT)            :: dcbdthetaf ! G = dcb_tot/dthetaf (at fixed stretches)
 DOUBLE PRECISION, INTENT(OUT)            :: dsficdthetaf(ndi,ndi) ! d(fictitious Cauchy)/dthetaf via cb_i
 DOUBLE PRECISION, INTENT(IN OUT)         :: cb(ndir)
+DOUBLE PRECISION, INTENT(IN OUT)         :: lamn(ndir)
+DOUBLE PRECISION, INTENT(IN)             :: f_t(ndi,ndi)   ! distortion gradient at the start of the increment
+DOUBLE PRECISION, INTENT(IN)             :: thetaf_t       ! thetaf at the start of the increment
 
 INTEGER :: i1,j1,k1,l1,m1, im1, isub, n_sub
-INTEGER, PARAMETER :: nargs = 19
+INTEGER, PARAMETER :: nargs = 21
 DOUBLE PRECISION :: args(nargs)
 DOUBLE PRECISION :: sfilfic(ndi,ndi), cfilfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
@@ -3153,23 +3827,34 @@ DOUBLE PRECISION :: cbt_i, cbtau_i, thetab_i, Kon, Koff_i, R_i, dtime_sub, cb_su
 INTEGER :: iter
 DOUBLE PRECISION :: cb_new, Res, cb_pert, dcb, r0f_p, l_p, r0_p
 DOUBLE PRECISION :: DfDcb, DdwDcb, Dr0Dcb, auxdwdcb, dHdlambda, dHdcb, dRiDcb, auxchem, dKoffDf_i
-DOUBLE PRECISION :: sensthetaf_i, dHdthetaf_i, dsfilficdcb(ndi,ndi)
-DOUBLE PRECISION :: dHdcb_i, dHdlambda_i, sens_i, dHdcb_min, kh_i, gerr_i, cbx_i, Hx_i, dHdcbx_i, dHdlambdax_i
+DOUBLE PRECISION :: dcbdthetaf_i, dHdthetaf_i, dsfilficdcb(ndi,ndi)
+DOUBLE PRECISION :: dHdcb_i, dHdlambda_i, dcbdlambda_i, dHdcb_min, kh_i, gerr_i, cbx_i, Hx_i, dHdcbx_i, dHdlambdax_i
 LOGICAL :: conv_i, atb_i, ok_i, hard_i
 INTEGER :: nhard, nacc, nsub_max
-! Kinetics sub-stepping (per direction). The whole increment is tried first (n_sub = 1); it is
-! repeated from the start-of-increment state with n_sub = 2, 4, ... <= MAX_SUBSTEPS sub-steps of
-! dtime/n_sub if, in any sub-step, the solve does not converge, dH/dcb at the root < DH_MIN
-! (uniqueness of the Backward-Euler root being lost), or the estimated Backward-Euler error
-! exceeds DCB_MAX*max(min(cb_start, cb_end), CB_SCALE*cbmax) (accuracy, relative to the smaller
-! of the two values). Error estimate (exact order for linear kinetics):
-! err = |cb change| * min(kh/2, 1/kh), with kh = dt_sub*|dR/dcb| = |dH/dcb - 1| the sub-step
-! length over the kinetic time scale, evaluated at the start and at the end of the sub-step
-! (larger factor used): slow kinetics (kh << 1) err ~ |dcb|*kh/2; fast kinetics (kh >> 1,
-! quasi-equilibrium, e.g. complete unbinding) err ~ |dcb|/kh -> 0.
+DOUBLE PRECISION :: g_rest, x_rest, rt, kactin, x_i, f_st, dxdle_i, dfdle_i, g_st, dgdf_st, s_i
+DOUBLE PRECISION :: bind_flux, dHdth_i, dHds_i, dHdthx_i, dHdsx_i
+DOUBLE PRECISION :: dledlambda_i, dledthetaf_i, dsdlambda_i, dsdthetaf_i, dbindfluxdlambda_i, dbindfluxdthetaf_i
+! Sub-steps k > 1: x and the force are evaluated at cb and lamn of the previous sub-step
+DOUBLE PRECISION :: dxdcb_i, dfdcb_i, dxdlamn_i, x_pert, f_pert, dxdle_pert, dfdle_pert
+DOUBLE PRECISION, PARAMETER :: EPS_FD = 1.0d-7      ! relative step of the one-sided differences of xmech
 DOUBLE PRECISION, PARAMETER :: DH_MIN = 0.1d0, DCB_MAX = 0.1d0, CB_SCALE = 1.0d-3
-INTEGER, PARAMETER :: MAX_SUBSTEPS = 64
+! Sub-stepping is off (MAX_SUBSTEPS = 1): the time step is controlled through PNEWDT by the error estimate below
+INTEGER, PARAMETER :: MAX_SUBSTEPS = 1
+! Backward-Euler local error estimate per direction (imode = 2): err = |dy - dt*ydot_t|/2 (y = lamn, absolute;
+! y = cb, relative), ydot_t the rate at the start-of-increment state; PNEWDT = SAFETY_DT/sqrt(max err/TOL)
+! (local error ~ dt^2), < 1 rejects the increment, otherwise at most PNEWDT_MAX (growth)
+! Tolerances calibrated 2026-11-07 (main_sa.f90 vs fixed fine steps): max stress error about 1 % or less
+DOUBLE PRECISION, PARAMETER :: TOL_LAMN = 3.0d-6, TOL_CB = 3.0d-5
+DOUBLE PRECISION, PARAMETER :: SAFETY_DT = 0.9d0, PNEWDT_MIN = 0.25d0, PNEWDT_MAX = 1.5d0
+DOUBLE PRECISION :: lambda_t_i, mfi_t(ndi), le_t, x_t, f_t_i, g_t, dgdf_t, dxdle_t, dfdle_t, s_t, kon_t, bind_t
+DOUBLE PRECISION :: thetab_t, rate_cb_t, rate_lamn_t, err_i, err_max
 DOUBLE PRECISION :: dPK2filficdcb(ndi,ndi), pfdlambdadcfil(ndi,ndi), cfilficchem(ndi,ndi,ndi,ndi)
+
+! Stretch-free rebinding (SFR)
+DOUBLE PRECISION :: sfr, xi_t, xi, lamn_t, lamn_sub, lamn_prev, den_n, lambdar, dlrdl, dlrdth
+DOUBLE PRECISION :: bind, dbinddthetaf, dlamndlambda_i, dlamndthetaf_i
+DOUBLE PRECISION :: dw_tot, ddw_tot, dwdth, dsfilficdth(ndi,ndi)
+LOGICAL :: loaded
 
 ! INTEGRATION SCHEME
   integer, parameter :: nfacedir = 2
@@ -3240,6 +3925,13 @@ off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
   cactin   = affprops(3)                                                                                              
   Mactin   = affprops(4)                                                                                            
   rhoactin = affprops(5)
+  sfr      = affprops(6) ! 1 = stretch-free rebinding on, 0 = off (lamn = 1, as 6_CL_DIFF_CS)
+  xi_t     = affprops(7) ! fraction of the network with stretch-free rebinding
+  IF (sfr > half) THEN
+    xi = xi_t
+  ELSE
+    xi = zero
+  END IF
   !     CHEMICAL
   cbmax    = chemprops(1)
   cfmax    = chemprops(2)
@@ -3251,6 +3943,10 @@ off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
   Keq      = chemprops(8)
   Kcatch0  = chemprops(9)
   dxc      = chemprops(10)
+  g_rest = chemprops(11)
+  x_rest = chemprops(12)
+  rt     = 8.314462618d0 * theta
+  kactin = cactin * NA * Mactin / rhoactin
 
   ! aux=n*(det**(-one))
   cfic=zero
@@ -3271,6 +3967,7 @@ off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
   nhard = 0
   nacc = 0
   nsub_max = 1
+  err_max = zero
   dHdcb_min = huge(one)
 !----------------------------------------------------------------------
   
@@ -3327,7 +4024,7 @@ do face = 1, face_num/2
         ! write(*,*) 'mf0i =', mf0i
         CALL deffil(lambdai,mfi,mf0i,f,ndi)
         
-        CALL bangle(ang,f,mfi,noel,pd,ndi)
+        CALL bangle(ang,f,mf0i,noel,prefdir0,ndi)
         
         CALL density(rho,ang,bdisp,efi)
         
@@ -3339,6 +4036,9 @@ do face = 1, face_num/2
         cbt_i = MAX(cb(node_num), 1.0d-10)
         cbtau_i = cbt_i  ! Initial guess is the old state
         kon = (Koff0 + Kcatch0) * Keq * exp(CHI * (1.0d0 - 2.0d0 * thetaf))
+        bind = kon * cfmax * thetaf / (one - thetaf)
+        dbinddthetaf = cfmax * kon * (one / (one - thetaf)**2 - two * CHI * thetaf / (one - thetaf))
+        lamn_t = lamn(node_num)
 
         args(1)  = lambdai
         args(2)  = lambda0
@@ -3370,33 +4070,91 @@ do face = 1, face_num/2
         n_sub = 1
         DO
           cb_sub = cbt_i
-          sens_i = zero
-          sensthetaf_i = zero
+          dcbdlambda_i = zero
+          dcbdthetaf_i = zero
+          lamn_sub = lamn_t
+          dlamndlambda_i = zero
+          dlamndthetaf_i = zero
+          ! Checkf if attempt passed all checks
           ok_i = .TRUE.
+          ! True for a hard failure (no converged root, or uniqueness being lost) in any sub-step
           hard_i = .FALSE.
+          ! Update sub-step size
           args(12) = dtime / DBLE(n_sub)
           DO isub = 1, n_sub
             args(16) = cb_sub
-            CALL solveKinetics(cb_new, args, nargs, cb_sub, conv_i, atb_i, dHdcb_i, dHdlambda_i)
-            IF (dHdcb_i /= zero) sens_i = (sens_i - dHdlambda_i) / dHdcb_i
-            dHdthetaf_i = - args(12) * cfmax * kon &
-                      * (one / (one - thetaf)**2 - two * CHI * thetaf / (one - thetaf))
-            IF (dHdcb_i /= zero) sensthetaf_i = (sensthetaf_i - dHdthetaf_i) / dHdcb_i
+            ! C4: bias e^{-(x - x_rest)}/g_rest and catch-slip factor at the start of the sub-step
+            ! (cb_sub, lamn_sub before the reference update, current stretch), as material_TC.py
+            CALL xmech(x_i, f_st, dxdle_i, dfdle_i, cb_sub, lambdai / lamn_sub, lamn_sub, aratio, r0c, etac, &
+                        mu0str, beta, b0, lambda0, kactin, rt)
+            s_i = EXP(-(x_i - x_rest)) / g_rest
+            CALL koffcs(g_st, dgdf_st, f_st, Koff0, Kcatch0, dx / (kb * theta), dxc / (kb * theta))
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            bind_flux = bind * s_i * g_st                ! C4 binding flux of the reference update
+            ! From sub-step 2 on, cb_sub and lamn_sub depend on lambda and thetaf through the earlier
+            ! sub-steps: partial derivatives of x and of the force with respect to them (one-sided
+            ! differences of xmech). In sub-step 1 they are start-of-increment values: no terms.
+            IF (isub > 1) THEN
+              CALL xmech(x_pert, f_pert, dxdle_pert, dfdle_pert, cb_sub * (one + EPS_FD), lambdai / lamn_sub, &
+                         lamn_sub, aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin, rt)
+              dxdcb_i = (x_pert - x_i) / (cb_sub * EPS_FD)          ! dx/dcb at fixed le, lamn
+              dfdcb_i = (f_pert - f_st) / (cb_sub * EPS_FD)         ! df/dcb at fixed le
+              CALL xmech(x_pert, f_pert, dxdle_pert, dfdle_pert, cb_sub, lambdai / lamn_sub, &
+                         lamn_sub * (one + EPS_FD), aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin, rt)
+              dxdlamn_i = (x_pert - x_i) / (lamn_sub * EPS_FD)      ! dx/dlamn at fixed le, cb (reservoir term)
+            ELSE
+              dxdcb_i = zero
+              dfdcb_i = zero
+              dxdlamn_i = zero
+            END IF
+            args(20) = s_i
+            args(21) = dbinddthetaf
+            ! Total derivatives at the start of the sub-step (before the SFR update) of le = lambda/lamn,
+            ! of s_i = exp(-(x - x_rest))/g_rest and of the binding flux bind*s_i*g(f)
+            dledlambda_i = (one - (lambdai / lamn_sub) * dlamndlambda_i) / lamn_sub
+            dledthetaf_i = - (lambdai / lamn_sub**2) * dlamndthetaf_i
+            dsdlambda_i = - s_i * (dxdle_i * dledlambda_i + dxdcb_i * dcbdlambda_i + dxdlamn_i * dlamndlambda_i)
+            dsdthetaf_i = - s_i * (dxdle_i * dledthetaf_i + dxdcb_i * dcbdthetaf_i + dxdlamn_i * dlamndthetaf_i)
+            dbindfluxdlambda_i = bind_flux * ((- dxdle_i + dgdf_st / g_st * dfdle_i) * dledlambda_i &
+                               + (- dxdcb_i + dgdf_st / g_st * dfdcb_i) * dcbdlambda_i - dxdlamn_i * dlamndlambda_i)
+            dbindfluxdthetaf_i = dbinddthetaf * s_i * g_st &
+                               + bind_flux * ((- dxdle_i + dgdf_st / g_st * dfdle_i) * dledthetaf_i &
+                               + (- dxdcb_i + dgdf_st / g_st * dfdcb_i) * dcbdthetaf_i - dxdlamn_i * dlamndthetaf_i)
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            IF (sfr > half) THEN
+              den_n = cb_sub + args(12) * bind_flux
+              lamn_prev = lamn_sub
+              lamn_sub = (cb_sub * lamn_prev + args(12) * bind_flux * lambdai) / den_n
+              dlamndlambda_i = (cb_sub * dlamndlambda_i + args(12) * bind_flux &
+              + (lamn_prev - lamn_sub) * dcbdlambda_i + args(12) * dbindfluxdlambda_i * (lambdai - lamn_sub)) / den_n
+              dlamndthetaf_i = (cb_sub * dlamndthetaf_i + (lamn_prev - lamn_sub) * dcbdthetaf_i &
+              + args(12) * dbindfluxdthetaf_i * (lambdai - lamn_sub)) / den_n
+            END IF
+            lambdar = lambdai / lamn_sub
+            dlrdl = (one - lambdar * dlamndlambda_i) / lamn_sub
+            dlrdth = - lambdar / lamn_sub * dlamndthetaf_i
+            args(1) = lambdar
+            CALL solveKinetics(cb_new, args, nargs, cb_sub, conv_i, atb_i, dHdcb_i, dHdlambda_i, dHdth_i, dHds_i)
+            ! IF (dHdcb_i /= zero) dcbdlambda_i = (dcbdlambda_i - dHdlambda_i * dlrdl - dHds_i * dsdlambda_i) / dHdcb_i
+            ! dHdthetaf_i = dHdth_i                        ! C4: -dt_sub * koff(f_root) * s_i * dbind/dthetaf
+            ! IF (dHdcb_i /= zero) dcbdthetaf_i = (dcbdthetaf_i - dHdthetaf_i - dHdlambda_i * dlrdth &
+            !                                     - dHds_i * dsdthetaf_i) / dHdcb_i
+            dHdthetaf_i = dHdth_i                        ! C4: -dt_sub * koff(f_root) * s_i * dbind/dthetaf
+            IF (atb_i) THEN
+              ! Root clipped at a bound of solveKinetics (1e-10 or cbmax - 1e-10): cb stays at the bound
+              ! for small changes of lambda and thetaf, so it has no sensitivity to them
+              dcbdlambda_i = zero
+              dcbdthetaf_i = zero
+            ELSE
+            IF (dHdcb_i /= zero) dcbdlambda_i = (dcbdlambda_i - dHdlambda_i * dlrdl - dHds_i * dsdlambda_i) / dHdcb_i
+            IF (dHdcb_i /= zero) dcbdthetaf_i = (dcbdthetaf_i - dHdthetaf_i - dHdlambda_i * dlrdth &
+                                                  - dHds_i * dsdthetaf_i) / dHdcb_i
+            END IF
             ! Hard failures (no converged root, or uniqueness being lost)
             IF ((.NOT. conv_i) .OR. (dHdcb_i < DH_MIN)) THEN
               ok_i = .FALSE.
               hard_i = .TRUE.
             END IF
-            ! Error factor g(kh) = min(kh/2, 1/kh) at the end (root) and at the start of the
-            ! sub-step; the larger one is used (strongly nonlinear kinetics, e.g. fast transients)
-            kh_i = ABS(dHdcb_i - one)
-            gerr_i = MIN(half * kh_i, one / MAX(kh_i, 1.0d-300))
-            cbx_i = cb_sub
-            CALL kineticsFunc(cbx_i, Hx_i, dHdcbx_i, dHdlambdax_i, args, nargs)
-            kh_i = ABS(dHdcbx_i - one)
-            gerr_i = MAX(gerr_i, MIN(half * kh_i, one / MAX(kh_i, 1.0d-300)))
-            IF (ABS(cb_new - cb_sub) * gerr_i &
-                > DCB_MAX * MAX(MIN(cb_sub, cb_new), CB_SCALE * cbmax)) ok_i = .FALSE.
             dHdcb_min = MIN(dHdcb_min, dHdcb_i)
             cb_sub = cb_new
             ! Abandon this attempt and refine (the last attempt is always completed)
@@ -3417,75 +4175,135 @@ do face = 1, face_num/2
         cbtau_i = cb_sub
 
         cb(node_num) = cbtau_i
+        lamn(node_num) = lamn_sub
         thetab_i = cbtau_i / cbmax
 
-        ! FINAL STATE UPDATE
-        r0f = 1.6 * (1.0d3 * cb(node_num))**(-two/5.0d0)
-        l = aratio * r0f
-        r0 = r0f + r0c
-        n = l**(-1) * (cactin * NA * Mactin / rhoactin)
-        aux = n * (det**(-one))
-
-        IF((etac > zero).AND.(etac .LE. one)) THEN
-          lambdaif = etac*(r0/r0f)*(lambdai-one)+one
-          lambda0f = etac*(r0/r0f)*(lambda0-one)+one
-        ELSE
-          lambdaif = lambdai
-          lambda0f = lambda0
+        ! Local error estimate of the Backward-Euler step (final call only): rates of cb and lamn at the
+        ! start-of-increment state (cb, lamn, stretch and thetaf at t), with the same kinetics as the update
+        IF (imode == 2) THEN
+          CALL deffil(lambda_t_i, mfi_t, mf0i, f_t, ndi)
+          le_t = lambda_t_i / lamn_t
+          CALL xmech(x_t, f_t_i, dxdle_t, dfdle_t, cbt_i, le_t, lamn_t, aratio, r0c, etac, &
+                     mu0str, beta, b0, lambda0, kactin, rt)
+          CALL koffcs(g_t, dgdf_t, f_t_i, Koff0, Kcatch0, dx / (kb * theta), dxc / (kb * theta))
+          s_t = EXP(-(x_t - x_rest)) / g_rest
+          kon_t = (Koff0 + Kcatch0) * Keq * EXP(CHI * (one - two * thetaf_t))
+          bind_t = kon_t * cfmax * thetaf_t / (one - thetaf_t)
+          thetab_t = cbt_i / cbmax
+          rate_cb_t = g_t * (bind_t * s_t - cbmax * thetab_t / (one - thetab_t))
+          rate_lamn_t = zero
+          IF (sfr > half) rate_lamn_t = bind_t * s_t * g_t / cbt_i * (lambda_t_i - lamn_t)
+          ! err_i = MAX(half * ABS(lamn_sub - lamn_t - dtime * rate_lamn_t) / TOL_LAMN, &
+          !             half * ABS(cbtau_i - cbt_i - dtime * rate_cb_t) / (TOL_CB * MAX(cbt_i, CB_SCALE * cbmax)))
+          err_i = half * ABS(lamn_sub - lamn_t - dtime * rate_lamn_t) / TOL_LAMN
+          ! cb check only for a Backward-Euler root: a root clipped at a bound (atb_i) is not a BE solution,
+          ! and its estimate (the rate it cannot follow) would force dt ~ 1/koff in fully unbound directions
+          IF (.NOT. atb_i) err_i = MAX(err_i, &
+                      half * ABS(cbtau_i - cbt_i - dtime * rate_cb_t) / (TOL_CB * MAX(cbt_i, CB_SCALE * cbmax)))
+          err_max = MAX(err_max, err_i)
         END IF
 
-        fi = zero
-        ! Loaded filament: total filament stretch (prestretch included) >= 1, as in kineticsFunc.
-        ! With LAMBDA0 = 1 this is lambdai >= 1 (the reference state F = I keeps the filament tangent)
-        IF(lambdaif*lambda0f .GE. one) THEN
-          CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),DfDcb)
-          !CALL fil_inext(fi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,beta,b0,etac,cb(node_num),DfDcb)
-          CALL sigfilfic(sfilfic,rho,lambdai,dwi,mfi,ai,ndi)
-          CALL csfilfic(cfilfic,rho,lambdai,dwi,ddwi,mfi,ai,ndi)
-          CALL csfilficchem(cfilficchem,rho,lambdai,mfi,ai,ndi)
-          ! Chemical contributions to the mechanical tangent (Kuu)
-          !! Term 3 - volumetric
-          ! kin_aux = 
-          !! Term 3.1
+        ! Stress and tangent of the direction (skipped in kinetics-only calls, imode = 1)
+        IF (imode == 2) THEN
+          ! FINAL STATE UPDATE
+          r0f = 1.6d0 * (1.0d3 * cb(node_num))**(-two/5.0d0)
+          l = aratio * r0f
+          r0 = r0f + r0c
+          n = l**(-1) * (cactin * NA * Mactin / rhoactin)
+          aux = n * (det**(-one))
+
+          !!!!!!!!!!!!!!!!!!!!!!!!!!
+          IF((etac > zero).AND.(etac .LE. one)) THEN
+            ! lambdaif = etac*(r0/r0f)*(lambdai-one)+one
+            lambda0f = etac*(r0/r0f)*(lambda0-one)+one
+          ELSE
+            ! lambdaif = lambdai
+            lambda0f = lambda0
+          END IF
           dr0dcb = - (two / 5.d0) * r0f / cb(node_num)
-          ddwdcb = lambda0 * (r0 * dfdcb + fi * dr0dcb)
-          auxdwdcb = two / 5.d0 * dwi / cb(node_num) + ddwdcb
-          !!! Leverage sigfilfic to get dSfic/Dcb for current direction
-          call sigfilfic(dPK2filficdcb,rho,lambdai,auxdwdcb,mf0i,ai,ndi)
-          ! Kuc (Part C, item 4): same derivative in the deformed direction mfi (fictitious Cauchy),
-          ! weighted by the free-fraction sensitivity S^theta_i = dcb_i/dthetaf
-          call sigfilfic(dsfilficdcb,rho,lambdai,auxdwdcb,mfi,ai,ndi)
-          dsficdthetaf = dsficdthetaf + aux * sensthetaf_i * dsfilficdcb
-          !! Term 3.2
+          dw_tot = zero
+          ddw_tot = zero
+          auxdwdcb = zero
+          dwdth = zero
+          loaded = .FALSE.
+          fi = zero
+
+          IF (xi > zero) THEN
+            lambdar = lambdai / lamn_sub
+            IF ((etac > zero) .AND. (etac .LE. one)) THEN
+              lambdaif = etac * (r0 / r0f) * (lambdar - one) + one
+            ELSE
+              lambdaif = lambdar
+            END IF
+            IF(lambdaif*lambda0f .GE. one) THEN
+              CALL fil(fi,ffi,dwi,ddwi,lambdar,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),DfDcb)
+              loaded = .TRUE.
+              dw_tot = dw_tot + xi * dwi / lamn_sub
+              ddw_tot = ddw_tot + xi / lamn_sub**2 * (ddwi * (one - lambdar * dlamndlambda_i) - dwi * dlamndlambda_i)
+              dwdth = dwdth - xi / lamn_sub**2 * (lambdar * ddwi + dwi) * dlamndthetaf_i
+              auxdwdcb = auxdwdcb + xi / lamn_sub * (two / 5.d0 * dwi / cb(node_num) + lambda0 * (r0 * dfdcb + fi * dr0dcb))
+            END IF
+          END IF
+          IF (xi < one) THEN
+            IF ((etac > zero) .AND. (etac .LE. one)) THEN
+              lambdaif = etac * (r0 / r0f) * (lambdai - one) + one
+            ELSE
+              lambdaif = lambdai
+            END IF
+            IF(lambdaif*lambda0f .GE. one) THEN
+              CALL fil(fi,ffi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,mu0str,beta,b0,etac,cb(node_num),DfDcb)
+              loaded = .TRUE.
+              dw_tot = dw_tot + (one - xi) * dwi
+              ddw_tot = ddw_tot + (one - xi) * ddwi
+              auxdwdcb = auxdwdcb + (one - xi) * (two / 5.d0 * dwi / cb(node_num) + lambda0 * (r0 * dfdcb + fi * dr0dcb))
+            END IF
+          END IF
+          ! Term 3.2 (dcb_tot/dC through dcb/dlambda_i)
           call pfdlambdadc(pfdlambdadcfil,rho,lambdai,unit2,mfi,ai,det,ndi)
           ! auxchem = -dcb/dlambda_i from the sub-step sensitivity recursion
-          ! (n_sub = 1: auxchem = dHdlambda/dHdcb, as before)
-          auxchem = - sens_i
-          ! auxchem = aux * auxdwdcb * (dHdcb)**(-one) * dHdlambda
-          ! write(*,*) 'auxchem =', auxchem
-          ! write(*,*) 'auxdwdcb =', auxdwdcb
-          ! write(*,*) 'aux =', aux
-          ! write(*,*) 'auxs*cfilficchem / cfilfic', auxdwdcb*auxchem*cfilficchem / cfilfic
+          ! (n_sub = 1: auxchem = dHdlambda/dHdcb)
+          auxchem = - dcbdlambda_i
           DO j1=1,ndi
             DO k1=1,ndi
-                sfic(j1,k1) = sfic(j1,k1) + aux*sfilfic(j1,k1)
-                ! Kuu - 3.1
-                dPK2ficdcb(j1,k1) = dPK2ficdcb(j1,k1) + n * dPK2filficdcb(j1,k1)
-                ! Kuu - 3 - volumetric
-                dcbdC(j1,k1) = dcbdC(j1,k1) + lambdai**(-one) * auxchem * pfdlambdadcfil(j1,k1)
-                DO l1=1,ndi
-                  DO m1=1,ndi
-                    cfic(j1,k1,l1,m1) = cfic(j1,k1,l1,m1) + aux*cfilfic(j1,k1,l1,m1) &
-                    - aux*auxdwdcb*auxchem*cfilficchem(j1,k1,l1,m1)
-                  END DO
-                END DO
+              dcbdC(j1,k1) = dcbdC(j1,k1) + lambdai**(-one) * auxchem * pfdlambdadcfil(j1,k1)
             END DO
           END DO
-        END IF
+
+          IF (loaded) THEN
+            call sigfilfic(sfilfic,rho,lambdai,dw_tot,mfi,ai,ndi)
+            call csfilfic(cfilfic,rho,lambdai,dw_tot,ddw_tot,mfi,ai,ndi)
+            call csfilficchem(cfilficchem,rho,lambdai,mfi,ai,ndi)
+            ! Chemical contributions to the mechanical tangent (Kuu)
+            !! Term 3.1
+            !!! Leverage sigfilfic to get dSfic/dcb for current direction
+            call sigfilfic(dPK2filficdcb,rho,lambdai,auxdwdcb,mf0i,ai,ndi)
+            ! Kuc (Part C, item 4)
+            call sigfilfic(dsfilficdcb,rho,lambdai,auxdwdcb,mfi,ai,ndi)
+            dsficdthetaf = dsficdthetaf + aux * dcbdthetaf_i * dsfilficdcb
+            ! SFR: stress through lamn(thetaf) at fixed cb
+            IF (dwdth /= zero) THEN
+              call sigfilfic(dsfilficdth,rho,lambdai,dwdth,mfi,ai,ndi)
+              dsficdthetaf = dsficdthetaf + aux * dsfilficdth
+            END IF
+            DO j1=1,ndi
+              DO k1=1,ndi
+                  sfic(j1,k1) = sfic(j1,k1) + aux*sfilfic(j1,k1)
+                  ! Kuu - 3.1
+                  dPK2ficdcb(j1,k1) = dPK2ficdcb(j1,k1) + n * dPK2filficdcb(j1,k1)
+                  DO l1=1,ndi
+                    DO m1=1,ndi
+                      cfic(j1,k1,l1,m1) = cfic(j1,k1,l1,m1) + aux*cfilfic(j1,k1,l1,m1) &
+                      - aux*auxdwdcb*auxchem*cfilficchem(j1,k1,l1,m1)
+                    END DO
+                  END DO
+              END DO
+            END DO
+          END IF
+        END IF ! imode == 2
         
         ! Update total bound CL concentration for this integration point                                                       
         cbtau_tot = cbtau_tot + cb(node_num) * rho * ai
-        dcbdthetaf = dcbdthetaf + sensthetaf_i * rho * ai
+        dcbdthetaf = dcbdthetaf + dcbdthetaf_i * rho * ai
         ! ==============================================================   
 
         !v=dwi
@@ -3510,6 +4328,15 @@ do face = 1, face_num/2
   IF (nacc > 0) THEN
     write(*,*) 'WARNING: kinetics accuracy check not met with', MAX_SUBSTEPS, 'sub-steps in', nacc, &
                'directions (result kept). noel =', noel
+  END IF
+  ! Time-step control from the local error estimate (final call only): reject (PNEWDT < 1) if the largest
+  ! scaled error exceeds 1, otherwise allow growth up to PNEWDT_MAX
+  IF ((imode == 2) .AND. (err_max > zero)) THEN
+    IF (err_max > one) THEN
+      pnewdt = MIN(pnewdt, MAX(PNEWDT_MIN, SAFETY_DT / SQRT(err_max)))
+    ELSE
+      pnewdt = MIN(pnewdt, MAX(one, MIN(PNEWDT_MAX, SAFETY_DT / SQRT(err_max))))
+    END IF
   END IF
 !
 !  Discard allocated memory.
@@ -3853,40 +4680,6 @@ END DO
 
 RETURN
 END SUBROUTINE contraction44
-SUBROUTINE csfilficchem(cfic,rho,lambda,m,rw,ndi)
-
-
-
-!>    AFFINE NETWORK: 'FICTICIOUS' ELASTICITY TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rho
-DOUBLE PRECISION, INTENT(IN OUT)         :: lambda
-DOUBLE PRECISION, INTENT(IN)             :: m(ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rw
-
-
-
-INTEGER :: i1,j1,k1,l1
-
-DOUBLE PRECISION :: aux
-
-aux=rho*rw*(lambda**(-two))
-DO i1=1,ndi
-  DO j1=1,ndi
-    DO k1=1,ndi
-      DO l1=1,ndi
-        cfic(i1,j1,k1,l1)=aux*m(i1)*m(j1)*m(k1)*m(l1)
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE csfilficchem
 SUBROUTINE csfilfic(cfic,rho,lambda,dw,ddw,m,rw,ndi)
 
 
@@ -3924,6 +4717,40 @@ END DO
 
 RETURN
 END SUBROUTINE csfilfic
+SUBROUTINE csfilficchem(cfic,rho,lambda,m,rw,ndi)
+
+
+
+!>    AFFINE NETWORK: 'FICTICIOUS' ELASTICITY TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: rho
+DOUBLE PRECISION, INTENT(IN OUT)         :: lambda
+DOUBLE PRECISION, INTENT(IN)             :: m(ndi)
+DOUBLE PRECISION, INTENT(IN)             :: rw
+
+
+
+INTEGER :: i1,j1,k1,l1
+
+DOUBLE PRECISION :: aux
+
+aux=rho*rw*(lambda**(-two))
+DO i1=1,ndi
+  DO j1=1,ndi
+    DO k1=1,ndi
+      DO l1=1,ndi
+        cfic(i1,j1,k1,l1)=aux*m(i1)*m(j1)*m(k1)*m(l1)
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE csfilficchem
 SUBROUTINE deffil(lambda,m,m0,f,ndi)
 
 
@@ -4107,12 +4934,12 @@ g=lhs-rhs
 
 RETURN
 END SUBROUTINE evalg
-SUBROUTINE evalh(h,cb0,cabp,cfmax,cbmax,chi,Keq)
+SUBROUTINE evalh(h,cb0,cabp,cfmax,cbmax,chi,Keq,eqprops)
 
 
 
 !>     ESTABLISHMENT OF H(F)=LHS-RHS(F) THAT RELATES
-!>       KEQ - CB0 RELATIONSHIP OF A SINGLE EXNTESIBLE FILAMENT
+!>       KEQ - CB0 RELATIONSHIP OF A SINGLE EXTENSIBLE FILAMENT
 use global
 IMPLICIT NONE
 
@@ -4123,11 +4950,38 @@ DOUBLE PRECISION, INTENT(IN)             :: cabp
 DOUBLE PRECISION, INTENT(IN)             :: cfmax
 DOUBLE PRECISION, INTENT(IN)             :: cbmax
 DOUBLE PRECISION, INTENT(IN)             :: chi
+DOUBLE PRECISION, INTENT(IN)             :: eqprops(11)
 
 DOUBLE PRECISION :: lhs,rhs
 
 
 DOUBLE PRECISION :: aux0,aux1,aux2,aux3,aux4
+DOUBLE PRECISION :: r0f, r0, ll, lambdaf, lambda0f, mu0str, beta, b0, f0, koff_f0, dkoffdf, keq_eff
+
+! Resting force of the prestretched filament
+f0 = zero
+IF (cb0 > zero) THEN
+    r0f = 1.6d0 * (1.0d3 * cb0)**(-two/5.0d0)
+    r0  = r0f + eqprops(2)
+    ll  = eqprops(1) * r0f
+    IF ((eqprops(3) > zero) .AND. (eqprops(3) .LE. one)) THEN
+        lambda0f = eqprops(3) * (r0/r0f) * (eqprops(7) - one) + one
+    ELSE
+        lambda0f = eqprops(7)
+    END IF
+    lambdaf = one
+    IF (lambdaf * lambda0f > one) THEN
+        mu0str = eqprops(4)
+        beta   = eqprops(5)
+        b0     = eqprops(6)
+        CALL pullforce(f0, zero, 1.0d9, 2.2204d-16, 1.0d-14, lambdaf, lambda0f, ll, r0f, mu0str, beta, b0)
+    END IF
+END IF
+keq_eff = Keq
+IF (f0 > zero) THEN
+    CALL koffcs(koff_f0, dkoffdf, f0, eqprops(8), eqprops(9), eqprops(10), eqprops(11))
+    keq_eff = Keq * (eqprops(8) + eqprops(9)) / koff_f0
+END IF
 
 aux0 = cabp - cb0
 aux1 = aux0 / cfmax
@@ -4135,12 +4989,13 @@ aux2 = 1.0d0 - aux1
 aux3 = exp(- chi * (1.0d0 - 2.0d0 * aux1))
     
 rhs = cb0 * aux2 * aux3
-lhs = Keq * aux0 * (1.0d0 - cb0 / cbmax)
+lhs = keq_eff * aux0 * (1.0d0 - cb0 / cbmax)
 
 h = lhs-rhs
 
 RETURN
 END SUBROUTINE evalh
+
 SUBROUTINE factorial(fact,term)
 
 
@@ -4452,26 +5307,6 @@ END DO
 
 RETURN
 END SUBROUTINE fslip
-! ! COMMENT WHEN RUNNING IN ABAQUS
-! SUBROUTINE getoutdir(outdir, lenoutdir)
-
-
-
-! !>     GET CURRENT WORKING DIRECTORY
-! ! INCLUDE 'aba_param.inc'
-
-
-! CHARACTER (LEN=256), INTENT(IN OUT)      :: outdir
-! INTEGER, INTENT(OUT)                     :: lenoutdir
-
-
-
-! CALL getcwd(outdir)
-! !        OUTDIR=OUTDIR(1:SCAN(OUTDIR,'\',BACK=.TRUE.)-1)
-! lenoutdir=len_trim(outdir)
-
-! RETURN
-! END SUBROUTINE getoutdir
 SUBROUTINE getprops_gp(noel, npt, etadir, etadir_array)
 
 use global
@@ -4717,12 +5552,13 @@ statev(pos1+2) = thetaf_t * cfmax + cb0
 !      TOTAL CB
 statev(pos1+3) = cb0
 !       STRESSES and CL FLUX
-DO i = pos1+4, nsdv - ndir
+DO i = pos1+4, nsdv - 2*ndir
     statev(i)=zero
 END DO
 
 DO i = 1, ndir
-    statev(nsdv - ndir + i) = cb0 ! INITIAL CL CONCENTRATION
+    statev(nsdv - 2*ndir + i) = cb0 ! INITIAL CL CONCENTRATION
+    statev(nsdv - ndir + i) = one  ! INITIAL REFERENCE STRETCH 
 END DO
 !        CONTRACTION VARIANCE
 !statev(pos1+2)=zero
@@ -4787,30 +5623,31 @@ diso(5)=zero
 
 RETURN
 END SUBROUTINE isomat
-subroutine kineticsFunc(cbtau, f, df, dHdlambda, args, nargs)
-    ! This subroutine serves as the function we would like to solve for
-    ! the bound crosslinker volume fraction (cbtau = cf/cfmax)
-    ! by finding cbtau such that f = 0
-    ! Outputs: f = H (Backward-Euler residual), df = dH/dcb, dHdlambda = dH/dlambda_i (at fixed cb),
-    ! the latter used for the consistent tangent (sub-step sensitivity dcb/dlambda_i)
+subroutine kineticsFunc(cbtau, f, df, dHdlambda, dHdth, dHds, args, nargs)
+
+! Outputs: f = H (Backward-Euler residual), df = dH/dcb, dHdlambda = dH/dlambdar (at fixed cb), with
+! lambdar = args(1) the stretch seen by the kinetics (lambda_i/lambda_n with stretch-free rebinding);
+! the caller converts it to dcb/dlambda_i with dlrdl (consistent tangent)
+
     use global
     implicit none
 
     integer, intent(in)              :: nargs
     DOUBLE PRECISION, intent(in out) :: cbtau
-    DOUBLE PRECISION, intent(out)    :: f, df, dHdlambda
+    DOUBLE PRECISION, intent(out)    :: f, df, dHdlambda, dHdth, dHds
     DOUBLE PRECISION, intent(in)     :: args(nargs)                                                              
                                                                                                                 
     DOUBLE PRECISION                 :: r0f, etac, r0, r0c, fi, ffi, dwi, ddwi, l, mu0str, beta, b0 
     DOUBLE PRECISION                 :: cfmax, cbmax, dx_kT, dt, kon, koff0, koff, thetab, Ri
     DOUBLE PRECISION                 :: kcatch0, dxc_kT, dkoffdf
-    DOUBLE PRECISION                 :: lambdai, lambdaif, lambda0, lambda0f, lambdaic, thetaf, cbt, det                                                          
+    DOUBLE PRECISION                 :: lambdar, lambdaif, lambda0, lambda0f, thetaf, cbt, det                                                          
     DOUBLE PRECISION                 :: DfDcb,DRiDcb, aratio
+    DOUBLE PRECISION                 :: s, dbdth, bterm
     
     Ri = zero
                                                                                                                 
     ! Obtain relevant quantities
-    lambdai = args(1)
+    lambdar = args(1)
     lambda0 = args(2)
     aratio  = args(3)
     etac    = args(4)
@@ -4829,34 +5666,34 @@ subroutine kineticsFunc(cbtau, f, df, dHdlambda, args, nargs)
     det     = args(17)
     kcatch0 = args(18)
     dxc_kT  = args(19)
+    s = args(20)
+    dbdth = args(21)
 
-    r0f = 1.6 * (cbtau*1.d3)**(- two / 5.d0)
+    r0f = 1.6d0 * (cbtau*1.d3)**(- two / 5.d0)
     l = aratio * r0f
     r0 = r0f + r0c
     
     IF((etac > zero).AND.(etac .LE. one))THEN
-        lambdaif=etac*(r0/r0f)*(lambdai-one)+one
+        lambdaif=etac*(r0/r0f)*(lambdar-one)+one
         lambda0f=etac*(r0/r0f)*(lambda0-one)+one
-        lambdaic=(lambdai*r0-lambdaif*r0f)/r0c
     ELSE
-        lambdaif=lambdai ! False for a filament attached to a stiff crosslinker (etac = 1), only valid for etac = 0 (???)
+        lambdaif=lambdar 
         lambda0f=lambda0
-        lambdaic=zero ! False for a stiff crosslinker (etac = 1), only valid for etac = 0 (???)
     END IF
 
     ! Slack filament (total filament stretch, prestretch included, <= 1): no force.
-    ! With LAMBDA0 = 1 this is lambdai <= 1; with LAMBDA0 > 1 the filament is loaded at rest
+    ! With LAMBDA0 = 1 this is lambdar <= 1; with LAMBDA0 > 1 the filament is loaded at rest
     IF (lambdaif*lambda0f .LE. one) then
         fi = 0.0
         DfDcb = 0.0
         ddwi = zero
     ELSE
         CALL fil(fi,ffi,dwi,ddwi,&
-                lambdai,lambdaif,lambda0,lambda0f,&
+                lambdar,lambdaif,lambda0,lambda0f,&
                 l,r0,r0f,mu0str,beta,b0,etac,&
                 cbtau,DfDcb)
-        !CALL fil_inext(fi,dwi,ddwi,lambdai,lambdaif,lambda0,lambda0f,l,r0,r0f,beta,b0,etac,cbtau,DfDcb)
-            ! CALL filpce(lambdai, fi, dwi, ddwi)
+        !CALL fil_inext(fi,dwi,ddwi,lambdar,lambdaif,lambda0,lambda0f,l,r0,r0f,beta,b0,etac,cbtau,DfDcb)
+            ! CALL filpce(lambdar, fi, dwi, ddwi)
     END IF
 
     ! Unbinding rate (catch-slip) and its force derivative
@@ -4864,7 +5701,8 @@ subroutine kineticsFunc(cbtau, f, df, dHdlambda, args, nargs)
     thetab = cbtau / cbmax
 
     ! Reaction rate and residual                                                                         
-    Ri = kon * cfmax * thetaf / (1 - thetaf) - koff * cbmax * thetab / (1 - thetab)
+    bterm = kon * cfmax * thetaf / (one - thetaf) * s
+    Ri = koff * (bterm - cbmax * thetab / (one - thetab))
     f = cbtau - cbt - Ri * dt
     ! Check if the residual is NaN or Inf. Large finite values are legitimate with the
     ! extensible filament and the catch-slip law (koff is capped by koffcs, not bounded by locking)
@@ -4883,12 +5721,13 @@ subroutine kineticsFunc(cbtau, f, df, dHdlambda, args, nargs)
     end if
                                                                                                                 
     ! Residual derivative
-    dRiDcb = - (dkoffdf * cbtau / (1 - thetab) * DfDcb + koff / (1 - thetab)**2)
+    dRiDcb = dkoffdf * DfDcb * (bterm - cbtau / (one - thetab)) - koff / (one - thetab)**2
     df = one - dRiDcb * dt
 
     ! Residual derivative wrt lambda_i at fixed cb: df/dlambda_i = ddwi / (lambda0 * r0), since dwi = lambda0 * r0 * fi
-    dHdlambda = dt * cbmax * thetab / (1 - thetab) * dkoffdf * ddwi / (lambda0 * r0)
-
+    dHdlambda = - dt * dkoffdf * ddwi / (lambda0 * r0) * (bterm - cbmax * thetab / (one - thetab))
+    dHdth = - dt * koff * s * dbdth
+    dHds  = - dt * koff * kon * cfmax * thetaf / (one - thetaf)
 end subroutine kineticsFunc
 
 SUBROUTINE koffcs(koff, dkoffdf, fi, koff0, kcatch0, dxs_kT, dxc_kT)
@@ -5468,7 +6307,7 @@ END DO
 RETURN
 END SUBROUTINE pull4
 SUBROUTINE pullchem(zero0, a, b, machep, t,  &
-        cabp,cfmax,cbmax,chi,Keq)
+        cabp,cfmax,cbmax,chi,Keq,eqprops)
 
 
 
@@ -5536,6 +6375,7 @@ DOUBLE PRECISION, INTENT(IN)             :: cfmax
 DOUBLE PRECISION, INTENT(IN)             :: cbmax
 DOUBLE PRECISION, INTENT(IN)             :: chi
 DOUBLE PRECISION, INTENT(IN)             :: Keq
+DOUBLE PRECISION, INTENT(IN)             :: eqprops(11)
 DOUBLE PRECISION :: c
 DOUBLE PRECISION :: d
 DOUBLE PRECISION :: e
@@ -5567,8 +6407,8 @@ DOUBLE PRECISION :: tol
 
 sa = a
 sb = b
-CALL evalh(fa,sa,cabp,cfmax,cbmax,chi,Keq)
-CALL evalh(fb,sb,cabp,cfmax,cbmax,chi,Keq)
+CALL evalh(fa,sa,cabp,cfmax,cbmax,chi,Keq,eqprops)
+CALL evalh(fb,sb,cabp,cfmax,cbmax,chi,Keq,eqprops)
 !      FA = F ( SA )
 !      FB = F ( SB )
 
@@ -5664,7 +6504,7 @@ sb = sb - tol
 130   CONTINUE
 
 !      FB = F ( SB )
-CALL evalh(fb,sb,cabp,cfmax,cbmax,chi,Keq)
+CALL evalh(fb,sb,cabp,cfmax,cbmax,chi,Keq,eqprops)
 IF ( fb > 0.0D+00 .AND. fc > 0.0D+00 ) GO TO 10
 IF ( fb <= 0.0D+00 .AND. fc <= 0.0D+00 ) GO TO 10
 GO TO 20
@@ -11186,16 +12026,17 @@ CALL matinv3d(u,uinv,ndi)
 r = matmul(f,uinv)
 RETURN
 END SUBROUTINE rotation
-SUBROUTINE sdvread(statev,thetaf,cb,cb_tot)
+SUBROUTINE sdvread(statev,thetaf,cb,cb_tot,lamn)
 use global
 implicit none
 !>    VISCOUS DISSIPATION: READ STATE VARS
 DOUBLE PRECISION, INTENT(IN)             :: statev(nsdv)
-DOUBLE PRECISION, INTENT(OUT)            :: thetaf, cb(ndir), cb_tot
+DOUBLE PRECISION, INTENT(OUT)            :: thetaf, cb(ndir), cb_tot, lamn(ndir)
 INTEGER :: IDIR
 
 DO IDIR = 1, ndir
-    cb(IDIR) = statev(NSDV - ndir + IDIR)
+    cb(IDIR) = statev(NSDV - 2*ndir + IDIR)
+    lamn(IDIR) = statev(NSDV - ndir + IDIR)
 END DO
 
 thetaf = statev(1)
@@ -11204,17 +12045,20 @@ cb_tot  = statev(4)
 RETURN
 
 END SUBROUTINE sdvread
-    SUBROUTINE sdvwrite(det, statev, sigma, thetaf, dmudx, Vmol, jfluid, cb, cb_tot, cfmax)                                           
+    SUBROUTINE sdvwrite(det, statev, sigma, thetaf, dmudx, Vmol, &
+        jfluid, cb, cb_tot, cfmax, lamn)                                           
     !>    WRITE ALL STATE VARIABLES TO STATEV AT END OF INCREMENT                                                       
     !>
     !>    STATEV layout (defined in global.f90):
-    !>      Slot  1       : thetaf  (thetaf)
-    !>      Slot  2       : det      (Jacobian J)
-    !>      Slot  3       : c        (fluid content)
-    !>      Slots 4-9     : sigma    (Cauchy stress, 6 components Voigt)
-    !>      Slots 10-12   : -dmudx   (chemical potential gradient)
-    !>      Slots 13-15   : jfluid   (fluid flux vector)
-    !>      Slots 16-NSDV : cb(i)    (bound CL concentration per unique direction)
+    !>      Slot  1               : thetaf  (thetaf)
+    !>      Slot  2               : det      (Jacobian J)
+    !>      Slot  3               : c        (fluid content)
+    !>      Slot  4               : cb_tot   (total bound CL concentration)
+    !>      Slots 5-10            : sigma    (Cauchy stress, 6 components Voigt)
+    !>      Slots 11-13           : -dmudx   (chemical potential gradient)
+    !>      Slots 14-16           : jfluid   (fluid flux vector)
+    !>      Slots 17-16+NDIR      : cb(i)    (bound CL concentration per unique direction)
+    !>      Slots 17+NDIR-NSDV    : lamn(i)  (reference stretch of stretch-free rebinding per unique direction)
     use global
     implicit none
   
@@ -11225,6 +12069,7 @@ END SUBROUTINE sdvread
     DOUBLE PRECISION, INTENT(IN)  :: Vmol
     DOUBLE PRECISION, INTENT(IN)  :: cb(ndir), cb_tot
     DOUBLE PRECISION, INTENT(IN)  :: cfmax
+    DOUBLE PRECISION, INTENT(IN)  :: lamn(ndir)
     DOUBLE PRECISION, INTENT(OUT) :: statev(nsdv)
   
     INTEGER :: idir
@@ -11239,9 +12084,10 @@ END SUBROUTINE sdvread
     statev(14:16) = jfluid(1:3,1)    ! fluid flux vector
 
 
-! Slots 17 to NSDV: bound crosslinker concentrations
+! Bound crosslinkers and reference stretch
 DO idir = 1, ndir
-    statev(nsdv - ndir + idir) = cb(idir)
+    statev(nsdv - 2*ndir + idir) = cb(idir)
+    statev(nsdv - ndir + idir) = lamn(idir)
 END DO
 
 
@@ -11505,7 +12351,7 @@ ru0=ru
 RETURN
 
 END SUBROUTINE sliding
-subroutine solveKinetics(root, args, nargs, rootOld, converged, atbound, dHdcb, dHdlambda)
+subroutine solveKinetics(root, args, nargs, rootOld, converged, atbound, dHdcb, dHdlambda, dHdth, dHds)
 
     ! Implicit (Backward-Euler) update of the bound concentration of one direction:
     ! root of H(cb) = cb - cbt - dt*R(cb) (kineticsFunc), same algorithm as material.py.
@@ -11532,7 +12378,7 @@ subroutine solveKinetics(root, args, nargs, rootOld, converged, atbound, dHdcb, 
     real(8), intent(out)    :: root
     logical, intent(out)    :: converged
     logical, intent(out)    :: atbound
-    real(8), intent(out)    :: dHdcb, dHdlambda
+    real(8), intent(out)    :: dHdcb, dHdlambda, dHdth, dHds
 
     ! Local variables
     integer :: j, imarch
@@ -11540,7 +12386,7 @@ subroutine solveKinetics(root, args, nargs, rootOld, converged, atbound, dHdcb, 
     real(8) :: rootMax, rootMin, x0, xend, a, b, s
     real(8) :: Ha, dHa, Hb, dHb, dum
     real(8) :: xl, xh, x, dx, dxold, Hx, dHx, xnew
-    real(8) :: last_x, last_H, last_dH, last_dHdlambda
+    real(8) :: last_x, last_H, last_dH, last_dHdlambda, last_dHdth, last_dHds
 
     ! Parameter declarations
     integer, parameter :: maxit = 50       ! RTSAFE iterations
@@ -11607,10 +12453,14 @@ subroutine solveKinetics(root, args, nargs, rootOld, converged, atbound, dHdcb, 
     if (last_x == root) then
         dHdcb = last_dH
         dHdlambda = last_dHdlambda
+        dHdth = last_dHdth 
+        dHds = last_dHds
     else
         call evalH(root, dum, dum)
         dHdcb = last_dH
         dHdlambda = last_dHdlambda
+        dHdth = last_dHdth 
+        dHds = last_dHds
     end if
 
     return
@@ -11623,7 +12473,7 @@ contains
         real(8), intent(out) :: H, dH
         real(8) :: xloc
         xloc = xin
-        call kineticsFunc(xloc, H, dH, last_dHdlambda, args, nargs)
+        call kineticsFunc(xloc, H, dH, last_dHdlambda, last_dHdth, last_dHds, args, nargs)
         last_x = xin
         last_H = H
         last_dH = dH
@@ -13480,650 +14330,6 @@ END IF
 RETURN
 
 END SUBROUTINE uexternaldb
-!>********************************************************************
-!> Record of revisions:                                              |
-!>        Date        Programmer        Description of change        |
-!>        ====        ==========        =====================        |
-!>                                                                   |
-!>--------------------------------------------------------------------
-!>     Description:
-!C>     UMAT: USER MATERIAL FOR THE FULL NETWORK MODEL.
-!C>                 AFFINE DEFORMATIONS
-!C>     UEXTERNALDB: READ FILAMENTS ORIENTATION AND PREFERED DIRECTION
-!>--------------------------------------------------------------------
-!>---------------------------------------------------------------------
-
-! SUBROUTINE material(stress,statev,ddsdde,sse,spd,scd, rpl,ddsddt,drplde,drpldt,  &
-!     stran,dstran,time,dtime,temp,dtemp,predef,dpred,cmname,  &
-!     ndi,nshr,ntens,nstatev,props,nprops,coords,drot,pnewdt,  &
-!     celent,dfgrd0,dfgrd1,noel,npt,layer,kspt,kstep,kinc)
-
-    SUBROUTINE MATERIAL(SIGMA,STATEV,DDSIGDDE,DFGRD0,DFGRD1,DET, &
-    TIME,DTIME,PREDEF,NDI,NSHR,NTENS,NSTATEV,PROPS,NPROPS,COORDS, &
-    PNEWDT,NOEL,NPT,KSTEP,KINC,MU_TAU,THETAF_TAU,DTHETAFDT, &
-      DTHETAFDMU,RMACRO,MFLUID,DMDMU,DMUDX,DMDJ,VMOL,CFMAX,DSIGDMU, &
-      DSRCDMU,DSRCDJ,DSRCDGU)
-!
-use global
-IMPLICIT NONE
-!----------------------------------------------------------------------
-!--------------------------- DECLARATIONS -----------------------------
-!----------------------------------------------------------------------
-INTEGER :: NDI, NSHR, NTENS, NSTATEV, NPROPS, NOEL, NPT, &
-            LAYER, KSPT, KSTEP, KINC
-
-INTEGER, PARAMETER :: nargs = 11
-
-REAL(KIND=8) :: STRESS(NTENS), STATEV(NSTATEV), &
-                DDSDDE(NTENS,NTENS), DDSDDT(NTENS), DRPLDE(NTENS), &
-                STRAN(NTENS), DSTRAN(NTENS), TIME(2), PREDEF(1), DPRED(1), &
-                PROPS(NPROPS), COORDS(3), DROT(3,3), DFGRD0(3,3), DFGRD1(3,3), &
-                FIBORI(NELEM,4), ARGS(NARGS)
-
-REAL(8), INTENT(IN)      :: MU_TAU, DMUDX(3,1)
-REAL(8), INTENT(OUT)     :: DSIGDMU(NDI,NDI)
-REAL(8), INTENT(OUT)     :: THETAF_TAU, DTHETAFDT, DTHETAFDMU, RMACRO! DPHIDMU, DPHIDOTDMU
-REAL(8), INTENT(OUT)     :: MFLUID, DMDMU, DMDJ, VMOL, CFMAX
-! Derivatives of the source s = -(cfmax*dthetaf/dt + dcb_tot/dt) (sign: -ds/d(.)), Part C item 1:
-!   DSRCDMU = (cfmax+G)/dt * dthetaf/dmu,  DSRCDJ = (cfmax+G)/dt * dthetaf/dJbar,
-!   DSRCDGU = -dcbdc/dt (spatial, isochoric: contracts with grad(du) at the local point)
-REAL(8), INTENT(OUT)     :: DSRCDMU, DSRCDJ, DSRCDGU(NDI,NDI)
-
-REAL(8) :: THETAF_T
-! DIFFUSION VARIABLES
-REAL(8) :: CHI, D, MU0, RGAS
-REAL(8) :: PHI_PER, PHI_M, dPdt_per, dPdt_m, DELTAMU, JFLUID(3,1)
-REAL(8) :: DphiDJ, DmDphi
-
-REAL(KIND=8) :: SSE, SPD, SCD, RPL, DRPLDT, DTIME, TEMP, &
-                DTEMP, PNEWDT, CELENT
-
-COMMON /kfilp/prefdir
-COMMON /kfile/etadir
-DOUBLE PRECISION :: prefdir(nelem,4)
-DOUBLE PRECISION :: etadir(nelem*ngp, ndir+2)
-DOUBLE PRECISION :: etadir_array(ndir)
-
-!
-!     FLAGS
-!      INTEGER FLAG1
-!     UTILITY TENSORS
-DOUBLE PRECISION :: unit2(ndi,ndi),unit4(ndi,ndi,ndi,ndi),  &
-    unit4s(ndi,ndi,ndi,ndi), proje(ndi,ndi,ndi,ndi),projl(ndi,ndi,ndi,ndi)
-!     KINEMATICS
-DOUBLE PRECISION :: distgr(ndi,ndi),c(ndi,ndi),b(ndi,ndi),  &
-    cbar(ndi,ndi),bbar(ndi,ndi),distgrinv(ndi,ndi),  &
-    ubar(ndi,ndi),vbar(ndi,ndi),rot(ndi,ndi), dfgrd1inv(ndi,ndi), &
-    cinv(ndi,ndi), cbarinv(ndi,ndi)
-DOUBLE PRECISION :: det,detfe, detfs,cbari1,cbari2
-!     VOLUMETRIC CONTRIBUTION
-DOUBLE PRECISION :: pkvol(ndi,ndi),svol(ndi,ndi),  &
-    cvol(ndi,ndi,ndi,ndi),cmvol(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: k,pv,ppv,ssev,ppv_chem
-!     ISOCHORIC CONTRIBUTION
-DOUBLE PRECISION :: siso(ndi,ndi),pkiso(ndi,ndi),pk2(ndi,ndi),  &
-    ciso(ndi,ndi,ndi,ndi),cmiso(ndi,ndi,ndi,ndi),  &
-    sfic(ndi,ndi),cfic(ndi,ndi,ndi,ndi), pkfic(ndi,ndi),cmfic(ndi,ndi,ndi,ndi)
-!     ISOCHORIC ISOTROPIC CONTRIBUTION
-DOUBLE PRECISION :: c10,c01,sseiso,diso(5),pkmatfic(ndi,ndi),  &
-    smatfic(ndi,ndi),sisomatfic(ndi,ndi), cmisomatfic(ndi,ndi,ndi,ndi),  &
-    cisomatfic(ndi,ndi,ndi,ndi)
-!     FILAMENTS NETWORK CONTRIBUTION
-DOUBLE PRECISION :: filprops(10), affprops(5), chemprops(10) ! affprops(6)
-DOUBLE PRECISION :: cactin,cabp,ll,lambda0,mu0str,beta,nn,b0,bb
-DOUBLE PRECISION :: phinet,r0,r0c,r0f,a,p,etac,na,mactin,rhoactin
-DOUBLE PRECISION :: pknetfic(ndi,ndi),cmnetfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: snetfic(ndi,ndi),cnetfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: pknetficaf(ndi,ndi),pknetficnaf(ndi,ndi)
-DOUBLE PRECISION :: snetficaf(ndi,ndi),snetficnaf(ndi,ndi)
-DOUBLE PRECISION :: cmnetficaf(ndi,ndi,ndi,ndi), cmnetficnaf(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: cnetficaf(ndi,ndi,ndi,ndi), cnetficnaf(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: efi, kb, dx, dxc, Lp, theta
-DOUBLE PRECISION :: R, Rfmax, Rbmax, Keq, Koff0, Kon0, Kcatch0
-DOUBLE PRECISION :: cb(ndir), cb0, cbmax, thetab, thetaf0
-DOUBLE PRECISION :: cb_tot, cb_tot_new, cf
-DOUBLE PRECISION :: cb_upper, machep, tol
-DOUBLE PRECISION :: Jc, f, df, dHdcb
-DOUBLE PRECISION :: DTHETAFDJ, dcbdthetaf, dsficdthetaf(ndi,ndi), dsigisodthetaf(ndi,ndi)
-!
-!     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)
-DOUBLE PRECISION :: cjr(ndi,ndi,ndi,ndi)
-!     CAUCHY STRESS AND ELASTICITY TENSOR
-DOUBLE PRECISION :: sigma(ndi,ndi),ddsigdde(ndi,ndi,ndi,ndi),  &
-    ddpkdde(ndi,ndi,ndi,ndi)
-!     OTHER TANGENT AUX TENSORS
-DOUBLE PRECISION :: dpk2dthetaf(ndi,ndi), dthetafdc(ndi,ndi), dPK2ficdcb(ndi,ndi), &
-                    dcbdc(ndi,ndi), cvolchem(ndi,ndi,ndi,ndi), &
-                    dsigmadcb(ndi,ndi)
-DOUBLE PRECISION :: stest(ndi,ndi), ctest(ndi,ndi,ndi,ndi)
-
-INTEGER :: I1, J1, K1, L1
-
-
-!----------------------------------------------------------------------
-!-------------------------- INITIALIZATIONS ---------------------------
-!----------------------------------------------------------------------
-!     IDENTITY AND PROJECTION TENSORS
-unit2=zero
-unit4=zero
-unit4s=zero
-proje=zero
-projl=zero
-!     KINEMATICS
-distgr=zero
-c=zero
-b=zero
-cbar=zero
-bbar=zero
-ubar=zero
-vbar=zero
-rot=zero
-det=zero
-cbari1=zero
-cbari2=zero
-!     VOLUMETRIC
-pkvol=zero
-svol=zero
-cvol=zero
-k=zero
-pv=zero
-ppv=zero
-ppv_chem=zero
-ssev=zero
-!     ISOCHORIC
-siso=zero
-pkiso=zero
-pk2=zero
-ciso=zero
-cfic=zero
-sfic=zero
-pkfic=zero
-!     ISOTROPIC
-c10=zero
-c01=zero
-sseiso=zero
-diso=zero
-pkmatfic=zero
-smatfic=zero
-sisomatfic=zero
-cmisomatfic=zero
-cisomatfic=zero
-!     FILAMENTS NETWORK
-snetfic=zero
-cnetfic=zero
-pknetfic=zero
-pknetficaf=zero
-pknetficnaf=zero
-snetficaf=zero
-snetficnaf=zero
-cmnetfic=zero
-cmnetficaf=zero
-cmnetficnaf=zero
-cnetficaf=zero
-cnetficnaf=zero
-!     JAUMANN RATE
-cjr=zero
-!     TOTAL CAUCHY STRESS AND ELASTICITY TENSORS
-sigma=zero
-ddsigdde=zero
-cvolchem=zero
-!     FLUID FLUX
-jfluid=zero
-!----------------------------------------------------------------------
-!------------------------ IDENTITY TENSORS ----------------------------
-!----------------------------------------------------------------------
-CALL onem(unit2,unit4,unit4s,ndi)
-!----------------------------------------------------------------------
-!------------------------ RANDOM GENERATION ---------------------------
-!----------------------------------------------------------------------
-
-!----------------------------------------------------------------------
-!------------------- MATERIAL CONSTANTS AND DATA ----------------------
-!----------------------------------------------------------------------
-!     VOLUMETRIC
-k        = props(1)
-!     ISOCHORIC ISOTROPIC
-c10      = props(2)
-c01      = props(3)
-phinet   = props(4)
-!     ACTIN/CROSSLINKERS
-a        = props(5)  ! Ratio between contour length and end-to-end distance
-r0c      = props(6)
-etac     = props(7)
-mu0str   = props(8)
-beta     = props(9)
-Lp       = props(10) ! Persistence length
-theta    = props(11) ! Absolute temperature
-dx       = props(12) ! CL reactive distance / bond length
-!     AFFINE NETWORK
-bb       = props(13)
-lambda0  = props(14)
-cactin   = props(15)
-R        = props(16) ! CL to actin ratio
-Rfmax    = props(17) ! Maximum free CL to actin ratio
-Rbmax   = props(18) ! Maximum bound CL to actin ratio
-!     SOLVENT
-CHI    = PROPS(19)
-D      = PROPS(20)
-MU0    = PROPS(21)
-VMOL   = PROPS(22)
-Koff0  = PROPS(23)
-Keq    = PROPS(24)
-Kcatch0 = PROPS(25)
-dxc     = PROPS(26)
-
-!Other parameters (Check which of these will be actually needed in the UMAT and not only in the AFFCL subroutine)
-! (double-precision literals: single-precision ones carry ~1e-8 relative errors)
-kb = 1.380649d-5
-b0 = Lp * theta * kb
-rgas = 8.314462618d0
-Mactin = 42.0d-3       ! [MDa]
-rhoactin = 16.0d0      ! [MDa/microm]
-NA = 6.022d5           ! [1/amol]
-Kon0 = (Koff0 + Kcatch0) * Keq
-! Maximum allowable CL concentration
-cfmax = Rfmax * cactin
-cbmax = Rbmax * cactin
-
-filprops = (/a, r0c, etac, mu0str, beta, Lp, theta, dx, kb, NA/)
-affprops = (/bb, lambda0, cactin, Mactin, rhoactin/)
-chemprops = (/cbmax, cfmax, CHI, D, MU0, VMOL, Koff0, Keq, Kcatch0, dxc/)
-
-
-
-
-!        STATE VARIABLES AND CHEMICAL PARAMETERS
-! IF ((kinc <= 1).AND.(kstep == 1)) THEN
-IF (STATEV(1) == 0.0d0) THEN
-!     CL CONCENTRATION
-  cabp = cactin*R 
-! Initial bound and free CL concentrations
-  cb_upper = MIN(cabp, cbmax)
-  machep = 2.22d-16
-  tol = 1.0d-12
-  ! write(*,*) 'Calling pullchem at t=0'
-  CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq)
-  ! write(*,*) 'cb0 = ', cb0
-  thetaf0 = (cabp - cb0) / cfmax
-  ! write(*,*) 'thetaf0 = ', thetaf0
-  CALL initialize(statev,thetaf0,vmol,cb0,cfmax)
-END IF
-!        READ STATEV
-CALL sdvread(statev, thetaf_t, cb, cb_tot)
-!----------------------------------------------------------------------
-!---------------------------- KINEMATICS ------------------------------
-!----------------------------------------------------------------------
-!     DISTORTION GRADIENT
-CALL fslip(dfgrd1,distgr,det,ndi)
-!     INVERSE OF DEFORMATION GRADIENT
-CALL matinv3d(dfgrd1,dfgrd1inv,ndi)
-!     INVERSE OF DISTORTION GRADIENT
-CALL matinv3d(distgr,distgrinv,ndi)
-!     CAUCHY-GREEN DEFORMATION TENSORS
-CALL deformation(dfgrd1,c,b,ndi)
-CALL deformation(distgr,cbar,bbar,ndi)
-!     INVERSE OF CAUCHY-GREEN DEFORMATION TENSORS
-CALL matinv3d(c,cinv,ndi)
-CALL matinv3d(cbar,cbarinv,ndi)
-!     INVARIANTS OF DEVIATORIC DEFORMATION TENSORS
-CALL invariants(cbar,cbari1,cbari2,ndi)
-!     STRETCH TENSORS
-CALL stretch(cbar,bbar,ubar,vbar,ndi)
-!     ROTATION TENSORS
-CALL rotation(distgr,rot,ubar,ndi)
-!     DEVIATORIC PROJECTION TENSORS
-CALL projeul(unit2,unit4s,proje,ndi)
-
-CALL projlag(c,unit4,projl,ndi)
-!----------------------------------------------------------------------
-!---------------------- COUPLED DIFFUSION -----------------------------
-!----------------------------------------------------------------------
-
-!     1. Solve for current free crosslinker fraction (THETAF_TAU)
-      ARGS(1) = MU_TAU
-      ARGS(2) = MU0
-      ARGS(3) = RGAS
-      ARGS(4) = THETA
-      ARGS(5) = CHI
-      ARGS(6) = VMOL
-      ARGS(7) = K
-      ARGS(8) = DET
-      ARGS(9) = CB_TOT
-      ARGS(10) = CFMAX
-      ARGS(11) = cactin * R      ! initial total crosslinker content c0 (reference state of J^c)
-      ! write(*,*) 'ARGS = ', ARGS
-      ! write(*,*) 'THETAF_T =', THETAF_T
-      CALL SOLVETHETAF(THETAF_TAU, ARGS, NARGS, THETAF_T, PNEWDT)
-      ! write(*,*) 'THETAF_TAU =', THETAF_TAU
-
-      cf = THETAF_TAU * cfmax
-      ! Swelling relative to the initial content c0 = cactin*R (stress-free reference: Jc = 1 at t = 0);
-      ! dJc/dc = VMOL as before, so the derivatives below are unchanged (same definition in thetafFunc)
-      Jc = 1.0d0 + VMOL * (cb_tot + cf - cactin * R)
-
-      ! Evaluate tangent at converged root
-      CALL thetafFunc(THETAF_TAU, f, df, ARGS, NARGS)
-      dHdcb = k * vmol**two / (RGAS * THETA) * (one + DLOG(det/Jc)) / Jc**two
-      DTHETAFDMU = one / (RGAS * THETA * df)
-
-      ! write(*,*) 'kinc = ', kinc
-      ! write(*,*) 'kstep = ', kstep
-      ! write(*,*) 'DTIME = ', DTIME
-
-      IF (DTIME > 1.0d-12) THEN
-        DTHETAFDT = (THETAF_TAU - THETAF_T) / DTIME            
-      ELSE
-        DTHETAFDT = 0.0d0
-      END IF
-
-
-      ! Fluid mobility (spatial, consistent with the spatial flux j = -m grad(mu)):
-      !   m = D/(RT) * (cf/J) * (1 - thetaf), with cf/J the free CL concentration per unit
-      !   deformed volume (cf is per unit reference volume; J = det = Jbar with F-bar).
-      !   D is the Fickian diffusion coefficient; the 1/(RT) (Einstein relation) gives
-      !   D_eff = m * dmu/d(cf/J) = D * [1 - 2*chi*thetaf*(1-thetaf)] ~ D
-      !   (Chester, Di Leo & Anand 2015, Eqs. 2.11 and 4.1)
-      MFLUID = D / (RGAS * THETA) * cf * (1.0d0 - THETAF_TAU) / det
-
-      ! Mobility tangents
-      DMDMU = D / (RGAS * THETA) * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) * DTHETAFDMU / det
-      ! dm/dJ: through thetaf (Implicit Function Theorem on H(THETAF_TAU, mu, J) = 0,
-      !   dthetaf/dJ = (k*Vmol) / (RT * Jc * det * df)) and through the 1/J of the concentration:
-      !   dm/dJ = dm/dthetaf * dthetaf/dJ - m/J
-      DTHETAFDJ = (k * VMOL) / (RGAS * THETA * Jc * det * df)
-      DMDJ  = D / (RGAS * THETA) * cfmax * (1.0d0 - 2.0d0 * THETAF_TAU) * DTHETAFDJ / det &
-            - MFLUID / det
-
-      ! Fluid flux vector (for visualization/SVARS)
-      jfluid = -MFLUID * DMUDX
-
-      
-!       DETFE = DET * PHI_TAU
-!       !     2. Time rate of swelling
-!       DPDT = (PHI_TAU - PHI_T) / DTIME
-      
-!       !     3. Analytical derivatives of PHI
-!       DPHIDMU = (ONE / (RGAS * THETA)) / &
-!       ( (ONE / (PHI_TAU - ONE)) + ONE + TWO * CHI * PHI_TAU &
-!       - ((VMOL * K) / (RGAS * THETA * PHI_TAU)) &
-!       + ((VMOL * K) / (RGAS * THETA * PHI_TAU)) * DLOG(DETFE) )
-      
-!       DPHIDJ  = ( ((VMOL * K) / (RGAS * THETA * DET)) &
-!       - ((VMOL * K) / (RGAS * THETA * DET)) * DLOG(DETFE) ) / &
-!       ( (ONE / (PHI_TAU - ONE)) + ONE + TWO * CHI * PHI_TAU &
-!       - ((VMOL * K) / (RGAS * THETA * PHI_TAU)) &
-!       + ((VMOL * K) / (RGAS * THETA * PHI_TAU)) * DLOG(DETFE) )
-      
-!       !     4. Numerical Perturbation for D(PHIDOT)/DMU
-!       IF (DABS(MU_TAU) > ONE) THEN
-!         DELTAMU = DABS(MU_TAU) * 1.D-8
-!       ELSE
-!         DELTAMU = 1.D-8
-!       END IF
-      
-!       ARGS(1) = MU_TAU + DELTAMU
-!       CALL SOLVEPHI(PHI_PER, ARGS, NARGS, PHI_T)
-!       DPDT_PER = (PHI_PER - PHI_T) / DTIME
-      
-!       ARGS(1) = MU_TAU - DELTAMU
-!       CALL SOLVEPHI(PHI_M, ARGS, NARGS, PHI_T)
-!       DPDT_M = (PHI_M - PHI_T) / DTIME
-      
-!       DPHIDOTDMU = (DPDT_PER - DPDT_M) / (TWO * DELTAMU)
-      
-!       !     5. Fluid mobility and permeability
-!       MFLUID = (D * (ONE / PHI_TAU - ONE)) / (DET * VMOL * RGAS * THETA)
-!       DMDPHI = -(D / (DET * VMOL * PHI_TAU * PHI_TAU * RGAS * THETA))
-!       DMDMU  = DMDPHI * DPHIDMU
-!       DMDJ   = DMDPHI * DPHIDJ
-
-!       !    6. Fluid flux vector (just for plotting)
-!       JFLUID = -MFLUID * DMUDX
-      
-!----------------------------------------------------------------------
-!--------------------- CONSTITUTIVE RELATIONS  ------------------------
-!----------------------------------------------------------------------
-!---- VOLUMETRIC ------------------------------------------------------
-!     STRAIN-ENERGY
-CALL vol(ssev,pv,ppv,k,det,Jc)
-! Add chemical contribution (Kuu Term 2)
-ppv_chem = - (k**two * VMOL**two * CFMAX) / (det * Jc**two) * DTHETAFDMU
-ppv = ppv+ ppv_chem
-! write(*,*) 'DTHETAFDMU = ', DTHETAFDMU
-! write(*,*) 'ppv = ', ppv
-! write(*,*) 'ppv_chem = ', ppv_chem
-!---- ISOCHORIC ISOTROPIC ---------------------------------------------
-IF (phinet < one) THEN
-!     STRAIN-ENERGY
-  CALL isomat(sseiso,diso,c10,c01,cbari1,cbari2)
-!     PK2 'FICTICIOUS' STRESS TENSOR
-  CALL pk2isomatfic(pkmatfic,diso,cbar,cbari1,unit2,ndi)
-!     CAUCHY 'FICTICIOUS' STRESS TENSOR
-  CALL sigisomatfic(sisomatfic,pkmatfic,distgr,det,ndi)
-!     'FICTICIOUS' MATERIAL ELASTICITY TENSOR
-  CALL cmatisomatfic(cmisomatfic,cbar,cbari1,cbari2, diso,unit2,unit4,det,ndi)
-!     'FICTICIOUS' SPATIAL ELASTICITY TENSOR
-  CALL csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
-  
-END IF
-!---- FILAMENTS NETWORK -----------------------------------------------
-!     IMAGINARY ERROR FUNCTION BASED ON DISPERSION PARAMETER
-CALL erfi(efi,bb)
-!     'FICTICIOUS' PK2 STRESS AND MATERIAL ELASTICITY TENSORS
-!------------ AFFINE NETWORK --------------
-dcbdc = zero
-dcbdthetaf = zero
-dsficdthetaf = zero
-IF (phinet > zero) THEN
-  ! write(*,*) 'Calling affclnetfic_discrete at t = ', time(1)
-  CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,unit2,filprops,  &
-      affprops,efi,noel,det,prefdir,ndi,cb,dtime,chemprops, &
-      thetaf_tau, cb_tot_new, dPK2ficdcb, dcbdc, pnewdt, dcbdthetaf, dsficdthetaf)
-END IF
-
-! Macroscopic reaction source (homogenized binding rate) and the source derivatives (Part C, item 1)
-IF (DTIME > 1.0d-12) THEN
-  RMACRO = (cb_tot_new - cb_tot) / DTIME
-  DSRCDMU = (CFMAX + dcbdthetaf) * DTHETAFDMU / DTIME
-  DSRCDJ  = (CFMAX + dcbdthetaf) * DTHETAFDJ / DTIME
-  DSRCDGU = - dcbdc / DTIME
-ELSE
-  RMACRO = 0.0d0
-  DSRCDMU = 0.0d0
-  DSRCDJ  = 0.0d0
-  DSRCDGU = 0.0d0
-END IF
-! write(*,*) 'cb_tot = ', cb_tot
-! write(*,*) 'cb_tot_new = ', cb_tot_new
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! CHEMICAL CONTRIBUTIONS TO THE MECHANICAL TANGENT (Kuu)!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! ========= SECOND PIOLA-KIRCHHOFF STRESS TANGENT =========
-!!! 2ND TERM - Final pushed-forward expression directly added to ppv
-! dS/dTHETAF
-! dpk2dthetaf = - (k * vmol * cfmax) / Jc * cinv
-! dTHETAF/dC
-! dthetafdc = one / two * (k * vmol) / Jc * dthetafdmu * cinv
-!!! 3RD TERM
-!! 3.1
-! dSvol/dcb
-! write(*,*) 'cfmax =', cfmax
-! write(*,*) 'dHdcb =', dHdcb
-! write(*,*) 'df =', df
-! do I1 = 1, ndi
-!   do J1 = 1, ndi
-!     do K1 = 1, ndi
-!       do L1 = 1, ndi
-!         cvolchem(I1,J1,K1,L1) = (k * vmol) / (det * Jc) * unit2(I1,J1) * dcbdc(K1,L1) &
-!                                 * (one - cfmax * dHdcb / df)
-!       end do
-!     end do
-!   end do
-! end do
-!! 3.2 (computed in affclnetfic_discrete)
-
-!      PKNETFIC=PKNETFICNAF+PKNETFICAF
-snetfic=snetficnaf+snetficaf
-!      CMNETFIC=CMNETFICNAF+CMNETFICAF
-cnetfic=cnetficnaf+cnetficaf
-!----------------------------------------------------------------------
-!     STRAIN-ENERGY
-SSE=SSEV+SSEISO
-!     PK2 'FICTICIOUS' STRESS
-pkfic=(one-phinet)*pkmatfic+pknetfic
-!     CAUCHY 'FICTICIOUS' STRESS
-sfic=(one-phinet)*sisomatfic+snetfic
-!     MATERIAL 'FICTICIOUS' ELASTICITY TENSOR
-cmfic=(one-phinet)*cmisomatfic+cmnetfic
-!     SPATIAL 'FICTICIOUS' ELASTICITY TENSOR
-cfic=(one-phinet)*cisomatfic+cnetfic
-!----------------------------------------------------------------------
-!-------------------------- STRESS MEASURES ---------------------------
-!----------------------------------------------------------------------
-!---- VOLUMETRIC ------------------------------------------------------
-!      PK2 STRESS
-! CALL pk2vol(pkvol,pv,c,ndi)
-CALL pk2vol(pkvol,pv,c,ndi,det)
-!      CAUCHY STRESS
-CALL sigvol(svol,pv,unit2,ndi)
-!---- ISOCHORIC -------------------------------------------------------
-!      PK2 STRESS
-CALL pk2iso(pkiso,pkfic,projl,det,ndi)
-!      CAUCHY STRESS
-CALL sigiso(siso,sfic,proje,ndi)
-!      ACTIVE CAUCHY STRESS
-!      CALL SIGISO(SACTISO,SNETFICAF,PROJE,NDI)
-
-!      CALL SPECTRAL(SACTISO,SACTVL,SACTVC)
-!---- VOLUMETRIC + ISOCHORIC ------------------------------------------
-!      PK2 STRESS
-pk2 = pkvol + pkiso
-!      CAUCHY STRESS
-sigma = svol + siso
-
-!----------------------------------------------------------------------
-!-------------------- MATERIAL ELASTICITY TENSOR ----------------------
-!----------------------------------------------------------------------
-
-!---- VOLUMETRIC ------------------------------------------------------
-
-!      CALL METVOL(CMVOL,C,PV,PPV,DET,NDI)
-
-!---- ISOCHORIC -------------------------------------------------------
-
-!      CALL METISO(CMISO,CMFIC,PROJL,PKISO,PKFIC,C,UNIT2,DET,NDI)
-
-!----------------------------------------------------------------------
-
-!      DDPKDDE=CMVOL+CMISO
-
-!----------------------------------------------------------------------
-!--------------------- SPATIAL ELASTICITY TENSOR ----------------------
-!----------------------------------------------------------------------
-
-!---- VOLUMETRIC ------------------------------------------------------
-
-CALL setvol(cvol,pv,ppv,unit2,unit4s,ndi)
-
-!---- ISOCHORIC -------------------------------------------------------
-
-CALL setiso(ciso,cfic,proje,siso,sfic,unit2,ndi)
-
-!-----JAUMMAN RATE ----------------------------------------------------
-
-CALL setjr(cjr,sigma,unit2,ndi)
-
-!----------------------------------------------------------------------
-
-!     ELASTICITY TENSOR
-ddsigdde=cvol+ciso ! +cvolchem ! +cjr
-! if (npt==1) then
-!   write(*,*) 'cvolchem / ddsigdde = ', cvolchem / ddsigdde
-! end if
-!----------------------------------------------------------------------
-!------------------------- CROSS-COUPLINGS ----------------------------
-!----------------------------------------------------------------------
-!     DISPLACEMENT - CHEMICAL POTENTIAL MODULUS
-! DO I1 = 1, NDI
-!     DO J1 = 1, NDI
-!       ! Derivative of Cauchy stress with respect to phi
-!       SPUCMOD(I1,J1) = (K / (DETFE * PHI_TAU)) * UNIT2(I1,J1) * DPHIDMU
-!     END DO
-! END DO
-
-!     CHEMICAL POTENTIAL - DISPLACEMENT MODULUS: assembled in the element from MFLUID, DMDJ,
-!     DSRCDJ and DSRCDGU (u3d8.f90, Part C items 1 and 5)
-
-
-!     CAUCHY STRESS - CHEMICAL POTENTIAL MODULUS (dS / dMu)
-!     volumetric (free CL swelling) + isochoric network through cb_i(thetaf) (Part C, item 4):
-!     dsigma/dthetaf = -K*Vmol*cfmax/(J*Jc) I + P : sum_i dsfic_i/dcb_i * S^theta_i
-  CALL contraction42(dsigisodthetaf, proje, dsficdthetaf, ndi)
-  DO I1 = 1, NDI
-      DO J1 = 1, NDI
-        DSIGDMU(I1,J1) = ( -((K * VMOL * CFMAX) / (DET * Jc)) * UNIT2(I1,J1) &
-                         + dsigisodthetaf(I1,J1) ) * DTHETAFDMU
-      END DO
-  END DO
-
-!     NETWORK STRESS THROUGH THETAF(J) (Kuu term 4, Part C item 7): push-forward of
-!     2 dSiso/dthetaf (x) dthetaf/dC, with dthetaf/dC = J/2 dthetaf/dJ C^-1:
-!     c_ijkl += J * dthetaf/dJ * dsigiso/dthetaf_ij * delta_kl
-!     (the volumetric counterpart is zero: Jc uses the lagged cb_tot, as for cvolchem)
-  DO I1 = 1, NDI
-    DO J1 = 1, NDI
-      DO K1 = 1, NDI
-        ddsigdde(I1,J1,K1,K1) = ddsigdde(I1,J1,K1,K1) + DET * DTHETAFDJ * dsigisodthetaf(I1,J1)
-      END DO
-    END DO
-  END DO
-
-
-!----------------------------------------------------------------------
-!------------------------- INDEX ALLOCATION ---------------------------
-!----------------------------------------------------------------------
-!     VOIGT NOTATION  - FULLY SIMMETRY IMPOSED
-CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
-
-!----------------------------------------------------------------------
-!--------------------------- STATE VARIABLES --------------------------
-!----------------------------------------------------------------------
-!     DO K1 = 1, NTENS
-!      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(det,statev,stress,thetaf_tau,dmudx,Vmol,jfluid,cb,cb_tot_new,cfmax)
-! CALL sdvwrite(det,etac_sdv,statev)
-!     END DO
-!----------------------------------------------------------------------
-RETURN
-END SUBROUTINE material
-!----------------------------------------------------------------------
-!--------------------------- END OF UMAT ------------------------------
-!----------------------------------------------------------------------
-
-!----------------------------------------------------------------------
-!----------------------- AUXILIAR SUBROUTINES -------------------------
-!----------------------------------------------------------------------
-!                         INPUT FILES
-!----------------------------------------------------------------------
-
-!----------------------------------------------------------------------
-!                         KINEMATIC QUANTITIES
-!----------------------------------------------------------------------
-!----------------------------------------------------------------------
-!                         STRESS TENSORS
-!----------------------------------------------------------------------
-!----------------------------------------------------------------------
-!                   LINEARISED ELASTICITY TENSORS
-!----------------------------------------------------------------------
-
-
-!----------------------------------------------------------------------
-!----------------------------------------------------------------------
-!----------------------------------------------------------------------
-!----------------------- UTILITY SUBROUTINES --------------------------
-!----------------------------------------------------------------------
-
 !****************************************************************************
 
 
@@ -14385,3 +14591,89 @@ SUBROUTINE xit()
 CALL EXIT()
 
 END SUBROUTINE
+SUBROUTINE xmech(x, fle, dxdle, dfdle, cb, le, lamn, aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin, rt)
+
+    !> C4: x = mu_b^mech/RT = d[n (w + F0 ln lamn)]/dcb / RT at fixed le = lambda/lamn and lamn (material_TC._x_mech).
+    !> w(le) = (lambda0 r0/aux) [f lf - int_0^f lam_f(f') df'] (exact extensible beta-model, 16-point Gauss-Legendre in
+    !> s = ln(1 + aux1 f')). Also returns the force fle at le, dxdle = dx/dle = d(n w')/dcb / RT (w' = lambda0 r0 f) and
+    !> dfdle = df/dle at fixed cb (for the tangent).
+
+    use global
+    IMPLICIT NONE
+    DOUBLE PRECISION, INTENT(OUT) :: x, fle, dxdle, dfdle
+    DOUBLE PRECISION, INTENT(IN)  :: cb, le, lamn, aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin, rt
+    INTEGER :: k
+    DOUBLE PRECISION :: xg(16), wg(16), pi
+    DOUBLE PRECISION :: r0f, dr0f, r0, ll, n, dndcb, aux, daux, l0f, dl0f, aux1, daux1, aux2, daux2, lf, kk
+    DOUBLE PRECISION :: smax, s, fp, jac, u, v, dd, rhs, lam, drhs, dlam, qi, qj, w, dw, mu
+    DOUBLE PRECISION :: fi, ffi, dwi, ddwi, dfdcb, f0, ff0, dw0, ddw0, df0
+    DOUBLE PRECISION :: c_le, c_lf, c_l0, c_l0f, c_ll, c_r0, c_r0f, c_mu0, c_beta, c_b0, c_eta, c_cb
+    xg = (/ -0.9894009349916499d0, -0.9445750230732326d0, -0.8656312023878318d0, -0.7554044083550030d0, &
+            -0.6178762444026438d0, -0.4580167776572274d0, -0.2816035507792589d0, -0.0950125098376374d0, &
+            0.0950125098376374d0, 0.2816035507792589d0, 0.4580167776572274d0, 0.6178762444026438d0, &
+            0.7554044083550030d0, 0.8656312023878318d0, 0.9445750230732326d0, 0.9894009349916499d0 /)
+    wg = (/ 0.0271524594117542d0, 0.0622535239386475d0, 0.0951585116824926d0, 0.1246289712555341d0, &
+            0.1495959888165767d0, 0.1691565193950026d0, 0.1826034150449236d0, 0.1894506104550686d0, &
+            0.1894506104550686d0, 0.1826034150449236d0, 0.1691565193950026d0, 0.1495959888165767d0, &
+            0.1246289712555341d0, 0.0951585116824926d0, 0.0622535239386475d0, 0.0271524594117542d0 /)
+    
+    pi   = four * ATAN(one)
+    r0f  = 1.6d0 * (cb * 1.0d3)**(-two / 5.0d0)
+    dr0f = -0.4d0 * r0f / cb
+    r0   = r0f + r0c
+    ll   = aratio * r0f
+    n    = kactin / ll
+    dndcb   = 0.4d0 * n / cb
+    aux  = etac * r0 / r0f
+    daux = -etac * r0c * dr0f / r0f**2
+    l0f  = aux * (lambda0 - one) + one
+    dl0f = daux * (lambda0 - one)
+    aux1    = ll * ll / (pi * pi * b0)
+    daux1   = -0.8d0 * aux1 / cb
+    aux2   = lambda0 * r0 / aux
+    daux2  = lambda0 * (dr0f * aux - r0 * daux) / aux**2
+    lf   = aux * (le - one) + one
+    kk   = one - one / aratio
+    w = zero; dw = zero; fle = zero; dxdle = zero; dfdle = zero
+
+    IF (lf * l0f > one) THEN
+        c_le = le; c_lf = lf; c_l0 = lambda0; c_l0f = l0f; c_ll = ll; c_r0 = r0; c_r0f = r0f
+        c_mu0 = mu0str; c_beta = beta; c_b0 = b0; c_eta = etac; c_cb = cb
+        CALL fil(fi, ffi, dwi, ddwi, c_le, c_lf, c_l0, c_l0f, c_ll, c_r0, c_r0f, c_mu0, c_beta, c_b0, c_eta, c_cb, dfdcb)
+        fle   = fi
+        dfdle = ddwi / (lambda0 * r0)                        ! dw' = lambda0 r0 df
+        smax = LOG(one + aux1 * fi)
+        qi = zero; qj = zero
+        DO k = 1, 16
+            s    = half * smax * (xg(k) + one)
+            fp   = (EXP(s) - one) / aux1                          ! f' at the node
+            jac  = EXP(s) / aux1                                  ! df'/ds
+            u    = one + fp / mu0str
+            v    = one + two * fp / mu0str
+            dd   = one + fp * aux1 * u
+            rhs  = u - kk * u**beta * v * dd**(-beta)
+            lam  = aratio * rhs / l0f                          ! lam_f(f')
+            drhs = beta * kk * u**beta * v * fp * u * dd**(-beta - one) * daux1
+            dlam = aratio * drhs / l0f - lam * dl0f / l0f      ! d lam_f(f')/dcb at fixed f'
+            qi = qi + wg(k) * lam * jac
+            qj = qj + wg(k) * dlam * jac
+        END DO
+        qi = half * smax * qi
+        qj = half * smax * qj
+        w  = aux2 * (fi * lf - qi)
+        dw = daux2 * (fi * lf - qi) + aux2 * (fi * daux * (le - one) - qj)
+        dxdle = n * (0.4d0 * dwi / cb + lambda0 * (dr0f * fi + r0 * dfdcb)) / rt   ! d(n lambda0 r0 f)/dcb / RT
+        END IF
+        mu = dndcb * w + n * dw
+        IF (lamn /= one) THEN                                  ! prestress reservoir: + n F0 ln(lamn)
+        f0 = zero; df0 = zero
+        IF (l0f > one) THEN
+            c_le = one; c_lf = one; c_l0 = lambda0; c_l0f = l0f; c_ll = ll; c_r0 = r0; c_r0f = r0f
+            c_mu0 = mu0str; c_beta = beta; c_b0 = b0; c_eta = etac; c_cb = cb
+            CALL fil(f0, ff0, dw0, ddw0, c_le, c_lf, c_l0, c_l0f, c_ll, c_r0, c_r0f, c_mu0, c_beta, c_b0, c_eta, c_cb, df0)
+        END IF
+        mu = mu + LOG(lamn) * (dndcb * f0 * lambda0 * r0 + n * lambda0 * (dr0f * f0 + r0 * df0))
+        END IF
+        x = mu / rt
+    RETURN
+END SUBROUTINE xmech

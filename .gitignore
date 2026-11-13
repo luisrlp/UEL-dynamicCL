@@ -9,6 +9,7 @@ reports/
 research_notes/
 paper/
 python_scripts/optimisation_runs
+python_scripts/sensitivity_runs
 python_scripts/validation
 python_scripts/old
 
@@ -16,7 +17,7 @@ python_scripts/old
 # Specific Files to Ignore
 # =========================
 GEMINI.md
-python_scripts/*.md
+python_scripts/now*.md
 
 # =========================
 # Abaqus Ignore List
@@ -123,3 +124,4 @@ dist/
 *.webp
 *.ico
 *.svg
+python_scripts/now-i-want-to-purring-hummingbird.md

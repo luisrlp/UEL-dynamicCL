@@ -1,7 +1,7 @@
 """
 Amplitude sweep (Unterberger et al. 2013, Fig. 4b) for the optimum of saved LAOS fits in optimisation_runs/.
 
-One LAOS run per amplitude from rest (fresh material), 5 cycles by default (--cycles N), G' and G'' of the last cycle
+One LAOS run per amplitude from rest (fresh material), the fitted number of cycles by default (--cycles N), G' and G'' of the last cycle
 from main.moduli (Eq. (1) of the paper, positive peaks), as in main.py. Runs fitted with the consistent (C4) kinetics
 use the closed-system Fortran driver (optimise_laos_v2.simulate, as plot_laos_runs.py), with the parameters of
 result.json (fixed values and optimum). Older runs use the Python material model, with the constants of setup.json
@@ -91,7 +91,7 @@ def sweep_job(args):
     import main
     name, gA, cycles, dt, factor, overrides = args
     diff, mech, cfg = load_run(name)
-    cfg['cycles'] = cycles
+    cfg['cycles'] = cycles or cfg['cycles']
     cfg['dt'] = dt or cfg['dt']
     cfg['factor'] = factor or cfg['factor']
     sim = {'deformation_type': 'shear', 'factor': cfg['factor'], 'max_iter': 50, 'tol': 1.0e-12}
@@ -141,7 +141,7 @@ def plot_runs(res, dG1, dG2, cycles, out):
 def main_cli():
     ap = argparse.ArgumentParser()
     ap.add_argument('--runs', nargs='+', required=True, help='run folders in optimisation_runs/')
-    ap.add_argument('--cycles', type=int, default=5, help='number of cycles per amplitude (default 5)')
+    ap.add_argument('--cycles', type=int, default=None, help='number of cycles per amplitude (default: as in the fit)')
     ap.add_argument('--dt', type=float, default=None, help='time step [s] (default: as in the fit)')
     ap.add_argument('--factor', type=int, default=None, help='integration factor, NDIR = 10 factor^2 (default: as in the fit)')
     ap.add_argument('--max-gamma', type=float, default=MAX_GAMMA, help='largest amplitude (default 0.2; data up to about 0.5)')
@@ -181,12 +181,12 @@ def main_cli():
                 tag = name + ('_set' if overrides else '') + (f'_dt{a.dt:g}' if a.dt else '') + (f'_f{a.factor}' if a.factor else '')
                 np.savetxt(os.path.join('validation', f'0_amplitude_sweep_{tag}.csv'), np.array(out[name])[:, :3],
                            delimiter=',', header=f"run {name} {a.set} (dt {a.dt or cfg['dt']}, factor {a.factor or cfg['factor']}, "
-                                                 f"cycle {a.cycles}); gamma_A, G' (Pa), G'' (Pa)")
+                                                 f"cycle {a.cycles or cfg['cycles']}); gamma_A, G' (Pa), G'' (Pa)")
                 print(f'{name}: done', flush=True)
     res = {r: np.array(v) for r, v in out.items()}
     fig = a.out or os.path.join('figures', 'validation',
                                 '0_amplitude_sweep_' + '_'.join(runs) + ('_set' if overrides else '') + (f'_dt{a.dt:g}' if a.dt else '') + (f'_f{a.factor}' if a.factor else '') + '.pdf')
-    plot_runs(res, dG1, dG2, a.cycles, fig)
+    plot_runs(res, dG1, dG2, a.cycles or ', '.join(sorted({str(load_run(r)[2]['cycles']) for r in runs})), fig)
     print(f'saved {fig}')
 
 

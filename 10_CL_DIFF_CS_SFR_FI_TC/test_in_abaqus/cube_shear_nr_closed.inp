@@ -1,0 +1,113 @@
+*Heading
+Newton-Raphson convergence: simple shear ramp of one UEL cube, CLOSED system (mu free, zero flux)
+** Top face (y = 1) displaced in x by GAMMA; top u_y and the z = 1 face free (traction-free normal
+** deformation: Poynting stresses and swelling are solved for); bottom fixed in x, y; z = 0 face symmetric.
+** Unknowns: u_y of the top nodes, u_z of the z = 1 nodes, mu of all nodes.
+** Properties: properties.inp (final2_B1, 28 entries); uel.f90 compiled with FACTOR = 3 (NSDV = 196).
+*Preprint, echo=NO, model=NO, history=NO, contact=NO
+*Node
+      1,           1.,           1.,           1.
+      2,           1.,           0.,           1.
+      3,           1.,           1.,           0.
+      4,           1.,           0.,           0.
+      5,           0.,           1.,           1.
+      6,           0.,           0.,           1.
+      7,           0.,           1.,           0.
+      8,           0.,           0.,           0.
+*Node, nset=extra_element
+99992, 0.0,0.0,0.0
+99993, 0.0001,0.0,0.0
+99994, 0.0001,0.0001,0.0
+99995, 0.0,0.0001,0.0
+99996, 0.0,0.0,0.0001
+99997, 0.0001,0.0,0.0001
+99998, 0.0001,0.0001,0.0001
+99999, 0.0,0.0001,0.0001
+** ==============================================================================
+** UEL (main mesh): Variables = NSDV x 8 integration points (196 x 8 at FACTOR 3; 736 x 8 = 5888 at FACTOR 6)
+** ==============================================================================
+*User Element, type=U3, Nodes=8, Coordinates=3, Properties=28, Iproperties=2, Variables=1568, Unsymm
+1, 2, 3, 11
+*Element, type=U3, elset=main_mesh
+1, 5, 6, 8, 7, 1, 2, 4, 3
+*Element,type=C3D8T,elset=extra_element
+99999, 99992,99993,99994,99995,99996,99997,99998,99999
+** Dummy mesh for visualisation (UVARM)
+*Element, type=C3D8, elset=dummy_mesh
+100001, 5, 6, 8, 7, 1, 2, 4, 3
+*Nset, nset=all_nodes
+1, 2, 3, 4, 5, 6, 7, 8
+*Nset, nset=top_nodes
+1, 3, 5, 7
+*Nset, nset=bottom_nodes
+2, 4, 6, 8
+*Nset, nset=z0_nodes
+3, 4, 7, 8
+** ==============================================================================
+** PROPERTIES AND SECTIONS
+** ==============================================================================
+*include, input=properties.inp
+*INCLUDE, file=sec_uel_cube.inp
+*Solid section, elset=extra_element, material=extra_material
+*Solid section, elset=dummy_mesh, material=dummy_material
+*Hourglass stiffness
+250.0
+*Material, name=extra_material
+*Elastic
+1.e-20
+*Conductivity
+1.0
+*Density
+1.0
+*Specific heat
+1.0
+*Material, name=dummy_material
+*elastic
+1.e-20
+** Must match ngSdv (196 at FACTOR 3)
+*User output variables
+196
+** ==============================================================================
+** INITIAL CONDITIONS: rest equilibrium of the material (INITMU from properties.inp)
+** ==============================================================================
+*Initial conditions, type=temperature
+extra_element, 0.0
+*Initial conditions, type=temperature
+all_nodes, <INITMU>
+** Linear ramp of the shear strain: gamma = 0.126 over 16 s (rate 0.0079 1/s, as ramp_mid of the SA)
+*Amplitude, name=ramp_load, time=STEP TIME
+0.0, 0.0, 16.0, 1.0
+** ==============================================================================
+** STEP: SHEAR RAMP with FIXED increments (no DELTMX): 0.8 s -> 20 increments
+**   other sizes for the study: 0.32 (50 increments), 3.2 (5), 8.0 (2), 16.0 (1)
+**   If the UEL requests PNEWDT < 1 (kinetics accuracy), a fixed-increment run may stop: that signals a step
+**   too large for the kinetics error control, not a Newton failure.
+** ==============================================================================
+*Step, name=ShearRamp, nlgeom=YES, inc=10000
+*Coupled Temperature-displacement, creep=none
+0.8, 16.0
+** Tight tolerances so that several iterations are taken and the convergence rate is visible in the .msg
+** (field data: R_n, C_n, q0_tilde, q_u, R_P, epsilon, C_epsilon, epsilon_l; check against the *Controls table)
+*Controls, parameters=field, field=displacement
+1.e-10, 1.e-8, , , 1.e-10, , 1.e-8
+*Controls, parameters=field, field=temperature
+1.e-10, 1.e-8, 1.e-6, , 1.e-10, 1.e-12, 1.e-8
+** More iterations before the divergence / rate checks (I_0, I_R, ..., I_A)
+*Controls, parameters=time incrementation
+8, 10, , , , , , 8
+*Boundary
+bottom_nodes, 1, 2, 0.0
+z0_nodes, 3, 3, 0.0
+extra_element, encastre
+extra_element, 11, 11, 0.0
+*Boundary, amplitude=ramp_load
+top_nodes, 1, 1, 0.126
+** CLOSED: no boundary condition on DOF 11 (mu) of the cube nodes -> zero flux
+*Output, field, time marks=no
+*Node Output, nset=all_nodes
+U, NT, RF, RFL
+*Element Output, elset=dummy_mesh
+UVARM, LE
+*Node Output, nset=extra_element
+U
+*End Step

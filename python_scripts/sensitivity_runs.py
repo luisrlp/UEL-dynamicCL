@@ -3,7 +3,7 @@ One-at-a-time sensitivity analysis (Part A, simple shear) with the material-poin
 
 Models : tc    = 10_CL_DIFF_CS_SFR_FI_TC (consistent kinetics)
          nontc = 9_CL_DIFF_CS_SFR_FI     (non-consistent kinetics), same parameter sets
-Base   : optimisation_runs/final_F1p_dt025_f6 (properties through optimise_laos_v2.fortran_props, as the fit)
+Base   : optimisation_runs/final2_B1 (properties through optimise_laos_v2.fortran_props, as the fit)
 Cases  : the base and 15 parameters x 2 levels (LEVELS), each in 7 protocols (PROTOCOLS), closed and open system.
 
   python -B sensitivity_runs.py run                                  # everything (missing runs only)
@@ -29,7 +29,7 @@ import optimise_laos_v2 as opt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
-BASE_RUN = 'final_F1p_dt025_f6'
+BASE_RUN = 'final2_B1'
 MODELS = {'tc': '10_CL_DIFF_CS_SFR_FI_TC', 'nontc': '9_CL_DIFF_CS_SFR_FI'}
 SYSTEMS = {'closed': 1, 'open': 0}
 FREQ = 0.05
@@ -298,7 +298,9 @@ def metrics(d, protocol, cb0, c0):
                  energy_ratio=dcyc / work if work else float('nan'),
                  overshoot=np.abs(s1).max() / smax - 1.0,            # largest |stress| of cycle 1 vs steady cycle
                  virgin_peak=s1.max() / lc[:, C['s12']].max(),       # first positive peak (virgin loading) vs steady
-                 last_change=np.sqrt(np.mean((lc[:, C['s12']] - pc[:, C['s12']])**2)) / smax,
+                 # previous cycle at the same phase (adaptive steps: the two cycles have different time points)
+                 last_change=np.sqrt(np.mean((lc[:, C['s12']]
+                                              - np.interp(tl - 1.0 / FREQ, pc[:, C['t']], pc[:, C['s12']]))**2)) / smax,
                  cb_mean_last=lc[:, C['cb_tot']].mean() / cb0 - 1.0,
                  react_frac_last=integral(lc[:, C['d_react']], tl) / max(dcyc, 1e-300))
     elif protocol.startswith('ramp'):
@@ -390,15 +392,50 @@ def cmd_analyse(a):
 KEY_METRICS = {'cyc': ['G1', 'G2', 'GM', 'overshoot', 'cb_mean_last', 'spread_max'],
                'ramp': ['s_005', 's_02', 'stiffening', 'cb_end', 'spread_max', 'lame_max'],
                'step': ['s0', 'relax_10', 'half_time', 'residual', 's_unload', 'cb_hold']}
+# Definitions shown in the tornado titles (cycle 7 = steady cycle; step: t0 = 0.1 s end of loading, t1 = 200.1 s end
+# of the hold; c_b0 rest bound content; lambda_e = lambda_bar / lambda_n)
+METRIC_FORMULA = {
+    'G1': r"$G' = (\sigma_A/\gamma_A)\cos\delta$",
+    'G2': r"$G'' = (\sigma_A/\gamma_A)\sin\delta$",
+    'GM': r'$G_M = \sigma_{12}(\gamma_{\max})/\gamma_{\max}$',
+    'overshoot': r'$\max|\sigma_{12}|_{\mathrm{cyc}\,1} / \max|\sigma_{12}|_{\mathrm{cyc}\,7} - 1$',
+    'cb_mean_last': r'$\overline{c_{b,\mathrm{tot}}}_{\,\mathrm{cyc}\,7} / c_{b0} - 1$',
+    'spread_max': r'$\max_t\, \mathrm{std}_i(c_{b,i}) / c_{b0}$',
+    's_005': r'$\sigma_{12}(\gamma = 0.05)$',
+    's_02': r'$\sigma_{12}(\gamma = 0.2)$',
+    'stiffening': r'$(d\sigma_{12}/d\gamma)_{\gamma=0.2} / (d\sigma_{12}/d\gamma)_{\gamma=0.01}$',
+    'cb_end': r'$c_{b,\mathrm{tot}}(t_{\mathrm{end}}) / c_{b0} - 1$',
+    'lame_max': r'$\max_t \max_i\, \lambda_{e,i}$',
+    's0': r'$s_0 = \sigma_{12}(t_0 = 0.1\,\mathrm{s})$',
+    'relax_10': r'$\sigma_{12}(t_0 + 10\,\mathrm{s}) / s_0$',
+    'half_time': r'$t(\sigma_{12} = s_0/2) - t_0$',
+    'residual': r'$\sigma_{12}(t_1 = 200.1\,\mathrm{s}) / s_0$',
+    's_unload': r'$\sigma_{12}(t_1 + 0.1\,\mathrm{s}) / s_0$',
+    'cb_hold': r'$c_{b,\mathrm{tot}}(t_1) / c_{b0} - 1$',
+}
+# LaTeX typesetting of the figures (text.usetex: every label must be valid LaTeX)
+TEX_FONTS = {'text.usetex': True, 'font.family': 'serif', 'axes.labelsize': 12, 'font.size': 12,
+             'legend.fontsize': 10, 'xtick.labelsize': 10, 'ytick.labelsize': 10, 'axes.unicode_minus': False}
+PARAM_TEX = {'lambda0': r'$\lambda_0$', 'a': r'$a$', 'koff0': r'$k_{\mathrm{off},0}$ (s$^{-1}$)', 'keq': r'$K_{\mathrm{eq}}$',
+             'phi': r'$\phi$', 'dxs_nm': r'$\Delta x_s$ (nm)', 'dxc_nm': r'$\Delta x_c$ (nm)', 'beta': r'$\beta$',
+             'mu0stretch': r'$\mu_0$ (pN)', 'eta': r'$\eta$', 'cactin': r'$c_{\mathrm{actin}}$', 'R': r'$R$',
+             'Rbmax': r'$R_{b,\mathrm{max}}$', 'Rfmax': r'$R_{f,\mathrm{max}}$', 'chi': r'$\chi$'}
+
+
+def tt(name):
+    """Code name (protocol, metric) as LaTeX typewriter text."""
+    return r'\texttt{' + name.replace('_', r'\_') + '}'
 
 
 def plots(out, rows, sens):
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
-    plt.rcParams['text.usetex'] = False
+    plt.rcParams.update(TEX_FONTS)
     fdir = os.path.join(REPO, 'figures', 'sensitivity', os.path.basename(os.path.normpath(out)))
     os.makedirs(fdir, exist_ok=True)
+    p0 = base_params()
+    base_label = lambda par: f'{base_value(par, p0):.4g} (base)'
     groups = sorted({(r['model'], r['system'], r['protocol']) for r in rows})
     for m, s, pr in groups:
         kind = 'cyc' if pr.startswith('cyc') else ('ramp' if pr.startswith('ramp') else 'step')
@@ -418,13 +455,13 @@ def plots(out, rows, sens):
                     ax.barh(np.arange(len(par)) + (0.2 if lev == 2 else -0.2), e, height=0.4, color=col,
                             label=f'level {lev}')
                 ax.set_yticks(np.arange(len(par)))
-                ax.set_yticklabels(par, fontsize=8)
+                ax.set_yticklabels([f'{PARAM_TEX.get(p, tt(p))}: {base_label(p)}' for p in par], fontsize=9)
                 ax.axvline(0, color='k', lw=0.5)
-                ax.set_title(met, fontsize=10)
-                ax.set_xlabel('difference from base (x100)' if met in ABSOLUTE_EFFECT else 'change from base (%)',
+                ax.set_title(f'{tt(met)}: {METRIC_FORMULA[met]}' if met in METRIC_FORMULA else tt(met), fontsize=10)
+                ax.set_xlabel(r'difference from base ($\times 100$)' if met in ABSOLUTE_EFFECT else r'change from base (\%)',
                               fontsize=8)
             axs.flat[0].legend(fontsize=8)
-            fig.suptitle(f'{m}, {s}, {pr}')
+            fig.suptitle(f'{m}, {s}, {tt(pr)}')
             fig.tight_layout()
             fig.savefig(os.path.join(fdir, f'tornado_{m}_{s}_{pr}.pdf'))
             plt.close(fig)
@@ -438,7 +475,7 @@ def plots(out, rows, sens):
         bdir = os.path.join(out, m, s, pr, 'base')
         bd = np.load(os.path.join(bdir, 'run.npz'))['data'] if os.path.exists(os.path.join(bdir, 'run.npz')) else None
         for ax, par in zip(axs.flat, params):
-            curves = [('base', bd, 'k')]
+            curves = [(base_label(par), bd, 'k')]
             for r in rows:
                 if (r['model'], r['system'], r['protocol'], r['param']) == (m, s, pr, par):
                     z = np.load(os.path.join(out, m, s, pr, r['case'], 'run.npz'))['data']
@@ -453,16 +490,156 @@ def plots(out, rows, sens):
                     ax.plot(z[:, C['gamma']], z[:, C['s12']], color=col, lw=1, label=lab)
                 else:
                     ax.plot(z[:, C['t']], z[:, C['s12']], color=col, lw=1, label=lab)
-            ax.set_title(par, fontsize=9)
+            ax.set_title(PARAM_TEX.get(par, tt(par)), fontsize=10)
             ax.legend(fontsize=6)
             ax.tick_params(labelsize=7)
         for ax in list(axs.flat)[len(params):]:
             ax.axis('off')
-        fig.suptitle(f'{m}, {s}, {pr}: sigma_12 (Pa) vs ' + ('t (s)' if kind == 'step' else 'gamma'))
+        fig.suptitle(f'{m}, {s}, {tt(pr)}: ' + r'$\sigma_{12}$ (Pa) vs ' + ('$t$ (s)' if kind == 'step' else r'$\gamma$'))
         fig.tight_layout()
         fig.savefig(os.path.join(fdir, f'overlay_{m}_{s}_{pr}.pdf'))
         plt.close(fig)
+    protocol_plots(out, fdir, rows, plt)
+    open_closed_plots(out, rows, plt)
     print(f'figures -> {fdir}')
+
+
+def protocol_plots(out, fdir, rows, plt):
+    """Base case across protocols, closed and open: steady cycles of cyc_lin/126/158 (absolute and normalised by the
+    amplitude and the peak stress) and the three ramps (sigma_12 vs gamma)."""
+    families = {'cyc': ['cyc_lin', 'cyc_126', 'cyc_158'], 'ramp': ['ramp_slow', 'ramp_mid', 'ramp_fast']}
+    colors = ['C0', 'C1', 'C3']
+    for m in sorted({r['model'] for r in rows}):
+        systems = [s for s in SYSTEMS if any(r['model'] == m and r['system'] == s for r in rows)]
+        for fam, prs in families.items():
+            ncol = 2
+            fig, axs = plt.subplots(len(systems), ncol, figsize=(5.5 * ncol, 4.0 * len(systems)), squeeze=False)
+            for i, s in enumerate(systems):
+                for pr, col in zip(prs, colors):
+                    f = os.path.join(out, m, s, pr, 'base', 'run.npz')
+                    if not os.path.exists(f):
+                        continue
+                    z = np.load(f)['data']
+                    if fam == 'cyc':
+                        z = last_cycle(z)
+                        g, sig = z[:, C['gamma']], z[:, C['s12']]
+                        ga, sa = np.abs(g).max(), np.abs(sig).max()
+                        axs[i, 0].plot(g, sig, color=col, lw=1, label=f'{tt(pr)} ($\\gamma_A$ = {ga:.4g})')
+                        axs[i, 1].plot(g / ga, sig / sa, color=col, lw=1, label=f'{tt(pr)} ($\\sigma_{{\\max}}$ = {sa:.3g} Pa)')
+                    else:
+                        t_end = z[-1, C['t']]
+                        lab = f'{tt(pr)} ({t_end:.4g} s, $\\dot\\gamma$ = {z[-1, C["gamma"]] / t_end:.3g} 1/s)'
+                        axs[i, 0].plot(z[:, C['gamma']], z[:, C['s12']], color=col, lw=1, label=lab)
+                        pos = (z[:, C['s12']] > 0) & (z[:, C['gamma']] >= 1.0e-3)
+                        axs[i, 1].loglog(z[pos, C['gamma']], z[pos, C['s12']], color=col, lw=1, label=lab)
+                axs[i, 0].set_xlabel('$\\gamma$')
+                axs[i, 0].set_ylabel('$\\sigma_{12}$ (Pa)')
+                axs[i, 0].set_title(f'{m}, {s}, base' + (': steady cycle' if fam == 'cyc' else ''), fontsize=10)
+                if fam == 'cyc':
+                    axs[i, 1].set_xlabel('$\\gamma / \\gamma_A$')
+                    axs[i, 1].set_ylabel('$\\sigma_{12} / \\sigma_{\\max}$')
+                    axs[i, 1].set_title(f'{m}, {s}, base: normalised', fontsize=10)
+                else:
+                    axs[i, 1].set_xlabel('$\\gamma$')
+                    axs[i, 1].set_ylabel('$\\sigma_{12}$ (Pa)')
+                    axs[i, 1].set_title(f'{m}, {s}, base: log-log ($\\gamma \\geq 10^{{-3}}$)', fontsize=10)
+                for ax in axs[i]:
+                    if ax.get_yscale() == 'linear':
+                        ax.axhline(0, color='k', lw=0.4)
+                    ax.axvline(0, color='k', lw=0.4)
+                    ax.legend(fontsize=8)
+            fig.tight_layout()
+            fig.savefig(os.path.join(fdir, f'protocols_{m}_{fam}_base.pdf'))
+            plt.close(fig)
+
+
+CONTRAST_METRICS = {'cyc': ['G1', 'G2', 'GM', 'overshoot', 'cb_mean_last', 'spread_max'],
+                    'ramp': ['s_005', 's_02', 'stiffening', 'cb_end', 'thetaf_end', 'spread_max'],
+                    'step': ['s0', 'relax_10', 'half_time', 'residual', 's_unload', 'cb_hold']}
+METRIC_FORMULA.setdefault('thetaf_end', r'$\theta_f(t_{\mathrm{end}}) / \theta_{f}(0) - 1$')
+
+
+def open_closed_plots(out, rows, plt):
+    """Closed vs open system: (A) chemical state of the base case vs time for cyc_158, ramp_fast and step;
+    (B) per protocol, the closed-open contrast of each metric for the base (dashed line) and every level (bars):
+    100 (y_closed / y_open - 1) in %, or 100 (y_closed - y_open) for the metrics of ABSOLUTE_EFFECT."""
+    name = os.path.basename(os.path.normpath(out))
+    fdir = os.path.join(REPO, 'figures', 'sensitivity', 'open_v_closed' + ('' if name == 'sensitivity_runs' else f'_{name}'))
+    os.makedirs(fdir, exist_ok=True)
+    p0 = base_params()
+    for m in sorted({r['model'] for r in rows}):
+        # (A) chemical state of the base case
+        prs = [pr for pr in ('cyc_158', 'ramp_fast', 'step')
+               if all(os.path.exists(os.path.join(out, m, s, pr, 'base', 'run.npz')) for s in SYSTEMS)]
+        if prs:
+            ylab = [r'$\sigma_{12}$ (Pa)', r'$\theta_f / \theta_{f0} - 1$ (\%)', r'$\mu_f - \mu_{f,\mathrm{rest}}$ (J/mol)',
+                    r'$c_{b,\mathrm{tot}} / c_{b0} - 1$ (\%)', r'$c / c_0 - 1$ (\%)']
+            fig, axs = plt.subplots(len(ylab), len(prs), figsize=(4.6 * len(prs), 2.3 * len(ylab)), squeeze=False,
+                                    sharex='col')
+            for j, pr in enumerate(prs):
+                for s, col, ls in (('closed', 'C0', '-'), ('open', 'C3', '--')):
+                    z = np.load(os.path.join(out, m, s, pr, 'base', 'run.npz'))
+                    d, h = z['data'], list(z['header'])
+                    t = d[:, C['t']]
+                    ys = [d[:, C['s12']], 100 * (d[:, C['thetaf']] / header_value(h, 'thetaf0') - 1),
+                          d[:, C['mu']] - header_value(h, 'mu_rest'), 100 * (d[:, C['cb_tot']] / header_value(h, 'cb0') - 1),
+                          100 * (d[:, C['content']] / d[0, C['content']] - 1)]
+                    for i, y in enumerate(ys):
+                        axs[i, j].plot(t, y, color=col, ls=ls, lw=1, label=s)
+                axs[0, j].set_title(f'{m}, base, {tt(pr)}', fontsize=11)
+                axs[-1, j].set_xlabel('$t$ (s)')
+                if pr == 'ramp_fast':
+                    for i in range(len(ylab)):
+                        axs[i, j].set_xlim(0, 1.0)
+            for i, lab in enumerate(ylab):
+                axs[i, 0].set_ylabel(lab, fontsize=10)
+                for ax in axs[i]:
+                    ax.axhline(0, color='k', lw=0.4)
+            axs[0, 0].legend(fontsize=9)
+            fig.tight_layout()
+            fig.savefig(os.path.join(fdir, f'state_{m}_base.pdf'))
+            plt.close(fig)
+        # (B) closed-open contrast per protocol and metric
+        idx = {(r['system'], r['protocol'], r['case']): r for r in rows if r['model'] == m}
+        for pr in sorted({k[1] for k in idx}):
+            kind = 'cyc' if pr.startswith('cyc') else ('ramp' if pr.startswith('ramp') else 'step')
+            cases = sorted({k[2] for k in idx if k[1] == pr and ('closed', pr, k[2]) in idx and ('open', pr, k[2]) in idx})
+            if 'base' not in cases:
+                continue
+
+            def contrast(case, met):
+                yc, yo = float(idx[('closed', pr, case)][met]), float(idx[('open', pr, case)][met])
+                if met in ABSOLUTE_EFFECT:
+                    return 100.0 * (yc - yo)
+                return 100.0 * (yc / yo - 1.0) if yo != 0 and np.isfinite(yo) else np.nan
+
+            fig, axs = plt.subplots(2, 3, figsize=(15, 9))
+            for ax, met in zip(axs.flat, CONTRAST_METRICS[kind]):
+                cb = contrast('base', met)
+                lev = {}
+                for case in cases:
+                    if case == 'base':
+                        continue
+                    r = idx[('closed', pr, case)]
+                    lev.setdefault(r['param'], {})[int(r['level'])] = contrast(case, met)
+                dev = lambda p: max((abs(v - cb) for v in lev[p].values() if np.isfinite(v)), default=0.0)
+                par = sorted(lev, key=dev)
+                for lv, col in ((1, 'C0'), (2, 'C3')):
+                    ax.barh(np.arange(len(par)) + (0.2 if lv == 2 else -0.2), [lev[p].get(lv, np.nan) for p in par],
+                            height=0.4, color=col, label=f'level {lv}')
+                ax.axvline(cb, color='k', ls='--', lw=1, label='base')
+                ax.axvline(0, color='k', lw=0.4)
+                ax.set_yticks(np.arange(len(par)))
+                ax.set_yticklabels([f'{PARAM_TEX.get(p, tt(p))}: {base_value(p, p0):.4g} (base)' for p in par], fontsize=9)
+                ax.set_title(f'{tt(met)}: {METRIC_FORMULA[met]}' if met in METRIC_FORMULA else tt(met), fontsize=10)
+                ax.set_xlabel(r'closed $-$ open ($\times 100$)' if met in ABSOLUTE_EFFECT
+                              else r'closed vs open: $100\,(y_{\mathrm{closed}}/y_{\mathrm{open}} - 1)$ (\%)', fontsize=9)
+            axs.flat[0].legend(fontsize=8)
+            fig.suptitle(f'{m}, {tt(pr)}: closed vs open (dashed: base)')
+            fig.tight_layout()
+            fig.savefig(os.path.join(fdir, f'contrast_{m}_{pr}.pdf'))
+            plt.close(fig)
+    print(f'open vs closed figures -> {fdir}')
 
 
 def main():
