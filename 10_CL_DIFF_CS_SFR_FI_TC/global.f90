@@ -32,8 +32,8 @@
       ! Set the offset here for UVARM plotting, must match input file!
       parameter(ElemOffset=100000)
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      PARAMETER (NTERM=60) ! 60
-      PARAMETER (FACTOR=3) ! 6
+      PARAMETER (NTERM=60) 
+      PARAMETER (FACTOR=6) 
       ! NDIR = number of UNIQUE filament directions (one hemisphere only).
       ! The integration loop runs over face_num/2 icosahedron faces;
       ! the antipodal hemisphere is recovered by the factor of 2 on rho.

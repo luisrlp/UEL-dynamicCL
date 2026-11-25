@@ -125,3 +125,10 @@ dist/
 *.ico
 *.svg
 python_scripts/now-i-want-to-purring-hummingbird.md
+
+# =========================
+# Compiled point drivers (rebuild on each machine: build_laos_closed.sh, build_sa.sh)
+# =========================
+laos_closed_f[0-9]*
+sa_point_f[0-9]*
+uni_point_f[0-9]*

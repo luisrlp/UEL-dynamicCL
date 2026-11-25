@@ -1,10 +1,5 @@
 SUBROUTINE xmech(x, fle, dxdle, dfdle, cb, le, lamn, aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin, rt)
 
-    !> C4: x = mu_b^mech/RT = d[n (w + F0 ln lamn)]/dcb / RT at fixed le = lambda/lamn and lamn (material_TC._x_mech).
-    !> w(le) = (lambda0 r0/aux) [f lf - int_0^f lam_f(f') df'] (exact extensible beta-model, 16-point Gauss-Legendre in
-    !> s = ln(1 + aux1 f')). Also returns the force fle at le, dxdle = dx/dle = d(n w')/dcb / RT (w' = lambda0 r0 f) and
-    !> dfdle = df/dle at fixed cb (for the tangent).
-
     use global
     IMPLICIT NONE
     DOUBLE PRECISION, INTENT(OUT) :: x, fle, dxdle, dfdle
@@ -72,15 +67,16 @@ SUBROUTINE xmech(x, fle, dxdle, dfdle, cb, le, lamn, aratio, r0c, etac, mu0str, 
         dxdle = n * (0.4d0 * dwi / cb + lambda0 * (dr0f * fi + r0 * dfdcb)) / rt   ! d(n lambda0 r0 f)/dcb / RT
         END IF
         mu = dndcb * w + n * dw
-        IF (lamn /= one) THEN                                  ! prestress reservoir: + n F0 ln(lamn)
-        f0 = zero; df0 = zero
-        IF (l0f > one) THEN
-            c_le = one; c_lf = one; c_l0 = lambda0; c_l0f = l0f; c_ll = ll; c_r0 = r0; c_r0f = r0f
-            c_mu0 = mu0str; c_beta = beta; c_b0 = b0; c_eta = etac; c_cb = cb
-            CALL fil(f0, ff0, dw0, ddw0, c_le, c_lf, c_l0, c_l0f, c_ll, c_r0, c_r0f, c_mu0, c_beta, c_b0, c_eta, c_cb, df0)
-        END IF
-        mu = mu + LOG(lamn) * (dndcb * f0 * lambda0 * r0 + n * lambda0 * (dr0f * f0 + r0 * df0))
-        END IF
+        ! Legacy code for prestress reservoir
+        ! IF (lamn /= one) THEN                                  ! prestress reservoir: + n F0 ln(lamn)
+        ! f0 = zero; df0 = zero
+        ! IF (l0f > one) THEN
+        !     c_le = one; c_lf = one; c_l0 = lambda0; c_l0f = l0f; c_ll = ll; c_r0 = r0; c_r0f = r0f
+        !     c_mu0 = mu0str; c_beta = beta; c_b0 = b0; c_eta = etac; c_cb = cb
+        !     CALL fil(f0, ff0, dw0, ddw0, c_le, c_lf, c_l0, c_l0f, c_ll, c_r0, c_r0f, c_mu0, c_beta, c_b0, c_eta, c_cb, df0)
+        ! END IF
+        ! mu = mu + LOG(lamn) * (dndcb * f0 * lambda0 * r0 + n * lambda0 * (dr0f * f0 + r0 * df0))
+        ! END IF
         x = mu / rt
     RETURN
 END SUBROUTINE xmech

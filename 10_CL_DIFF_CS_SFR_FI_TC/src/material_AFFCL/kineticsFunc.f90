@@ -77,7 +77,8 @@ subroutine kineticsFunc(cbtau, f, df, dHdlambda, dHdth, dHds, args, nargs)
 
     ! Reaction rate and residual                                                                         
     bterm = kon * cfmax * thetaf / (one - thetaf) * s
-    Ri = koff * (bterm - cbmax * thetab / (one - thetab))
+    ! Ri = koff * (bterm - cbmax * thetab / (one - thetab)) ! Old
+    Ri = koff * (bterm * (one - thetab) - cbtau)
     f = cbtau - cbt - Ri * dt
     ! Check if the residual is NaN or Inf. Large finite values are legitimate with the
     ! extensible filament and the catch-slip law (koff is capped by koffcs, not bounded by locking)
@@ -96,12 +97,17 @@ subroutine kineticsFunc(cbtau, f, df, dHdlambda, dHdth, dHds, args, nargs)
     end if
                                                                                                                 
     ! Residual derivative
-    dRiDcb = dkoffdf * DfDcb * (bterm - cbtau / (one - thetab)) - koff / (one - thetab)**2
+    ! dRiDcb = dkoffdf * DfDcb * (bterm - cbtau / (one - thetab)) - koff / (one - thetab)**2 ! Old
+    dRiDcb = dkoffdf * DfDcb * ((one - thetab) * bterm - cbtau) - koff * (bterm / cbmax + one)
     df = one - dRiDcb * dt
 
     ! Residual derivative wrt lambda_i at fixed cb: df/dlambda_i = ddwi / (lambda0 * r0), since dwi = lambda0 * r0 * fi
-    dHdlambda = - dt * dkoffdf * ddwi / (lambda0 * r0) * (bterm - cbmax * thetab / (one - thetab))
-    dHdth = - dt * koff * s * dbdth
-    dHds  = - dt * koff * kon * cfmax * thetaf / (one - thetaf)
+    ! Old
+    ! dHdlambda = - dt * dkoffdf * ddwi / (lambda0 * r0) * (bterm - cbmax * thetab / (one - thetab))
+    ! dHdth = - dt * koff * s * dbdth
+    ! dHds  = - dt * koff * kon * cfmax * thetaf / (one - thetaf)
+    dHdlambda = - dt * dkoffdf * ddwi / (lambda0 * r0) * ((one - thetab) * bterm - cbtau)
+    dHdth = - dt * koff * (one - thetab) * s * dbdth
+    dHds  = - dt * koff * (one - thetab) * kon * cfmax * thetaf / (one - thetaf)
 end subroutine kineticsFunc
 

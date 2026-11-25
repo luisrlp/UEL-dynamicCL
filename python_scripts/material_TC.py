@@ -11,6 +11,21 @@ mech_props['kinetics'] selects the binding/unbinding law:
                            with the filament energy w from an exact force-space Gauss quadrature (the beta-model
                            gives lam_f explicitly as a function of f) and the isotensional prestress reservoir
                            term +F0 ln lam_n. K0 is normalised so that the rest state is unchanged.
+                           Rate law: Langmuir mass action,
+                             R_i = g(f) [ (1 - thb_i) B_i/g_rest - cb_i ],
+                           i.e. binding needs an empty bound site and each bound crosslinker unbinds independently
+                           at g(f). It is the activity form g(f) [B_i/g_rest - CB_MAX thb_i/(1 - thb_i)] (B_i
+                           contains thf/(1 - thf)) times the positive mobility (1 - thb_i): same equilibrium and
+                           detailed balance, per-bond off-rate g(f) instead of g(f)/(1 - thb_i).
+
+mech_props['reservoir'] selects the prestress reservoir and the target of the stretch-free rebinding (SFR) update:
+  'stretch'  (default) - new bonds form at the reference stretch, lam_e = 1, i.e. with the rest force f0(cb) of a
+                         segment of the current length. The reservoir term is n(cb) F0(cb) ln lam_n, so the bound
+                         chemical potential contains d(n F0)/dcb ln lam_n (binding bias of remodelled directions).
+  'tension'            - new bonds form at the rest direction tension N0 = n(cb0) F(1; cb0) (A1 in
+                         python_scripts/now-i-want2.md). The reservoir term is N0 ln lam_n, independent of cb, so
+                         it adds nothing to the bound chemical potential. New bonds are born at the elastic stretch
+                         lam_e^res(cb), with n(cb) F(lam_e^res; cb) = N0 (lam_e^res = 1 at cb = cb0).
 See python_scripts/now-i-want-to-purring-hummingbird.md (consistent kinetics; prestress reservoir).
 """
 import numpy as np
@@ -57,6 +72,12 @@ class DynamicCrosslinking:
         if self.kinetics not in ('legacy', 'consistent'):
             raise ValueError(f"mech_props['kinetics'] = {self.kinetics!r}: use 'legacy' or 'consistent'.")
         self.consistent = self.kinetics == 'consistent'
+        # Prestress reservoir and SFR target: 'stretch' (lam_e = 1, as before) or 'tension' (rest direction tension N0)
+        self.reservoir = self.mech_props.get('reservoir', 'stretch')
+        if self.reservoir not in ('stretch', 'tension'):
+            raise ValueError(f"mech_props['reservoir'] = {self.reservoir!r}: use 'stretch' or 'tension'.")
+        if self.reservoir == 'tension' and not (self.stretch_free_binding and self.mech_props.get('filament', 'inext') == 'ext'):
+            raise NotImplementedError("reservoir = 'tension' needs stretch-free binding and the extensible filament.")
         if self.consistent:
             if self.mech_props.get('filament', 'inext') != 'ext':
                 raise NotImplementedError("Consistent kinetics are only implemented for extensible filaments.")
@@ -67,6 +88,15 @@ class DynamicCrosslinking:
             self.g_rest = self._koff(self.f_rest)[0]                 # catch-slip factor at rest
             self.x_rest = self._x_mech(self.cb0, 1.0, 1.0)           # mechanical bias at rest
             self.f_history = np.full(len(self.dirs), self.f_rest)    # force history (no longer used by the binding flux)
+        if self.reservoir == 'tension':
+            # Rest direction tension N0 = n(cb0) F(1; cb0), F = f lam0 r0 lam_e (per unit direction weight)
+            r0f_rest = 1.6 * (self.cb0 * 1.e3)**(-2/5)
+            f0_rest = self._f_ext(r0f_rest, 1.0)
+            self.N0 = (self.KACTIN / (self.mech_props['a_ratio'] * r0f_rest)) * f0_rest \
+                      * self.mech_props['LAMBDA0'] * (r0f_rest + self.mech_props['R0C'])
+            le_rest = self._le_res(self.cb0)
+            if abs(le_rest - 1.0) > 1.0e-8:
+                raise RuntimeError(f"reservoir = 'tension': lam_e^res(cb0) = {le_rest:.12f}, expected 1.")
 
     def _init_equilibrium(self):
         """Chemical equilibrium of the undeformed network (t = 0, F = I; 
@@ -193,7 +223,9 @@ class DynamicCrosslinking:
             w = A * (f * lf - I)
             dw = dA * (f * lf - I) + A * (f * dkap * (le - 1.0) - J)
         mu = dn * w + n * dw
-        if lamn != 1.0:                                 # isotensional prestress reservoir: +n F0 ln lamn
+        # reservoir = 'stretch': isotensional prestress reservoir +n F0(cb) ln lamn, which depends on cb.
+        # reservoir = 'tension': reservoir N0 ln lamn, independent of cb, so no contribution here.
+        if lamn != 1.0 and self.reservoir == 'stretch':
             lf1 = 1.0                                   # lam_f at le = 1
             f0 = self._f_ext(r0f, lf1) if lf1 * l0f > 1.0 else 0.0
             df0 = self.dfdcb_ext(f0, cb, r0f, 1.0, lf1, l0f, l0, r0) if f0 > 0.0 else 0.0
@@ -201,6 +233,58 @@ class DynamicCrosslinking:
             dF0 = l0 * (dr0f * f0 + r0 * df0)
             mu += math.log(lamn) * (dn * F0 + n * dF0)
         return mu / self.RT
+
+    def _le_res(self, cb):
+        """SFR target of reservoir = 'tension': the elastic stretch lam_e^res at which a direction with bound
+        content cb carries the rest direction tension, n(cb) F(lam_e^res; cb) = N0, F = f lam0 r0 lam_e.
+
+        Solved for the force f with the explicit inverse of the beta-model force law (as in _x_mech):
+            lam_f lam_0f = a rhs(f),   lam_e = 1 + (lam_f - 1)/kappa,   kappa = eta r0/r0f,
+        so that f lam_e(f) = N0/(n lam0 r0) is a scalar, increasing equation in f (Newton from the target
+        force, bracketed bisection as fallback). Returns 1 for reservoir = 'stretch'.
+        """
+        if self.reservoir != 'tension':
+            return 1.0
+        mp = self.mech_props
+        a, R0C, eta = mp['a_ratio'], mp['R0C'], mp['ETA']
+        beta, mu0, l0 = mp['BETA'], mp['MU0STRETCH'], mp['LAMBDA0']
+        r0f = 1.6 * (cb * 1.e3)**(-2/5)
+        r0 = r0f + R0C
+        L = a * r0f
+        n = self.KACTIN / L
+        kap = eta * r0 / r0f
+        l0f = kap * (l0 - 1.0) + 1.0
+        c = L * L / (np.pi**2 * self.B0)
+        K = 1.0 - 1.0 / a
+        target = self.N0 / (n * l0 * r0)                # f lam_e at the target
+
+        def le_and_dle(f):
+            u = 1.0 + f / mu0
+            v = 1.0 + 2.0 * f / mu0
+            D = 1.0 + f * c * u
+            q = K * u**beta * v * D**(-beta)
+            rhs = u - q
+            drhs = 1.0 / mu0 - q * (beta / (mu0 * u) + 2.0 / (mu0 * v) - beta * c * (u + f / mu0) / D)
+            lf = a * rhs / l0f
+            return 1.0 + (lf - 1.0) / kap, a * drhs / (l0f * kap)
+
+        f = target
+        for _ in range(50):
+            le, dle = le_and_dle(f)
+            phi = f * le - target
+            if abs(phi) <= 1.0e-14 * target:
+                return le
+            f_new = f - phi / (le + f * dle)
+            if not (f_new > 0.0) or not np.isfinite(f_new):
+                break
+            f = f_new
+        # fallback: bracketed bisection on f
+        phi = lambda ff: ff * le_and_dle(ff)[0] - target
+        f_hi = 2.0 * target
+        while phi(f_hi) <= 0.0:
+            f_hi *= 2.0
+        f = brentq(phi, 0.0, f_hi, xtol=1e-15, rtol=1e-13, maxiter=200)
+        return le_and_dle(f)[0]
 
     def _solve_thetaf(self, kinematics, mu):
         J = kinematics.J
@@ -396,9 +480,16 @@ class DynamicCrosslinking:
         thetab = cb / self.CB_MAX
 
         if self.consistent:
-            # k_on = B_i g(f)/g_rest with g = Koff: R = Koff (B_i/g_rest - cb/(1-thetab))
-            Ri = Koff * (B / self.g_rest - self.CB_MAX * thetab / (1 - thetab))
-            DRiDcb = dKoff_df * DfDcb * (B / self.g_rest - cb / (1 - thetab)) - Koff / (1 - thetab)**2
+            # Old rate law (activity form, per-bond off-rate Koff/(1 - thetab)):
+            # # k_on = B_i g(f)/g_rest with g = Koff: R = Koff (B_i/g_rest - cb/(1-thetab))
+            # Ri = Koff * (B / self.g_rest - self.CB_MAX * thetab / (1 - thetab))
+            # DRiDcb = dKoff_df * DfDcb * (B / self.g_rest - cb / (1 - thetab)) - Koff / (1 - thetab)**2
+            # Langmuir mass action: the activity form times the mobility (1 - thetab) > 0 (same zero, so the same
+            # equilibrium); binding needs an empty site and each bond unbinds at Koff,
+            # R = Koff [(1 - thetab) B_i/g_rest - cb]
+            A = (1.0 - thetab) * B / self.g_rest - cb
+            Ri = Koff * A
+            DRiDcb = dKoff_df * DfDcb * A - Koff * (B / (self.g_rest * self.CB_MAX) + 1.0)
         else:
             Ri = B - Koff * self.CB_MAX * thetab / (1-thetab)
             DRiDcb = - (dKoff_df * cb / (1 - thetab) * DfDcb + Koff / (1 - thetab)**2)
@@ -658,12 +749,21 @@ class DynamicCrosslinking:
                         x = np.array([self._x_mech(cb_prev[i], li_bar_all[i] / lamn_sub[i], lamn_sub[i])
                                       for i in range(ndir)])
                         B_dir = B * np.exp(-(x - self.x_rest))
-                        B_flux = B_dir * np.array([self._koff(fi)[0] for fi in f_lag]) / self.g_rest
+                        # Old (activity form): B_flux = B_dir * np.array([self._koff(fi)[0] for fi in f_lag]) / self.g_rest
+                        # binding flux of the Langmuir mass action: times (1 - thetab), start-of-sub-step cb
+                        B_flux = B_dir * np.array([self._koff(fi)[0] for fi in f_lag]) / self.g_rest \
+                                 * (1.0 - cb_prev / self.CB_MAX)
                     else:
                         B_dir = B_flux = B
                     if self.stretch_free_binding:
-                        # reference stretch: new bonds form at the current stretch
-                        lamn_sub = (cb_prev * lamn_sub + dt_sub * B_flux * li_bar_all) / (cb_prev + dt_sub * B_flux)
+                        # reference stretch: new bonds form in the current configuration, with reference
+                        # lam_bar (reservoir = 'stretch', born at lam_e = 1) or lam_bar/lam_e^res(cb) (reservoir =
+                        # 'tension', born at the rest direction tension); cb at the start of the sub-step, as x
+                        if self.reservoir == 'tension':
+                            lam_new = li_bar_all / np.array([self._le_res(c) for c in cb_prev])
+                        else:
+                            lam_new = li_bar_all
+                        lamn_sub = (cb_prev * lamn_sub + dt_sub * B_flux * lam_new) / (cb_prev + dt_sub * B_flux)
                     (cb_sub, li_arr, kon_arr, koff_arr, R_arr,
                      conv, dH, f_arr) = kinetics_sweep(cb_sub, dt_sub, Kon, B_dir, lamn_sub, warn=last_try)
                     f_lag = f_arr

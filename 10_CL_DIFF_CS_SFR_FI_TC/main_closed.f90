@@ -25,7 +25,8 @@ DOUBLE PRECISION :: a, r0c, etac, mu0str, beta, Lp, theta, dx, bb, lambda0, cact
 DOUBLE PRECISION :: CHI, D, MU0, VMOL, Koff0, Keq, Kcatch0, dxc, sfr, xi_t
 DOUBLE PRECISION :: kb, b0, rgas, Mactin, rhoactin, NA, cfmax, cbmax, cabp, cb_upper, machep, tol, cb0
 DOUBLE PRECISION :: x_rest, f_rest, g_rest, dum1, dum2, efi
-DOUBLE PRECISION :: filprops(10), affprops(7), chemprops(12), eqprops(11), prefdir(nelem,4)
+DOUBLE PRECISION :: filprops(10), affprops(7), chemprops(13), eqprops(11), prefdir(nelem,4)
+DOUBLE PRECISION :: N0, r0f_rest
 !     KINEMATICS AND NETWORK STATE
 DOUBLE PRECISION :: dfgrd1(ndi,ndi), distgr(ndi,ndi), unit2(ndi,ndi), det
 DOUBLE PRECISION :: distgr_t(ndi,ndi), thetaf_t       ! start of the increment (error estimate of the kinetics)
@@ -89,7 +90,10 @@ CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq, eq
 CALL xmech(x_rest, f_rest, dum1, dum2, cb0, one, one, a, r0c, etac, mu0str, beta, b0, lambda0, &
            cactin*NA*Mactin/rhoactin, rgas*theta)
 CALL koffcs(g_rest, dum1, f_rest, Koff0, Kcatch0, dx/(kb*theta), dxc/(kb*theta))
-chemprops = (/cbmax, cfmax, CHI, D, MU0, VMOL, Koff0, Keq, Kcatch0, dxc, g_rest, x_rest/)
+r0f_rest = 1.6d0 * (cb0 * 1.0d3)**(-two / 5.0d0)
+N0 = (cactin*NA*Mactin/rhoactin) / (a * r0f_rest) * f_rest * lambda0 * (r0f_rest + r0c)
+! chemprops = (/cbmax, cfmax, CHI, D, MU0, VMOL, Koff0, Keq, Kcatch0, dxc, g_rest, x_rest/)
+chemprops = (/cbmax, cfmax, CHI, D, MU0, VMOL, Koff0, Keq, Kcatch0, dxc, g_rest, x_rest, N0/)
 CALL erfi(efi, bb)
 !     PREFERRED DIRECTION (as prefdir.inp: element 1, direction (1,0,0)); no uexternaldb needed
 prefdir = zero

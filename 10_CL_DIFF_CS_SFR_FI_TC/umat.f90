@@ -32,8 +32,8 @@
       ! Set the offset here for UVARM plotting, must match input file!
       parameter(ElemOffset=100000)
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      PARAMETER (NTERM=60) ! 60
-      PARAMETER (FACTOR=3) ! 6
+      PARAMETER (NTERM=60) 
+      PARAMETER (FACTOR=6) 
       ! NDIR = number of UNIQUE filament directions (one hemisphere only).
       ! The integration loop runs over face_num/2 icosahedron faces;
       ! the antipodal hemisphere is recovered by the factor of 2 on rho.
@@ -514,7 +514,7 @@ DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN)             :: filprops(10)
 DOUBLE PRECISION, INTENT(IN)             :: affprops(7)
-DOUBLE PRECISION, INTENT(IN)             :: chemprops(12)
+DOUBLE PRECISION, INTENT(IN)             :: chemprops(13)
 DOUBLE PRECISION, INTENT(IN OUT)         :: efi
 INTEGER, INTENT(IN OUT)                  :: noel
 DOUBLE PRECISION, INTENT(IN OUT)         :: det
@@ -571,6 +571,7 @@ DOUBLE PRECISION :: dPK2filficdcb(ndi,ndi), pfdlambdadcfil(ndi,ndi), cfilficchem
 ! Stretch-free rebinding (SFR)
 DOUBLE PRECISION :: sfr, xi_t, xi, lamn_t, lamn_sub, lamn_prev, den_n, lambdar, dlrdl, dlrdth
 DOUBLE PRECISION :: bind, dbinddthetaf, dlamndlambda_i, dlamndthetaf_i
+DOUBLE PRECISION :: N0, le_rest_i, le_rest_pert, dledcb_i, lamtarg_i, dtargdlambda_i, dtargdthetaf_i, le_rest_t
 DOUBLE PRECISION :: dw_tot, ddw_tot, dwdth, dsfilficdth(ndi,ndi)
 LOGICAL :: loaded
 
@@ -661,8 +662,9 @@ off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
   Keq      = chemprops(8)
   Kcatch0  = chemprops(9)
   dxc      = chemprops(10)
-  g_rest = chemprops(11)
-  x_rest = chemprops(12)
+  g_rest   = chemprops(11)
+  x_rest   = chemprops(12)
+  N0       = chemprops(13)
   rt     = 8.314462618d0 * theta
   kactin = cactin * NA * Mactin / rhoactin
 
@@ -808,7 +810,8 @@ do face = 1, face_num/2
             s_i = EXP(-(x_i - x_rest)) / g_rest
             CALL koffcs(g_st, dgdf_st, f_st, Koff0, Kcatch0, dx / (kb * theta), dxc / (kb * theta))
             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            bind_flux = bind * s_i * g_st                ! C4 binding flux of the reference update
+            ! bind_flux = bind * s_i * g_st              ! Old: C4 binding flux of the reference update
+            bind_flux = bind * s_i * g_st * (one - cb_sub / cbmax)
             ! From sub-step 2 on, cb_sub and lamn_sub depend on lambda and thetaf through the earlier
             ! sub-steps: partial derivatives of x and of the force with respect to them (one-sided
             ! differences of xmech). In sub-step 1 they are start-of-increment values: no terms.
@@ -817,9 +820,10 @@ do face = 1, face_num/2
                          lamn_sub, aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin, rt)
               dxdcb_i = (x_pert - x_i) / (cb_sub * EPS_FD)          ! dx/dcb at fixed le, lamn
               dfdcb_i = (f_pert - f_st) / (cb_sub * EPS_FD)         ! df/dcb at fixed le
-              CALL xmech(x_pert, f_pert, dxdle_pert, dfdle_pert, cb_sub, lambdai / lamn_sub, &
-                         lamn_sub * (one + EPS_FD), aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin, rt)
-              dxdlamn_i = (x_pert - x_i) / (lamn_sub * EPS_FD)      ! dx/dlamn at fixed le, cb (reservoir term)
+              ! CALL xmech(x_pert, f_pert, dxdle_pert, dfdle_pert, cb_sub, lambdai / lamn_sub, &
+              !            lamn_sub * (one + EPS_FD), aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin, rt)
+              ! dxdlamn_i = (x_pert - x_i) / (lamn_sub * EPS_FD)      ! dx/dlamn at fixed le, cb (reservoir term)
+              dxdlamn_i = zero
             ELSE
               dxdcb_i = zero
               dfdcb_i = zero
@@ -833,20 +837,47 @@ do face = 1, face_num/2
             dledthetaf_i = - (lambdai / lamn_sub**2) * dlamndthetaf_i
             dsdlambda_i = - s_i * (dxdle_i * dledlambda_i + dxdcb_i * dcbdlambda_i + dxdlamn_i * dlamndlambda_i)
             dsdthetaf_i = - s_i * (dxdle_i * dledthetaf_i + dxdcb_i * dcbdthetaf_i + dxdlamn_i * dlamndthetaf_i)
+            ! Old
+            ! dbindfluxdlambda_i = bind_flux * ((- dxdle_i + dgdf_st / g_st * dfdle_i) * dledlambda_i &
+            !                    + (- dxdcb_i + dgdf_st / g_st * dfdcb_i) * dcbdlambda_i - dxdlamn_i * dlamndlambda_i)
+            ! dbindfluxdthetaf_i = dbinddthetaf * s_i * g_st &
+            !                    + bind_flux * ((- dxdle_i + dgdf_st / g_st * dfdle_i) * dledthetaf_i &
+            !                    + (- dxdcb_i + dgdf_st / g_st * dfdcb_i) * dcbdthetaf_i - dxdlamn_i * dlamndthetaf_i)
             dbindfluxdlambda_i = bind_flux * ((- dxdle_i + dgdf_st / g_st * dfdle_i) * dledlambda_i &
-                               + (- dxdcb_i + dgdf_st / g_st * dfdcb_i) * dcbdlambda_i - dxdlamn_i * dlamndlambda_i)
-            dbindfluxdthetaf_i = dbinddthetaf * s_i * g_st &
+                               + (- dxdcb_i + dgdf_st / g_st * dfdcb_i - one / (cbmax - cb_sub)) * dcbdlambda_i &
+                               - dxdlamn_i * dlamndlambda_i)
+            dbindfluxdthetaf_i = dbinddthetaf * s_i * g_st * (one - cb_sub / cbmax) &
                                + bind_flux * ((- dxdle_i + dgdf_st / g_st * dfdle_i) * dledthetaf_i &
-                               + (- dxdcb_i + dgdf_st / g_st * dfdcb_i) * dcbdthetaf_i - dxdlamn_i * dlamndthetaf_i)
+                               + (- dxdcb_i + dgdf_st / g_st * dfdcb_i - one / (cbmax - cb_sub)) * dcbdthetaf_i &
+                               - dxdlamn_i * dlamndthetaf_i)
             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             IF (sfr > half) THEN
+              ! A1: new bonds born at the rest direction tension, reference lambdai/le_res(cb_sub)
+              ! (legacy: reference lambdai, i.e. born at lam_e = 1). cb_sub depends on lambda and thetaf
+              ! from sub-step 2 on, so the target does too (dledcb by a one-sided difference, as for xmech).
+              CALL lerest(le_rest_i, cb_sub, N0, aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin)
+              IF (isub > 1) THEN
+                CALL lerest(le_rest_pert, cb_sub * (one + EPS_FD), N0, aratio, r0c, etac, mu0str, beta, b0, &
+                           lambda0, kactin)
+                dledcb_i = (le_rest_pert - le_rest_i) / (cb_sub * EPS_FD)
+              ELSE
+                dledcb_i = zero
+              END IF
+              lamtarg_i = lambdai / le_rest_i
+              dtargdlambda_i = (one - lamtarg_i * dledcb_i * dcbdlambda_i) / le_rest_i
+              dtargdthetaf_i = - lamtarg_i / le_rest_i * dledcb_i * dcbdthetaf_i
               den_n = cb_sub + args(12) * bind_flux
               lamn_prev = lamn_sub
-              lamn_sub = (cb_sub * lamn_prev + args(12) * bind_flux * lambdai) / den_n
-              dlamndlambda_i = (cb_sub * dlamndlambda_i + args(12) * bind_flux &
-              + (lamn_prev - lamn_sub) * dcbdlambda_i + args(12) * dbindfluxdlambda_i * (lambdai - lamn_sub)) / den_n
-              dlamndthetaf_i = (cb_sub * dlamndthetaf_i + (lamn_prev - lamn_sub) * dcbdthetaf_i &
-              + args(12) * dbindfluxdthetaf_i * (lambdai - lamn_sub)) / den_n
+              ! lamn_sub = (cb_sub * lamn_prev + args(12) * bind_flux * lambdai) / den_n
+              ! dlamndlambda_i = (cb_sub * dlamndlambda_i + args(12) * bind_flux &
+              ! + (lamn_prev - lamn_sub) * dcbdlambda_i + args(12) * dbindfluxdlambda_i * (lambdai - lamn_sub)) / den_n
+              ! dlamndthetaf_i = (cb_sub * dlamndthetaf_i + (lamn_prev - lamn_sub) * dcbdthetaf_i &
+              ! + args(12) * dbindfluxdthetaf_i * (lambdai - lamn_sub)) / den_n
+              lamn_sub = (cb_sub * lamn_prev + args(12) * bind_flux * lamtarg_i) / den_n
+              dlamndlambda_i = (cb_sub * dlamndlambda_i + args(12) * bind_flux * dtargdlambda_i &
+              + (lamn_prev - lamn_sub) * dcbdlambda_i + args(12) * dbindfluxdlambda_i * (lamtarg_i - lamn_sub)) / den_n
+              dlamndthetaf_i = (cb_sub * dlamndthetaf_i + args(12) * bind_flux * dtargdthetaf_i &
+              + (lamn_prev - lamn_sub) * dcbdthetaf_i + args(12) * dbindfluxdthetaf_i * (lamtarg_i - lamn_sub)) / den_n
             END IF
             lambdar = lambdai / lamn_sub
             dlrdl = (one - lambdar * dlamndlambda_i) / lamn_sub
@@ -908,9 +939,15 @@ do face = 1, face_num/2
           kon_t = (Koff0 + Kcatch0) * Keq * EXP(CHI * (one - two * thetaf_t))
           bind_t = kon_t * cfmax * thetaf_t / (one - thetaf_t)
           thetab_t = cbt_i / cbmax
-          rate_cb_t = g_t * (bind_t * s_t - cbmax * thetab_t / (one - thetab_t))
+          ! rate_cb_t = g_t * (bind_t * s_t - cbmax * thetab_t / (one - thetab_t)) ! Old
+          rate_cb_t = g_t * ((one - thetab_t) * bind_t * s_t - cbt_i)
           rate_lamn_t = zero
-          IF (sfr > half) rate_lamn_t = bind_t * s_t * g_t / cbt_i * (lambda_t_i - lamn_t)
+          ! IF (sfr > half) rate_lamn_t = bind_t * s_t * g_t / cbt_i * (lambda_t_i - lamn_t)
+          IF (sfr > half) THEN
+            CALL lerest(le_rest_t, cbt_i, N0, aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin)
+            ! rate_lamn_t = bind_t * s_t * g_t / cbt_i * (lambda_t_i / le_rest_t - lamn_t) ! Old
+            rate_lamn_t = (one - thetab_t) * bind_t * s_t * g_t / cbt_i * (lambda_t_i / le_rest_t - lamn_t)
+          END IF
           ! err_i = MAX(half * ABS(lamn_sub - lamn_t - dtime * rate_lamn_t) / TOL_LAMN, &
           !             half * ABS(cbtau_i - cbt_i - dtime * rate_cb_t) / (TOL_CB * MAX(cbt_i, CB_SCALE * cbmax)))
           err_i = half * ABS(lamn_sub - lamn_t - dtime * rate_lamn_t) / TOL_LAMN
@@ -1431,7 +1468,7 @@ DOUBLE PRECISION :: c10,c01,sseiso,diso(5),pkmatfic(ndi,ndi),  &
     smatfic(ndi,ndi),sisomatfic(ndi,ndi), cmisomatfic(ndi,ndi,ndi,ndi),  &
     cisomatfic(ndi,ndi,ndi,ndi)
 !     FILAMENTS NETWORK CONTRIBUTION
-DOUBLE PRECISION :: filprops(10), affprops(7), chemprops(12), eqprops(11)
+DOUBLE PRECISION :: filprops(10), affprops(7), chemprops(13), eqprops(11)
 DOUBLE PRECISION :: cactin,cabp,ll,lambda0,mu0str,beta,nn,b0,bb
 DOUBLE PRECISION :: phinet,r0,r0c,r0f,a,p,etac,na,mactin,rhoactin
 DOUBLE PRECISION :: pknetfic(ndi,ndi),cmnetfic(ndi,ndi,ndi,ndi)
@@ -1449,6 +1486,7 @@ DOUBLE PRECISION :: cb_upper, machep, tol
 DOUBLE PRECISION :: Jc, f, df, dHdcb
 DOUBLE PRECISION :: DTHETAFDJ, dcbdthetaf, dsficdthetaf(ndi,ndi), dsigisodthetaf(ndi,ndi)
 DOUBLE PRECISION :: x_rest, f_rest, g_rest, dum1, dum2
+DOUBLE PRECISION :: N0, r0f_rest
 !     FULLY IMPLICIT FREE FRACTION F(theta_f) = H(theta_f; mu, J, cb_tot(theta_f)), RTSAFE
 INTEGER :: it_fi
 INTEGER, PARAMETER :: MAXIT_FI = 50
@@ -1617,7 +1655,10 @@ CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq, eq
 CALL xmech(x_rest, f_rest, dum1, dum2, cb0, one, one, a, r0c, etac, mu0str, beta, b0, lambda0, &
            cactin*NA*Mactin/rhoactin, rgas*theta)
 CALL koffcs(g_rest, dum1, f_rest, Koff0, Kcatch0, dx/(kb*theta), dxc/(kb*theta))
-chemprops = (/cbmax, cfmax, CHI, D, MU0, VMOL, Koff0, Keq, Kcatch0, dxc, g_rest, x_rest/)
+r0f_rest = 1.6d0 * (cb0 * 1.0d3)**(-two / 5.0d0)
+N0 = (cactin*NA*Mactin/rhoactin) / (a * r0f_rest) * f_rest * lambda0 * (r0f_rest + r0c)
+! chemprops = (/cbmax, cfmax, CHI, D, MU0, VMOL, Koff0, Keq, Kcatch0, dxc, g_rest, x_rest/)
+chemprops = (/cbmax, cfmax, CHI, D, MU0, VMOL, Koff0, Keq, Kcatch0, dxc, g_rest, x_rest, N0/)
 
 IF (STATEV(1) == 0.0d0) THEN
   thetaf0 = (cabp - cb0) / cfmax
@@ -2193,11 +2234,6 @@ REAL(8), DIMENSION(120) :: y2 = (/ &
 END SUBROUTINE linear_interpolate
 SUBROUTINE xmech(x, fle, dxdle, dfdle, cb, le, lamn, aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin, rt)
 
-    !> C4: x = mu_b^mech/RT = d[n (w + F0 ln lamn)]/dcb / RT at fixed le = lambda/lamn and lamn (material_TC._x_mech).
-    !> w(le) = (lambda0 r0/aux) [f lf - int_0^f lam_f(f') df'] (exact extensible beta-model, 16-point Gauss-Legendre in
-    !> s = ln(1 + aux1 f')). Also returns the force fle at le, dxdle = dx/dle = d(n w')/dcb / RT (w' = lambda0 r0 f) and
-    !> dfdle = df/dle at fixed cb (for the tangent).
-
     use global
     IMPLICIT NONE
     DOUBLE PRECISION, INTENT(OUT) :: x, fle, dxdle, dfdle
@@ -2265,15 +2301,16 @@ SUBROUTINE xmech(x, fle, dxdle, dfdle, cb, le, lamn, aratio, r0c, etac, mu0str, 
         dxdle = n * (0.4d0 * dwi / cb + lambda0 * (dr0f * fi + r0 * dfdcb)) / rt   ! d(n lambda0 r0 f)/dcb / RT
         END IF
         mu = dndcb * w + n * dw
-        IF (lamn /= one) THEN                                  ! prestress reservoir: + n F0 ln(lamn)
-        f0 = zero; df0 = zero
-        IF (l0f > one) THEN
-            c_le = one; c_lf = one; c_l0 = lambda0; c_l0f = l0f; c_ll = ll; c_r0 = r0; c_r0f = r0f
-            c_mu0 = mu0str; c_beta = beta; c_b0 = b0; c_eta = etac; c_cb = cb
-            CALL fil(f0, ff0, dw0, ddw0, c_le, c_lf, c_l0, c_l0f, c_ll, c_r0, c_r0f, c_mu0, c_beta, c_b0, c_eta, c_cb, df0)
-        END IF
-        mu = mu + LOG(lamn) * (dndcb * f0 * lambda0 * r0 + n * lambda0 * (dr0f * f0 + r0 * df0))
-        END IF
+        ! Legacy code for prestress reservoir
+        ! IF (lamn /= one) THEN                                  ! prestress reservoir: + n F0 ln(lamn)
+        ! f0 = zero; df0 = zero
+        ! IF (l0f > one) THEN
+        !     c_le = one; c_lf = one; c_l0 = lambda0; c_l0f = l0f; c_ll = ll; c_r0 = r0; c_r0f = r0f
+        !     c_mu0 = mu0str; c_beta = beta; c_b0 = b0; c_eta = etac; c_cb = cb
+        !     CALL fil(f0, ff0, dw0, ddw0, c_le, c_lf, c_l0, c_l0f, c_ll, c_r0, c_r0f, c_mu0, c_beta, c_b0, c_eta, c_cb, df0)
+        ! END IF
+        ! mu = mu + LOG(lamn) * (dndcb * f0 * lambda0 * r0 + n * lambda0 * (dr0f * f0 + r0 * df0))
+        ! END IF
         x = mu / rt
     RETURN
 END SUBROUTINE xmech
@@ -8886,7 +8923,8 @@ function genbet ( aa, bb )
 
     ! Reaction rate and residual                                                                         
     bterm = kon * cfmax * thetaf / (one - thetaf) * s
-    Ri = koff * (bterm - cbmax * thetab / (one - thetab))
+    ! Ri = koff * (bterm - cbmax * thetab / (one - thetab)) ! Old
+    Ri = koff * (bterm * (one - thetab) - cbtau)
     f = cbtau - cbt - Ri * dt
     ! Check if the residual is NaN or Inf. Large finite values are legitimate with the
     ! extensible filament and the catch-slip law (koff is capped by koffcs, not bounded by locking)
@@ -8905,13 +8943,18 @@ function genbet ( aa, bb )
     end if
                                                                                                                 
     ! Residual derivative
-    dRiDcb = dkoffdf * DfDcb * (bterm - cbtau / (one - thetab)) - koff / (one - thetab)**2
+    ! dRiDcb = dkoffdf * DfDcb * (bterm - cbtau / (one - thetab)) - koff / (one - thetab)**2 ! Old
+    dRiDcb = dkoffdf * DfDcb * ((one - thetab) * bterm - cbtau) - koff * (bterm / cbmax + one)
     df = one - dRiDcb * dt
 
     ! Residual derivative wrt lambda_i at fixed cb: df/dlambda_i = ddwi / (lambda0 * r0), since dwi = lambda0 * r0 * fi
-    dHdlambda = - dt * dkoffdf * ddwi / (lambda0 * r0) * (bterm - cbmax * thetab / (one - thetab))
-    dHdth = - dt * koff * s * dbdth
-    dHds  = - dt * koff * kon * cfmax * thetaf / (one - thetaf)
+    ! Old
+    ! dHdlambda = - dt * dkoffdf * ddwi / (lambda0 * r0) * (bterm - cbmax * thetab / (one - thetab))
+    ! dHdth = - dt * koff * s * dbdth
+    ! dHds  = - dt * koff * kon * cfmax * thetaf / (one - thetaf)
+    dHdlambda = - dt * dkoffdf * ddwi / (lambda0 * r0) * ((one - thetab) * bterm - cbtau)
+    dHdth = - dt * koff * (one - thetab) * s * dbdth
+    dHds  = - dt * koff * (one - thetab) * kon * cfmax * thetaf / (one - thetaf)
 end subroutine kineticsFunc
 
 SUBROUTINE setjr(cjr,sigma,unit2,ndi)
@@ -9432,6 +9475,7 @@ DOUBLE PRECISION :: prefdir(1,4)
 DOUBLE PRECISION :: etadir(nelem*8, 2+ndir)
 CHARACTER (LEN=256) ::  filename, jobdir, etafile
 INTEGER :: lenjobdir,i,j,k
+INTEGER :: alloc_stat
 
 !     LOP=0 --> START OF THE ANALYSIS
 IF(lop == 0.OR.lop == 4) THEN
@@ -9457,6 +9501,18 @@ IF(lop == 0.OR.lop == 4) THEN
   !END DO
   !CLOSE(17)
 
+  ! globalSdv (UEL integration-point state, read by UVARM for the dummy mesh) allocated once here, at the start of
+  ! the analysis and before any element call: with element operations in threads, the first UEL calls would
+  ! otherwise all find it unallocated and allocate it at the same time (race; lost copies, NaN in the first frame)
+  IF (.NOT. ALLOCATED(globalSdv)) THEN
+    ALLOCATE(globalSdv(numElem, ngp, nsdv), STAT=alloc_stat)
+    IF (alloc_stat /= 0) THEN
+      write(*,*) 'UEXTERNALDB: error when allocating globalSdv, stat =', alloc_stat, ', numElem =', numElem
+      call exit
+    END IF
+    globalSdv = 0.0d0
+    write(*,*) 'UEXTERNALDB: globalSdv allocated, (numElem, ngp, nsdv) =', numElem, ngp, nsdv
+  END IF
 
 END IF
 
@@ -9918,6 +9974,77 @@ END DO
 
 RETURN
 END SUBROUTINE pk2iso
+SUBROUTINE lerest(le_rest, cb, N0, aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin)
+!> A1 (python_scripts/now-i-want2.md): elastic stretch lam_e^rest at which a direction with bound content cb
+!> carries the rest direction tension N0:   n(cb) * f(lam_e^rest; cb) * lambda0 * r0(cb) * lam_e^rest = N0.
+!> Solved for the force f with the explicit inverse of the beta-model force law (as in xmech):
+!>   lam_f*lam_0f = aratio*rhs(f),   lam_e = 1 + (lam_f - 1)/kappa,   kappa = etac*r0/r0f,
+!> i.e. f*lam_e(f) = N0/(n*lambda0*r0), increasing in f. Newton from the target force, bisection as fallback.
+use global
+IMPLICIT NONE
+DOUBLE PRECISION, INTENT(OUT) :: le_rest
+DOUBLE PRECISION, INTENT(IN)  :: cb, N0, aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin
+INTEGER :: it
+DOUBLE PRECISION :: pi, r0f, r0, ll, n, kap, l0f, c, kk, ftarg, f, f_new, fl, fh, le, dle
+
+pi  = four * ATAN(one)
+r0f = 1.6d0 * (cb * 1.0d3)**(-two / 5.0d0)
+r0  = r0f + r0c
+ll  = aratio * r0f
+n   = kactin / ll
+kap = etac * r0 / r0f
+l0f = kap * (lambda0 - one) + one
+c   = ll * ll / (pi * pi * b0)
+kk  = one - one / aratio
+ftarg = N0 / (n * lambda0 * r0)                  ! f*lam_e at the target
+
+f = ftarg
+DO it = 1, 50
+  CALL le_of_f(f, le, dle)
+  IF (ABS(f * le - ftarg) <= 1.0d-14 * ftarg) THEN
+    le_rest = le
+    RETURN
+  END IF
+  f_new = f - (f * le - ftarg) / (le + f * dle)
+  IF (.NOT. (f_new > zero)) EXIT
+  f = f_new
+END DO
+fl = zero                                         ! fallback: bisection on f
+fh = two * ftarg
+CALL le_of_f(fh, le, dle)
+DO WHILE (fh * le - ftarg <= zero)
+  fh = two * fh
+  CALL le_of_f(fh, le, dle)
+END DO
+DO it = 1, 200
+  f = half * (fl + fh)
+  CALL le_of_f(f, le, dle)
+  IF (f * le - ftarg > zero) THEN
+    fh = f
+  ELSE
+    fl = f
+  END IF
+  IF (fh - fl <= 1.0d-14 * MAX(one, fh)) EXIT
+END DO
+CALL le_of_f(half * (fl + fh), le, dle)
+le_rest = le
+RETURN
+CONTAINS
+  SUBROUTINE le_of_f(ff, lee, dlee)              ! lam_e(f) and dlam_e/df
+    DOUBLE PRECISION, INTENT(IN)  :: ff
+    DOUBLE PRECISION, INTENT(OUT) :: lee, dlee
+    DOUBLE PRECISION :: u, v, dd, q, rhs, drhs
+    u  = one + ff / mu0str
+    v  = one + two * ff / mu0str
+    dd = one + ff * c * u
+    q  = kk * u**beta * v * dd**(-beta)
+    rhs  = u - q
+    drhs = one / mu0str - q * (beta / (mu0str * u) + two / (mu0str * v) - beta * c * (u + ff / mu0str) / dd)
+    lee  = one + (aratio * rhs / l0f - one) / kap
+    dlee = aratio * drhs / (l0f * kap)
+  END SUBROUTINE le_of_f
+END SUBROUTINE lerest
+
 SUBROUTINE push4(spatial,mat,f,det,ndi)
 
 

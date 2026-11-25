@@ -23,7 +23,7 @@ DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN)             :: filprops(10)
 DOUBLE PRECISION, INTENT(IN)             :: affprops(7)
-DOUBLE PRECISION, INTENT(IN)             :: chemprops(12)
+DOUBLE PRECISION, INTENT(IN)             :: chemprops(13)
 DOUBLE PRECISION, INTENT(IN OUT)         :: efi
 INTEGER, INTENT(IN OUT)                  :: noel
 DOUBLE PRECISION, INTENT(IN OUT)         :: det
@@ -80,6 +80,7 @@ DOUBLE PRECISION :: dPK2filficdcb(ndi,ndi), pfdlambdadcfil(ndi,ndi), cfilficchem
 ! Stretch-free rebinding (SFR)
 DOUBLE PRECISION :: sfr, xi_t, xi, lamn_t, lamn_sub, lamn_prev, den_n, lambdar, dlrdl, dlrdth
 DOUBLE PRECISION :: bind, dbinddthetaf, dlamndlambda_i, dlamndthetaf_i
+DOUBLE PRECISION :: N0, le_rest_i, le_rest_pert, dledcb_i, lamtarg_i, dtargdlambda_i, dtargdthetaf_i, le_rest_t
 DOUBLE PRECISION :: dw_tot, ddw_tot, dwdth, dsfilficdth(ndi,ndi)
 LOGICAL :: loaded
 
@@ -170,8 +171,9 @@ off_a(:,2) = [-2, 1, 1];   off_b(:,2) = [1, -2, 1];   off_c(:,2) = [1, 1, -2]
   Keq      = chemprops(8)
   Kcatch0  = chemprops(9)
   dxc      = chemprops(10)
-  g_rest = chemprops(11)
-  x_rest = chemprops(12)
+  g_rest   = chemprops(11)
+  x_rest   = chemprops(12)
+  N0       = chemprops(13)
   rt     = 8.314462618d0 * theta
   kactin = cactin * NA * Mactin / rhoactin
 
@@ -317,7 +319,8 @@ do face = 1, face_num/2
             s_i = EXP(-(x_i - x_rest)) / g_rest
             CALL koffcs(g_st, dgdf_st, f_st, Koff0, Kcatch0, dx / (kb * theta), dxc / (kb * theta))
             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            bind_flux = bind * s_i * g_st                ! C4 binding flux of the reference update
+            ! bind_flux = bind * s_i * g_st              ! Old: C4 binding flux of the reference update
+            bind_flux = bind * s_i * g_st * (one - cb_sub / cbmax)
             ! From sub-step 2 on, cb_sub and lamn_sub depend on lambda and thetaf through the earlier
             ! sub-steps: partial derivatives of x and of the force with respect to them (one-sided
             ! differences of xmech). In sub-step 1 they are start-of-increment values: no terms.
@@ -326,9 +329,10 @@ do face = 1, face_num/2
                          lamn_sub, aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin, rt)
               dxdcb_i = (x_pert - x_i) / (cb_sub * EPS_FD)          ! dx/dcb at fixed le, lamn
               dfdcb_i = (f_pert - f_st) / (cb_sub * EPS_FD)         ! df/dcb at fixed le
-              CALL xmech(x_pert, f_pert, dxdle_pert, dfdle_pert, cb_sub, lambdai / lamn_sub, &
-                         lamn_sub * (one + EPS_FD), aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin, rt)
-              dxdlamn_i = (x_pert - x_i) / (lamn_sub * EPS_FD)      ! dx/dlamn at fixed le, cb (reservoir term)
+              ! CALL xmech(x_pert, f_pert, dxdle_pert, dfdle_pert, cb_sub, lambdai / lamn_sub, &
+              !            lamn_sub * (one + EPS_FD), aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin, rt)
+              ! dxdlamn_i = (x_pert - x_i) / (lamn_sub * EPS_FD)      ! dx/dlamn at fixed le, cb (reservoir term)
+              dxdlamn_i = zero
             ELSE
               dxdcb_i = zero
               dfdcb_i = zero
@@ -342,20 +346,47 @@ do face = 1, face_num/2
             dledthetaf_i = - (lambdai / lamn_sub**2) * dlamndthetaf_i
             dsdlambda_i = - s_i * (dxdle_i * dledlambda_i + dxdcb_i * dcbdlambda_i + dxdlamn_i * dlamndlambda_i)
             dsdthetaf_i = - s_i * (dxdle_i * dledthetaf_i + dxdcb_i * dcbdthetaf_i + dxdlamn_i * dlamndthetaf_i)
+            ! Old
+            ! dbindfluxdlambda_i = bind_flux * ((- dxdle_i + dgdf_st / g_st * dfdle_i) * dledlambda_i &
+            !                    + (- dxdcb_i + dgdf_st / g_st * dfdcb_i) * dcbdlambda_i - dxdlamn_i * dlamndlambda_i)
+            ! dbindfluxdthetaf_i = dbinddthetaf * s_i * g_st &
+            !                    + bind_flux * ((- dxdle_i + dgdf_st / g_st * dfdle_i) * dledthetaf_i &
+            !                    + (- dxdcb_i + dgdf_st / g_st * dfdcb_i) * dcbdthetaf_i - dxdlamn_i * dlamndthetaf_i)
             dbindfluxdlambda_i = bind_flux * ((- dxdle_i + dgdf_st / g_st * dfdle_i) * dledlambda_i &
-                               + (- dxdcb_i + dgdf_st / g_st * dfdcb_i) * dcbdlambda_i - dxdlamn_i * dlamndlambda_i)
-            dbindfluxdthetaf_i = dbinddthetaf * s_i * g_st &
+                               + (- dxdcb_i + dgdf_st / g_st * dfdcb_i - one / (cbmax - cb_sub)) * dcbdlambda_i &
+                               - dxdlamn_i * dlamndlambda_i)
+            dbindfluxdthetaf_i = dbinddthetaf * s_i * g_st * (one - cb_sub / cbmax) &
                                + bind_flux * ((- dxdle_i + dgdf_st / g_st * dfdle_i) * dledthetaf_i &
-                               + (- dxdcb_i + dgdf_st / g_st * dfdcb_i) * dcbdthetaf_i - dxdlamn_i * dlamndthetaf_i)
+                               + (- dxdcb_i + dgdf_st / g_st * dfdcb_i - one / (cbmax - cb_sub)) * dcbdthetaf_i &
+                               - dxdlamn_i * dlamndthetaf_i)
             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             IF (sfr > half) THEN
+              ! A1: new bonds born at the rest direction tension, reference lambdai/le_res(cb_sub)
+              ! (legacy: reference lambdai, i.e. born at lam_e = 1). cb_sub depends on lambda and thetaf
+              ! from sub-step 2 on, so the target does too (dledcb by a one-sided difference, as for xmech).
+              CALL lerest(le_rest_i, cb_sub, N0, aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin)
+              IF (isub > 1) THEN
+                CALL lerest(le_rest_pert, cb_sub * (one + EPS_FD), N0, aratio, r0c, etac, mu0str, beta, b0, &
+                           lambda0, kactin)
+                dledcb_i = (le_rest_pert - le_rest_i) / (cb_sub * EPS_FD)
+              ELSE
+                dledcb_i = zero
+              END IF
+              lamtarg_i = lambdai / le_rest_i
+              dtargdlambda_i = (one - lamtarg_i * dledcb_i * dcbdlambda_i) / le_rest_i
+              dtargdthetaf_i = - lamtarg_i / le_rest_i * dledcb_i * dcbdthetaf_i
               den_n = cb_sub + args(12) * bind_flux
               lamn_prev = lamn_sub
-              lamn_sub = (cb_sub * lamn_prev + args(12) * bind_flux * lambdai) / den_n
-              dlamndlambda_i = (cb_sub * dlamndlambda_i + args(12) * bind_flux &
-              + (lamn_prev - lamn_sub) * dcbdlambda_i + args(12) * dbindfluxdlambda_i * (lambdai - lamn_sub)) / den_n
-              dlamndthetaf_i = (cb_sub * dlamndthetaf_i + (lamn_prev - lamn_sub) * dcbdthetaf_i &
-              + args(12) * dbindfluxdthetaf_i * (lambdai - lamn_sub)) / den_n
+              ! lamn_sub = (cb_sub * lamn_prev + args(12) * bind_flux * lambdai) / den_n
+              ! dlamndlambda_i = (cb_sub * dlamndlambda_i + args(12) * bind_flux &
+              ! + (lamn_prev - lamn_sub) * dcbdlambda_i + args(12) * dbindfluxdlambda_i * (lambdai - lamn_sub)) / den_n
+              ! dlamndthetaf_i = (cb_sub * dlamndthetaf_i + (lamn_prev - lamn_sub) * dcbdthetaf_i &
+              ! + args(12) * dbindfluxdthetaf_i * (lambdai - lamn_sub)) / den_n
+              lamn_sub = (cb_sub * lamn_prev + args(12) * bind_flux * lamtarg_i) / den_n
+              dlamndlambda_i = (cb_sub * dlamndlambda_i + args(12) * bind_flux * dtargdlambda_i &
+              + (lamn_prev - lamn_sub) * dcbdlambda_i + args(12) * dbindfluxdlambda_i * (lamtarg_i - lamn_sub)) / den_n
+              dlamndthetaf_i = (cb_sub * dlamndthetaf_i + args(12) * bind_flux * dtargdthetaf_i &
+              + (lamn_prev - lamn_sub) * dcbdthetaf_i + args(12) * dbindfluxdthetaf_i * (lamtarg_i - lamn_sub)) / den_n
             END IF
             lambdar = lambdai / lamn_sub
             dlrdl = (one - lambdar * dlamndlambda_i) / lamn_sub
@@ -417,9 +448,15 @@ do face = 1, face_num/2
           kon_t = (Koff0 + Kcatch0) * Keq * EXP(CHI * (one - two * thetaf_t))
           bind_t = kon_t * cfmax * thetaf_t / (one - thetaf_t)
           thetab_t = cbt_i / cbmax
-          rate_cb_t = g_t * (bind_t * s_t - cbmax * thetab_t / (one - thetab_t))
+          ! rate_cb_t = g_t * (bind_t * s_t - cbmax * thetab_t / (one - thetab_t)) ! Old
+          rate_cb_t = g_t * ((one - thetab_t) * bind_t * s_t - cbt_i)
           rate_lamn_t = zero
-          IF (sfr > half) rate_lamn_t = bind_t * s_t * g_t / cbt_i * (lambda_t_i - lamn_t)
+          ! IF (sfr > half) rate_lamn_t = bind_t * s_t * g_t / cbt_i * (lambda_t_i - lamn_t)
+          IF (sfr > half) THEN
+            CALL lerest(le_rest_t, cbt_i, N0, aratio, r0c, etac, mu0str, beta, b0, lambda0, kactin)
+            ! rate_lamn_t = bind_t * s_t * g_t / cbt_i * (lambda_t_i / le_rest_t - lamn_t) ! Old
+            rate_lamn_t = (one - thetab_t) * bind_t * s_t * g_t / cbt_i * (lambda_t_i / le_rest_t - lamn_t)
+          END IF
           ! err_i = MAX(half * ABS(lamn_sub - lamn_t - dtime * rate_lamn_t) / TOL_LAMN, &
           !             half * ABS(cbtau_i - cbt_i - dtime * rate_cb_t) / (TOL_CB * MAX(cbt_i, CB_SCALE * cbmax)))
           err_i = half * ABS(lamn_sub - lamn_t - dtime * rate_lamn_t) / TOL_LAMN

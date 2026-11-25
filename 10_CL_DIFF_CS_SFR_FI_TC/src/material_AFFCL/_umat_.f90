@@ -71,7 +71,7 @@ DOUBLE PRECISION :: c10,c01,sseiso,diso(5),pkmatfic(ndi,ndi),  &
     smatfic(ndi,ndi),sisomatfic(ndi,ndi), cmisomatfic(ndi,ndi,ndi,ndi),  &
     cisomatfic(ndi,ndi,ndi,ndi)
 !     FILAMENTS NETWORK CONTRIBUTION
-DOUBLE PRECISION :: filprops(10), affprops(7), chemprops(12), eqprops(11)
+DOUBLE PRECISION :: filprops(10), affprops(7), chemprops(13), eqprops(11)
 DOUBLE PRECISION :: cactin,cabp,ll,lambda0,mu0str,beta,nn,b0,bb
 DOUBLE PRECISION :: phinet,r0,r0c,r0f,a,p,etac,na,mactin,rhoactin
 DOUBLE PRECISION :: pknetfic(ndi,ndi),cmnetfic(ndi,ndi,ndi,ndi)
@@ -89,6 +89,7 @@ DOUBLE PRECISION :: cb_upper, machep, tol
 DOUBLE PRECISION :: Jc, f, df, dHdcb
 DOUBLE PRECISION :: DTHETAFDJ, dcbdthetaf, dsficdthetaf(ndi,ndi), dsigisodthetaf(ndi,ndi)
 DOUBLE PRECISION :: x_rest, f_rest, g_rest, dum1, dum2
+DOUBLE PRECISION :: N0, r0f_rest
 !     FULLY IMPLICIT FREE FRACTION F(theta_f) = H(theta_f; mu, J, cb_tot(theta_f)), RTSAFE
 INTEGER :: it_fi
 INTEGER, PARAMETER :: MAXIT_FI = 50
@@ -257,7 +258,10 @@ CALL pullchem(cb0, zero, cb_upper, machep, tol, cabp, cfmax, cbmax, CHI, Keq, eq
 CALL xmech(x_rest, f_rest, dum1, dum2, cb0, one, one, a, r0c, etac, mu0str, beta, b0, lambda0, &
            cactin*NA*Mactin/rhoactin, rgas*theta)
 CALL koffcs(g_rest, dum1, f_rest, Koff0, Kcatch0, dx/(kb*theta), dxc/(kb*theta))
-chemprops = (/cbmax, cfmax, CHI, D, MU0, VMOL, Koff0, Keq, Kcatch0, dxc, g_rest, x_rest/)
+r0f_rest = 1.6d0 * (cb0 * 1.0d3)**(-two / 5.0d0)
+N0 = (cactin*NA*Mactin/rhoactin) / (a * r0f_rest) * f_rest * lambda0 * (r0f_rest + r0c)
+! chemprops = (/cbmax, cfmax, CHI, D, MU0, VMOL, Koff0, Keq, Kcatch0, dxc, g_rest, x_rest/)
+chemprops = (/cbmax, cfmax, CHI, D, MU0, VMOL, Koff0, Keq, Kcatch0, dxc, g_rest, x_rest, N0/)
 
 IF (STATEV(1) == 0.0d0) THEN
   thetaf0 = (cabp - cb0) / cfmax

@@ -16,5 +16,7 @@ gfortran -g -O0 -fbacktrace -ffpe-trap=invalid,zero,overflow -o my_program main.
 
 # Compile concat_file with global.f90 into folder test_in_abaqus
 cat global.f90 $CONCAT_FILE > test_in_abaqus/uel.f90
+cat global.f90 $CONCAT_FILE > test_in_abaqus/rheometer/uel.f90
+cat global.f90 $CONCAT_FILE > test_in_abaqus/afm/uel.f90
 
 echo "Compilation finished. Executable created: my_program"
